@@ -46,6 +46,7 @@ dependencies {
     implementation(libs.rhino)
 
     testImplementation(libs.junit)
+    testImplementation(libs.mockwebserver)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }

@@ -55,6 +55,7 @@ suspend fun <T> String.request(
 
     return withContext(Dispatchers.IO) {
         val client = OkHttpClient.Builder()
+            .addInterceptor(HttpBasicAuthInterceptor())
             .sslSocketFactory(
                 TrustAllSSLSocketFactory.sslSocketFactory,
                 TrustAllSSLSocketFactory.trustManager

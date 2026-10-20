@@ -20,6 +20,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -39,9 +41,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
+import top.yogiczy.mytv.core.data.network.HttpBasicAuth
+import top.yogiczy.mytv.core.data.network.HttpBasicAuthInterceptor
+import top.yogiczy.mytv.core.data.network.TrustAllSSLSocketFactory
 import top.yogiczy.mytv.core.util.utils.toHeaders
 import top.yogiczy.mytv.tv.ui.utils.Configs
+import java.util.concurrent.TimeUnit
 
 @OptIn(UnstableApi::class)
 class Media3VideoPlayer(
@@ -119,21 +126,41 @@ class Media3VideoPlayer(
     }
 
     private fun getDataSourceFactory(): DefaultDataSource.Factory {
-        return DefaultDataSource.Factory(
-            context,
+        val authentication = HttpBasicAuth.parse(currentChannelLine.playableUrl)
+        val userAgent = currentChannelLine.httpUserAgent ?: Configs.videoPlayerUserAgent
+        val httpFactory: HttpDataSource.Factory = if (authentication != null) {
+            // OkHttp removes Authorization on redirects to another origin. The interceptor also
+            // limits inherited playlist credentials to segment/key URLs from the same origin.
+            val client = OkHttpClient.Builder()
+                .addInterceptor(HttpBasicAuthInterceptor(authentication))
+                .connectTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
+                .readTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
+                .sslSocketFactory(
+                    TrustAllSSLSocketFactory.sslSocketFactory,
+                    TrustAllSSLSocketFactory.trustManager,
+                )
+                .hostnameVerifier { _, _ -> true }
+                .build()
+            OkHttpDataSource.Factory(client).setUserAgent(userAgent)
+        } else {
             DefaultHttpDataSource.Factory().apply {
-                setUserAgent(currentChannelLine.httpUserAgent ?: Configs.videoPlayerUserAgent)
-                setDefaultRequestProperties(Configs.videoPlayerHeaders.toHeaders())
+                setUserAgent(userAgent)
                 setConnectTimeoutMs(Configs.videoPlayerLoadTimeout.toInt())
                 setReadTimeoutMs(Configs.videoPlayerLoadTimeout.toInt())
                 setKeepPostFor302Redirects(true)
                 setAllowCrossProtocolRedirects(true)
-            },
+            }
+        }
+        httpFactory.setDefaultRequestProperties(Configs.videoPlayerHeaders.toHeaders())
+        return DefaultDataSource.Factory(
+            context,
+            httpFactory,
         )
     }
 
     private fun getMediaSource(contentType: Int? = null): MediaSource? {
-        val uri = Uri.parse(currentChannelLine.playableUrl)
+        val playableUrl = currentChannelLine.playableUrl
+        val uri = Uri.parse(HttpBasicAuth.parse(playableUrl)?.url?.toString() ?: playableUrl)
         val mediaItem = MediaItem.fromUri(uri)
 
         var contentTypeForce = contentType

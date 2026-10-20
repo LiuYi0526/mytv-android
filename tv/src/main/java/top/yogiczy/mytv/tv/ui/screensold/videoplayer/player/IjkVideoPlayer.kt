@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
+import top.yogiczy.mytv.core.data.network.HttpBasicAuth
 import top.yogiczy.mytv.core.util.utils.toHeaders
 import top.yogiczy.mytv.tv.ui.utils.Configs
 import tv.danmaku.ijk.media.player.IMediaPlayer
@@ -60,7 +61,7 @@ class IjkVideoPlayer(
     override fun prepare(line: ChannelLine) {
         player.reset()
         player.setDataSource(
-            line.playableUrl,
+            HttpBasicAuth.parse(line.playableUrl)?.urlWithEncodedCredentials ?: line.playableUrl,
             Configs.videoPlayerHeaders.toHeaders() + mapOf(
                 "User-Agent" to (line.httpUserAgent ?: Configs.videoPlayerUserAgent),
             )

@@ -120,12 +120,14 @@ dependencies {
         implementation(project(":media3:lib-exoplayer-rtsp"))
         implementation(project(":media3:lib-exoplayer-dash"))
         implementation(project(":media3:lib-ui"))
+        implementation(project(":media3:lib-datasource-okhttp"))
     } else {
         implementation(libs.androidx.media3.exoplayer)
         implementation(libs.androidx.media3.exoplayer.hls)
         implementation(libs.androidx.media3.exoplayer.rtsp)
         implementation(libs.androidx.media3.exoplayer.dash)
         implementation(libs.androidx.media3.ui)
+        implementation(libs.androidx.media3.datasource.okhttp)
     }
 
     implementation("com.github.CarGuo.GSYVideoPlayer:gsyvideoplayer-java:v10.0.0")
