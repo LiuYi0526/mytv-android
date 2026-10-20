@@ -60,10 +60,13 @@ class IjkVideoPlayer(
 
     override fun prepare(line: ChannelLine) {
         player.reset()
+        val userAgent = line.httpUserAgent ?: Configs.videoPlayerUserAgent
+        // FFmpeg's HTTP layer uses this option for its own User-Agent header.
+        player.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "user_agent", userAgent)
         player.setDataSource(
             HttpBasicAuth.parse(line.playableUrl)?.urlWithEncodedCredentials ?: line.playableUrl,
             Configs.videoPlayerHeaders.toHeaders() + mapOf(
-                "User-Agent" to (line.httpUserAgent ?: Configs.videoPlayerUserAgent),
+                "User-Agent" to userAgent,
             )
         )
         setOption()

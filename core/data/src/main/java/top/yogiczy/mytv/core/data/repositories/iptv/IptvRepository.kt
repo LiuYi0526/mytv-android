@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
+import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceUrl
 import top.yogiczy.mytv.core.data.network.HttpException
 import top.yogiczy.mytv.core.data.network.request
 import top.yogiczy.mytv.core.data.repositories.FileCacheRepository
@@ -21,7 +22,8 @@ class IptvRepository(private val source: IptvSource) :
     FileCacheRepository(source.cacheFileName("v2.json")) {
 
     private val log = Logger.create("IptvRepository")
-    private val rawRepository = IptvRawRepository(source)
+    private val sourceUrl = IptvSourceUrl.parse(source.url)
+    private val rawRepository = IptvRawRepository(source.copy(url = sourceUrl.requestUrl))
 
     private fun isExpired(lastModified: Long, cacheTime: Long): Boolean {
         val timeout =
@@ -35,7 +37,7 @@ class IptvRepository(private val source: IptvSource) :
         transform: suspend ((List<IptvParser.ChannelItem>) -> List<IptvParser.ChannelItem>) = { it -> it },
     ): String {
         val raw = rawRepository.getRaw()
-        val parser = IptvParser.instances.first { it.isSupport(source.url, raw) }
+        val parser = IptvParser.instances.first { it.isSupport(sourceUrl.requestUrl, raw) }
 
         log.d("开始解析直播源（${source.name}）...")
         return measureTimedValue {
@@ -92,7 +94,7 @@ class IptvRepository(private val source: IptvSource) :
                 Globals.json.decodeFromString<ChannelGroupList>(json)
             }
             log.i("加载直播源（${source.name}）：${groupList.size}个分组，${groupList.sumOf { it.channelList.size }}个频道: $duration")
-            return groupList
+            return sourceUrl.applyTo(groupList)
         } catch (ex: Exception) {
             log.e("加载直播源（${source.name}）失败", ex)
             throw ex
@@ -102,7 +104,7 @@ class IptvRepository(private val source: IptvSource) :
     suspend fun getEpgUrl(): String? {
         return runCatching {
             val sourceData = rawRepository.getRaw(Long.MAX_VALUE)
-            val parser = IptvParser.instances.first { it.isSupport(source.url, sourceData) }
+            val parser = IptvParser.instances.first { it.isSupport(sourceUrl.requestUrl, sourceData) }
             parser.getEpgUrl(sourceData)
         }.getOrNull()
     }
