@@ -136,7 +136,13 @@ class MainContentState(
     init {
         val channelGroupList = channelGroupListProvider()
 
-        changeCurrentChannel(settingsViewModel.iptvChannelLastPlay.isEmptyOrElse {
+        val lastPlayed = settingsViewModel.iptvChannelLastPlay
+        val lastLineUrls = lastPlayed.lineList.map { it.url }
+        // Resume with current playlist metadata, including a changed subscription UA.
+        val currentVersion = channelGroupList.channelList.firstOrNull {
+            it.name == lastPlayed.name && it.lineList.map { line -> line.url } == lastLineUrls
+        }
+        changeCurrentChannel(currentVersion ?: lastPlayed.isEmptyOrElse {
             channelGroupList.channelFirstOrNull() ?: Channel.EMPTY
         })
 
