@@ -209,6 +209,7 @@ fun SettingsCloudSyncScreen(
                 item {
                     SettingsListItem(
                         headlineContent = "网络链接",
+                        supportingContent = "支持网络地址，或 base64:// 后接 UTF-8 同步数据的 Base64 编码",
                         trailingContent = settingsViewModel.cloudSyncNetworkUrl,
                         remoteConfig = true,
                     )
