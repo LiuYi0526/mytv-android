@@ -78,11 +78,6 @@ android {
         create("original") {
             dimension = "version"
         }
-
-        create("disguised") {
-            dimension = "version"
-            applicationId = "com.chinablue.tv"
-        }
     }
 
     // splits {
