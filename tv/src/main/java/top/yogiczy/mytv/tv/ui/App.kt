@@ -13,7 +13,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
@@ -23,12 +22,10 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.debounce
-import top.yogiczy.mytv.allinone.AllInOne
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource.Companion.needExternalStoragePermission
 import top.yogiczy.mytv.tv.ui.material.Padding
 import top.yogiczy.mytv.tv.ui.material.PopupHandleableApplication
 import top.yogiczy.mytv.tv.ui.material.Snackbar
-import top.yogiczy.mytv.tv.ui.material.SnackbarType
 import top.yogiczy.mytv.tv.ui.material.SnackbarUI
 import top.yogiczy.mytv.tv.ui.material.Visibility
 import top.yogiczy.mytv.tv.ui.screen.main.MainScreen
@@ -40,7 +37,6 @@ import top.yogiczy.mytv.tv.ui.theme.SAFE_AREA_HORIZONTAL_PADDING
 import top.yogiczy.mytv.tv.ui.theme.SAFE_AREA_VERTICAL_PADDING
 import top.yogiczy.mytv.tv.ui.tooling.PreviewWithLayoutGrids
 import top.yogiczy.mytv.tv.ui.utils.rememberReadExternalStoragePermission
-import java.io.File
 
 @Composable
 fun App(
@@ -48,7 +44,6 @@ fun App(
     settingsViewModel: SettingsViewModel = settingsVM,
     onBackPressed: () -> Unit = {},
 ) {
-    val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val doubleBackPressedExitState = rememberDoubleBackPressedExitState()
 
@@ -85,20 +80,6 @@ fun App(
         LaunchedEffect(Unit) { if (!hasPermission) requestPermission() }
     }
 
-    LaunchedEffect(settingsViewModel.iptvSourceCurrent) {
-        if (settingsViewModel.feiyangAllInOneFilePath.isNotBlank()) {
-            AllInOne.start(
-                context,
-                settingsViewModel.feiyangAllInOneFilePath,
-                onFail = {
-                    Snackbar.show("二进制 启动失败", type = SnackbarType.ERROR)
-                },
-                onUnsupported = {
-                    Snackbar.show("二进制 不支持当前平台", type = SnackbarType.ERROR)
-                },
-            )
-        }
-    }
 }
 
 /**

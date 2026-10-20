@@ -145,7 +145,6 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:util"))
-    implementation(project(":allinone"))
     // implementation(project(":tbsx5"))
 
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))

@@ -258,27 +258,6 @@
                         </van-cell>
                     </van-cell-group>
 
-                    <van-cell-group inset title="二进制">
-                        <van-cell title="上传二进制">
-                            <template #extra>
-                                <van-uploader :after-read="uploadAllInOneAfterRead" accept="*.*" />
-                            </template>
-                        </van-cell>
-
-                        <van-cell title="二进制文件地址">
-                            <template #label>
-                                <van-field class="!p-0" v-model="configs.feiyangAllInOneFilePath"></van-field>
-                            </template>
-                        </van-cell>
-
-                        <van-cell>
-                            <div class="flex justify-end">
-                                <van-button @click="pushConfigs" size="small" type="primary">
-                                    推送
-                                </van-button>
-                            </div>
-                        </van-cell>
-                    </van-cell-group>
                 </template>
 
                 <template v-else-if="tabActive === 'log'">
@@ -491,19 +470,6 @@
                     }
                 }
 
-                async function uploadAllInOneAfterRead(file) {
-                    try {
-                        vant.showLoadingToast({ message: '加载中...', forbidClick: true, duration: 0 })
-                        const formData = new FormData()
-                        formData.append('filename', file.file)
-                        await requestApi('/api/upload/allinone', { method: "POST", body: formData })
-                        vant.closeToast()
-                    } catch (e) {
-                        vant.showFailToast('上传AllInOne失败')
-                        console.error(e)
-                    }
-                }
-
                 const videoPlayerHeadersExample = "Header-Name-1: Header-Value-1\nHeader-Name-2: Header-Value-2"
 
                 onMounted(async () => {
@@ -528,7 +494,6 @@
                     channelAlias,
                     updateChannelAlias,
                     uploadApkAfterRead,
-                    uploadAllInOneAfterRead,
                     videoPlayerHeadersExample,
                 }
             }
