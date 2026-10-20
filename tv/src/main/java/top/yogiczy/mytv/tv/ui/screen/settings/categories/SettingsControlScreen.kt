@@ -16,6 +16,7 @@ import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 fun SettingsControlScreen(
     modifier: Modifier = Modifier,
     settingsViewModel: SettingsViewModel = settingsVM,
+    toControlKeyActionsScreen: () -> Unit = {},
     onBackPressed: () -> Unit = {},
 ) {
     SettingsCategoryScreen(
@@ -24,10 +25,18 @@ fun SettingsControlScreen(
         onBackPressed = onBackPressed,
     ) { firstItemFocusRequester ->
         item {
+            SettingsListItem(
+                modifier = Modifier.focusRequester(firstItemFocusRequester),
+                headlineContent = "按键操作映射",
+                supportingContent = "自定义直播界面的按键短按、长按和屏幕分区操作",
+                link = true,
+                onSelect = toControlKeyActionsScreen,
+            )
+        }
+        item {
             val enable = settingsViewModel.iptvChannelNoSelectEnable
 
             SettingsListItem(
-                modifier = Modifier.focusRequester(firstItemFocusRequester),
                 headlineContent = "数字选台",
                 supportingContent = "通过数字键选择频道",
                 trailingContent = {
@@ -44,8 +53,7 @@ fun SettingsControlScreen(
 
             SettingsListItem(
                 headlineContent = "换台反转",
-                supportingContent = if (flip) "方向键上：下一个频道；方向键下：上一个频道"
-                else "方向键上：上一个频道；方向键下：下一个频道",
+                supportingContent = "反转未自定义的上/下键及上下滑动的换台方向",
                 trailingContent = {
                     Switch(flip, null)
                 },

@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelFavoriteList
+import top.yogiczy.mytv.core.data.entities.control.ControlKeyActions
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceList
@@ -102,6 +103,9 @@ object Configs {
 
         /** 换台列表首尾循环 **/
         IPTV_CHANNEL_CHANGE_LIST_LOOP,
+
+        /** 直播界面的自定义按键操作 */
+        CONTROL_KEY_ACTIONS,
 
         /** ==================== 节目单 ==================== */
         /** 启用节目单 */
@@ -382,6 +386,14 @@ object Configs {
     var iptvChannelChangeListLoop: Boolean
         get() = SP.getBoolean(KEY.IPTV_CHANNEL_CHANGE_LIST_LOOP.name, false)
         set(value) = SP.putBoolean(KEY.IPTV_CHANNEL_CHANGE_LIST_LOOP.name, value)
+
+    var controlKeyActions: Map<String, String>
+        get() = runCatching {
+            ControlKeyActions.sanitize(Globals.json.decodeFromString<Map<String, String>>(
+                SP.getString(KEY.CONTROL_KEY_ACTIONS.name, "{}"),
+            ))
+        }.getOrDefault(emptyMap())
+        set(value) = SP.putString(KEY.CONTROL_KEY_ACTIONS.name, Globals.json.encodeToString(ControlKeyActions.sanitize(value)))
 
     /** ==================== 节目单 ==================== */
     /** 启用节目单 */
@@ -680,6 +692,7 @@ object Configs {
 
     fun toPartial(): Partial {
         return Partial(
+            controlKeyActions = controlKeyActions,
             appBootLaunch = appBootLaunch,
             appPipEnable = appPipEnable,
             appLastLatestVersion = appLastLatestVersion,
@@ -749,6 +762,7 @@ object Configs {
     }
 
     fun fromPartial(configs: Partial) {
+        configs.controlKeyActions?.let { controlKeyActions = it }
         configs.appBootLaunch?.let { appBootLaunch = it }
         configs.appPipEnable?.let { appPipEnable = it }
         configs.appLastLatestVersion?.let { appLastLatestVersion = it }
@@ -819,6 +833,7 @@ object Configs {
 
     @Serializable
     data class Partial(
+        val controlKeyActions: Map<String, String>? = null,
         val appBootLaunch: Boolean? = null,
         val appPipEnable: Boolean? = null,
         val appLastLatestVersion: String? = null,

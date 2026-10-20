@@ -10,6 +10,9 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.channelList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
 import top.yogiczy.mytv.core.data.entities.channel.ChannelList
+import top.yogiczy.mytv.core.data.entities.control.ControlAction
+import top.yogiczy.mytv.core.data.entities.control.ControlKey
+import top.yogiczy.mytv.core.data.entities.control.ControlKeyActions
 import top.yogiczy.mytv.core.data.entities.epg.Epg
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.match
@@ -45,8 +48,7 @@ import top.yogiczy.mytv.tv.ui.screensold.videoplayerdiaplaymode.VideoPlayerDispl
 import top.yogiczy.mytv.tv.ui.screensold.videotracks.VideoTracksScreen
 import top.yogiczy.mytv.tv.ui.screensold.webview.WebViewScreen
 import top.yogiczy.mytv.tv.ui.utils.backHandler
-import top.yogiczy.mytv.tv.ui.utils.handleDragGestures
-import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
+import top.yogiczy.mytv.tv.ui.utils.handleLiveControls
 
 @Composable
 fun MainContent(
@@ -76,68 +78,40 @@ fun MainContent(
         }
     }
 
+    fun performControl(key: ControlKey, number: Int?) {
+        val action = ControlKeyActions.actionFor(key, settingsViewModel.controlKeyActions, settingsViewModel.iptvChannelChangeFlip)
+        when (action) {
+            ControlAction.NONE -> Unit
+            ControlAction.PREVIOUS_CHANNEL -> mainContentState.changeCurrentChannelToPrev()
+            ControlAction.NEXT_CHANNEL -> mainContentState.changeCurrentChannelToNext()
+            ControlAction.PREVIOUS_LINE, ControlAction.NEXT_LINE -> {
+                if (mainContentState.currentChannel.lineList.size > 1) {
+                    val step = if (action == ControlAction.PREVIOUS_LINE) -1 else 1
+                    mainContentState.changeCurrentChannel(mainContentState.currentChannel, mainContentState.currentChannelLineIdx + step)
+                }
+            }
+            ControlAction.CHANNEL_NO_SELECT -> if (number != null && settingsViewModel.iptvChannelNoSelectEnable) channelNumberSelectState.input(number)
+            ControlAction.CHANNELS -> mainContentState.isChannelScreenVisible = true
+            ControlAction.QUICK_OP -> mainContentState.isQuickOpScreenVisible = true
+            ControlAction.CHANNEL_SOURCE_LIST -> toSettingsScreen(SettingsSubCategories.IPTV_SOURCE)
+            ControlAction.EPG_PROGRAMME_LIST -> mainContentState.isEpgScreenVisible = true
+            ControlAction.CHANNEL_LINE_LIST -> mainContentState.isChannelLineScreenVisible = true
+            ControlAction.VIDEO_PLAYER_DISPLAY_MODE_LIST -> mainContentState.isVideoPlayerDisplayModeScreenVisible = true
+            ControlAction.VIDEO_PLAYER_FACTORY_LIST -> toSettingsScreen(SettingsSubCategories.VIDEO_PLAYER_CORE)
+            ControlAction.VIDEO_PLAYER_VIDEO_TRACK_LIST -> mainContentState.isVideoTracksScreenVisible = true
+            ControlAction.VIDEO_PLAYER_AUDIO_TRACK_LIST -> mainContentState.isAudioTracksScreenVisible = true
+            ControlAction.VIDEO_PLAYER_SUBTITLE_TRACK_LIST -> mainContentState.isSubtitleTracksScreenVisible = true
+            ControlAction.VIDEO_PLAYER_CONTROLLER -> mainContentState.isVideoPlayerControllerScreenVisible = true
+        }
+    }
+
     Box(
         modifier = modifier
             .popupable()
             .backHandler { onBackPressed() }
-            .handleKeyEvents(
-                onUp = {
-                    if (settingsViewModel.iptvChannelChangeFlip) mainContentState.changeCurrentChannelToNext()
-                    else mainContentState.changeCurrentChannelToPrev()
-                },
-                onDown = {
-                    if (settingsViewModel.iptvChannelChangeFlip) mainContentState.changeCurrentChannelToPrev()
-                    else mainContentState.changeCurrentChannelToNext()
-                },
-                onLeft = {
-                    if (mainContentState.currentChannel.lineList.size > 1) {
-                        mainContentState.changeCurrentChannel(
-                            mainContentState.currentChannel,
-                            mainContentState.currentChannelLineIdx - 1,
-                        )
-                    }
-                },
-                onRight = {
-                    if (mainContentState.currentChannel.lineList.size > 1) {
-                        mainContentState.changeCurrentChannel(
-                            mainContentState.currentChannel,
-                            mainContentState.currentChannelLineIdx + 1,
-                        )
-                    }
-                },
-                onSelect = { mainContentState.isChannelScreenVisible = true },
-                onLongSelect = { mainContentState.isQuickOpScreenVisible = true },
-                onSettings = { mainContentState.isQuickOpScreenVisible = true },
-                onLongLeft = { mainContentState.isEpgScreenVisible = true },
-                onLongRight = { mainContentState.isChannelLineScreenVisible = true },
-                onLongDown = { mainContentState.isVideoPlayerControllerScreenVisible = true },
-                onNumber = { channelNumberSelectState.input(it) },
-            )
-            .handleDragGestures(
-                onSwipeDown = {
-                    if (settingsViewModel.iptvChannelChangeFlip) mainContentState.changeCurrentChannelToNext()
-                    else mainContentState.changeCurrentChannelToPrev()
-                },
-                onSwipeUp = {
-                    if (settingsViewModel.iptvChannelChangeFlip) mainContentState.changeCurrentChannelToPrev()
-                    else mainContentState.changeCurrentChannelToNext()
-                },
-                onSwipeRight = {
-                    if (mainContentState.currentChannel.lineList.size > 1) {
-                        mainContentState.changeCurrentChannel(
-                            mainContentState.currentChannel,
-                            mainContentState.currentChannelLineIdx - 1,
-                        )
-                    }
-                },
-                onSwipeLeft = {
-                    if (mainContentState.currentChannel.lineList.size > 1) {
-                        mainContentState.changeCurrentChannel(
-                            mainContentState.currentChannel,
-                            mainContentState.currentChannelLineIdx + 1,
-                        )
-                    }
-                },
+            .handleLiveControls(
+                onControl = ::performControl,
+                onQuickOp = { mainContentState.isQuickOpScreenVisible = true },
             ),
     ) {
         VideoPlayerScreen(

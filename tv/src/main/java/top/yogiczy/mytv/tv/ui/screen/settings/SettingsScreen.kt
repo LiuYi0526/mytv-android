@@ -36,6 +36,7 @@ import top.yogiczy.mytv.tv.ui.screen.settings.categories.SettingsUpdateScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.categories.SettingsVideoPlayerScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.subcategories.SettingsChannelGroupVisibilityScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.subcategories.SettingsCloudSyncProviderScreen
+import top.yogiczy.mytv.tv.ui.screen.settings.subcategories.SettingsControlKeyActionsScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.subcategories.SettingsEpgRefreshTimeThresholdScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.subcategories.SettingsEpgSourceScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.subcategories.SettingsIptvHybridModeScreen
@@ -143,6 +144,16 @@ fun SettingsScreen(
 
                 composable(SettingsCategories.CONTROL.name) {
                     SettingsControlScreen(
+                        toControlKeyActionsScreen = {
+                            navController.navigateSingleTop(SettingsSubCategories.CONTROL_KEY_ACTIONS.name)
+                        },
+                        onBackPressed = { navController.navigateUp() },
+                    )
+                }
+
+                composable(SettingsSubCategories.CONTROL_KEY_ACTIONS.name) {
+                    SettingsControlKeyActionsScreen(
+                        settingsViewModel = settingsViewModel,
                         onBackPressed = { navController.navigateUp() },
                     )
                 }

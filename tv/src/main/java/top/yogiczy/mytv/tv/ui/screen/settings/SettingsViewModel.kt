@@ -23,6 +23,14 @@ import top.yogiczy.mytv.tv.ui.screensold.videoplayer.VideoPlayerDisplayMode
 import top.yogiczy.mytv.tv.ui.utils.Configs
 
 class SettingsViewModel : ViewModel() {
+    private var _controlKeyActions by mutableStateOf<Map<String, String>>(emptyMap())
+    var controlKeyActions: Map<String, String>
+        get() = _controlKeyActions
+        set(value) {
+            Configs.controlKeyActions = value
+            _controlKeyActions = Configs.controlKeyActions
+        }
+
     private var _appBootLaunch by mutableStateOf(false)
     var appBootLaunch: Boolean
         get() = _appBootLaunch
@@ -613,6 +621,7 @@ class SettingsViewModel : ViewModel() {
     }
 
     fun refresh() {
+        _controlKeyActions = Configs.controlKeyActions
         _appBootLaunch = Configs.appBootLaunch
         _appPipEnable = Configs.appPipEnable
         _appLastLatestVersion = Configs.appLastLatestVersion

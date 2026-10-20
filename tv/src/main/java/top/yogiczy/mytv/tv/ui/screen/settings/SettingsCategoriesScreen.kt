@@ -213,6 +213,7 @@ enum class SettingsCategories(
 }
 
 enum class SettingsSubCategories {
+    CONTROL_KEY_ACTIONS,
     IPTV_SOURCE,
     IPTV_SOURCE_CACHE_TIME,
     CHANNEL_GROUP_VISIBILITY,
