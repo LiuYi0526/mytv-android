@@ -20,7 +20,7 @@ import kotlin.time.measureTimedValue
  * 节目单获取
  */
 class EpgRepository(private val source: EpgSource) :
-    FileCacheRepository(source.cacheFileName("json")) {
+    FileCacheRepository(source.cacheFileName("v2.json")) {
 
     private val log = Logger.create("EpgRepository")
     private val epgXmlRepository = EpgXmlRepository(source)

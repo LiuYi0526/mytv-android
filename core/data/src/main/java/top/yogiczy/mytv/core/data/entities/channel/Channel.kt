@@ -36,6 +36,9 @@ data class Channel(
      * 频道号
      */
     val index: Int = -1,
+
+    /** XMLTV channel id from the playlist's tvg-id, kept separate from display names. */
+    val epgId: String = "",
 ) {
     companion object {
         val EXAMPLE = Channel(

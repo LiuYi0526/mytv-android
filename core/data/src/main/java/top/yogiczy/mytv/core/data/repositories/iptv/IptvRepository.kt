@@ -18,7 +18,7 @@ import kotlin.time.measureTimedValue
  * 直播源数据获取
  */
 class IptvRepository(private val source: IptvSource) :
-    FileCacheRepository(source.cacheFileName("json")) {
+    FileCacheRepository(source.cacheFileName("v2.json")) {
 
     private val log = Logger.create("IptvRepository")
     private val rawRepository = IptvRawRepository(source)

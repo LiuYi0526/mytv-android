@@ -24,6 +24,8 @@ data class Epg(
      * 节目列表
      */
     val programmeList: EpgProgrammeList = EpgProgrammeList(),
+
+    val channelId: String? = null,
 ) {
     companion object {
         private val log = Logger.create("Epg")

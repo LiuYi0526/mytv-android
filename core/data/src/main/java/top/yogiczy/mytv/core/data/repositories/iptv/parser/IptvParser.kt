@@ -46,6 +46,7 @@ interface IptvParser {
         val manifestType: String? = null,
         val licenseType: String? = null,
         val licenseKey: String? = null,
+        val epgId: String = "",
     ) {
         companion object {
             private fun List<ChannelItem>.toChannelList(): ChannelList {
@@ -57,6 +58,7 @@ interface IptvParser {
                             name = channelName,
                             standardName = ChannelAlias.standardChannelName(channelName),
                             epgName = ChannelAlias.standardChannelName(first.epgName),
+                            epgId = first.epgId,
                             lineList = ChannelLineList(
                                 channelList.distinctBy { it.url }
                                     .map {

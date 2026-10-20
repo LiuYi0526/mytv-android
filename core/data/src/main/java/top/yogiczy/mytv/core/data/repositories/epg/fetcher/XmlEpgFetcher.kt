@@ -9,10 +9,10 @@ import okhttp3.ResponseBody
  */
 class XmlEpgFetcher : EpgFetcher {
     override fun isSupport(url: String): Boolean {
-        return url.endsWith(".xml")
+        return url.substringBefore('?').substringBefore('#').endsWith(".xml", ignoreCase = true)
     }
 
     override suspend fun fetch(body: ResponseBody) = withContext(Dispatchers.IO) {
-        body.byteStream()
+        DefaultEpgFetcher().fetch(body)
     }
 }

@@ -26,6 +26,7 @@ class M3uIptvParser : IptvParser {
                     val epgName =
                         Regex("tvg-name=\"(.*?)\"").find(line)?.groupValues?.get(1)?.trim()
                             ?.ifBlank { name } ?: name
+                    val epgId = Regex("tvg-id=\"(.*?)\"").find(line)?.groupValues?.get(1)?.trim().orEmpty()
                     val groupNames =
                         Regex("group-title=\"(.+?)\"").find(line)?.groupValues?.get(1)?.split(";")
                             ?.map { it.trim() }
@@ -38,6 +39,7 @@ class M3uIptvParser : IptvParser {
                         IptvParser.ChannelItem(
                             name = name,
                             epgName = epgName,
+                            epgId = epgId,
                             groupName = groupName,
                             url = "",
                             logo = logo,

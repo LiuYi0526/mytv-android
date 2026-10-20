@@ -9,9 +9,7 @@ import kotlinx.serialization.Serializable
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.epg.Epg.Companion.recentProgramme
-import top.yogiczy.mytv.core.data.utils.Logger
-import top.yogiczy.mytv.core.data.utils.LruMutableCache
-import kotlin.time.measureTimedValue
+import java.util.Locale
 
 /**
  * 频道节目单列表
@@ -21,10 +19,25 @@ import kotlin.time.measureTimedValue
 data class EpgList(
     val value: List<Epg> = emptyList(),
 ) : List<Epg> by value {
-    companion object {
-        private val log = Logger.create("EpgList")
-        private val matchCache = LruMutableCache<String, Epg>(64)
+    // Indexes belong to this immutable guide, so a refresh/source switch cannot reuse old matches.
+    private val byId by lazy {
+        buildMap {
+            value.forEach { epg -> epg.channelId?.trim()?.takeIf { it.isNotEmpty() }?.let { id ->
+                if (!containsKey(id)) put(id, epg)
+            } }
+        }
+    }
 
+    private val byName by lazy {
+        buildMap {
+            value.forEach { epg -> epg.channelList.forEach { name ->
+                val normalized = name.trim().lowercase(Locale.ROOT)
+                if (normalized.isNotEmpty() && !containsKey(normalized)) put(normalized, epg)
+            } }
+        }
+    }
+
+    companion object {
         fun EpgList.recentProgramme(channel: Channel): EpgProgrammeRecent? {
             if (isEmpty()) return null
 
@@ -34,20 +47,15 @@ data class EpgList(
         fun EpgList.match(channel: Channel): Epg? {
             if (isEmpty()) return null
 
-            return matchCache.getOrPut(channel.epgName) {
-                val t = measureTimedValue {
-                    firstOrNull { epg ->
-                        epg.channelList.any { it.equals(channel.epgName, ignoreCase = true) }
-                    } ?: Epg()
-                }
-                log.v("match(${matchCache.size()}): ${channel.epgName}", null, t.duration)
-
-                t.value
+            channel.epgId.trim().takeIf { it.isNotEmpty() }?.let { id ->
+                byId[id]?.let { return it }
+                // Older cached EPG data may have ids only in channelList.
+                byName[id.lowercase(Locale.ROOT)]?.let { return it }
             }
-        }
-
-        fun clearCache() {
-            matchCache.evictAll()
+            for (name in listOf(channel.epgName, channel.standardName, channel.name)) {
+                byName[name.trim().lowercase(Locale.ROOT)]?.let { return it }
+            }
+            return null
         }
 
         fun example(channelList: ChannelList): EpgList {

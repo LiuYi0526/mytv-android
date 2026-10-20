@@ -201,7 +201,6 @@ class MainViewModel : ViewModel() {
 
 
         if (_uiState.value is MainUiState.Ready) {
-            EpgList.clearCache()
             val channelGroupList = (_uiState.value as MainUiState.Ready).channelGroupList
 
             flow {
@@ -232,10 +231,8 @@ class MainViewModel : ViewModel() {
                 }
                 .map { epgList ->
                     withContext(Dispatchers.Default) {
-                        val filteredChannels =
-                            (channelGroupList.channelList + Configs.iptvChannelFavoriteList.map { it.channel }).map { it.epgName }
-
-                        EpgList(epgList.filter { epg -> epg.channelList.any { it in filteredChannels } })
+                        val channels = channelGroupList.channelList + Configs.iptvChannelFavoriteList.map { it.channel }
+                        EpgList(channels.mapNotNull { epgList.match(it) }.distinct())
                     }
                 }
                 .map { epgList ->
