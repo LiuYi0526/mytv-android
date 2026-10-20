@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.ArrowBackIosNew
+import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.AspectRatio
 import androidx.compose.material.icons.outlined.Audiotrack
 import androidx.compose.material.icons.outlined.Book
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.outlined.SlowMotionVideo
 import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -30,6 +32,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
+import top.yogiczy.mytv.tv.ui.screen.timingclose.LocalTimingCloseViewModel
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.VideoPlayerDisplayMode
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.VideoPlayer
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
@@ -59,6 +62,8 @@ fun QuickOpBtnList(
     val childPadding = rememberChildPadding()
     val listState = rememberLazyListState()
     val playerMetadata = playerMetadataProvider()
+    val timingCloseViewModel = LocalTimingCloseViewModel.current
+    val timingCloseStatus by timingCloseViewModel.status.collectAsState()
 
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }.distinctUntilChanged()
@@ -100,6 +105,17 @@ fun QuickOpBtnList(
                 title = "播放控制",
                 imageVector = Icons.Outlined.ControlCamera,
                 onSelect = onShowVideoPlayerController,
+            )
+        }
+
+        item {
+            QuickOpBtn(
+                title = if (timingCloseStatus.isActive) "定时关闭 · ${timingCloseStatus.remainingMinutes} 分钟" else "定时关闭",
+                imageVector = Icons.Outlined.Alarm,
+                onSelect = {
+                    onDismissRequest()
+                    timingCloseViewModel.showPicker = true
+                },
             )
         }
 

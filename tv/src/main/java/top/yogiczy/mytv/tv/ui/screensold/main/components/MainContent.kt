@@ -27,6 +27,7 @@ import top.yogiczy.mytv.tv.ui.material.popupable
 import top.yogiczy.mytv.tv.ui.screen.settings.SettingsSubCategories
 import top.yogiczy.mytv.tv.ui.screen.settings.SettingsViewModel
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
+import top.yogiczy.mytv.tv.ui.screen.timingclose.LocalTimingCloseViewModel
 import top.yogiczy.mytv.tv.ui.screensold.audiotracks.AudioTracksScreen
 import top.yogiczy.mytv.tv.ui.screensold.channel.ChannelNumberSelectScreen
 import top.yogiczy.mytv.tv.ui.screensold.channel.ChannelScreen
@@ -63,6 +64,7 @@ fun MainContent(
     onBackPressed: () -> Unit = {},
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val timingCloseViewModel = LocalTimingCloseViewModel.current
 
     val videoPlayerState =
         rememberVideoPlayerState(defaultDisplayModeProvider = { settingsViewModel.videoPlayerDisplayMode })
@@ -102,6 +104,7 @@ fun MainContent(
             ControlAction.VIDEO_PLAYER_AUDIO_TRACK_LIST -> mainContentState.isAudioTracksScreenVisible = true
             ControlAction.VIDEO_PLAYER_SUBTITLE_TRACK_LIST -> mainContentState.isSubtitleTracksScreenVisible = true
             ControlAction.VIDEO_PLAYER_CONTROLLER -> mainContentState.isVideoPlayerControllerScreenVisible = true
+            ControlAction.TIMING_CLOSE -> timingCloseViewModel.showPicker = true
         }
     }
 

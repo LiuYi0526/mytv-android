@@ -32,6 +32,7 @@ import top.yogiczy.mytv.tv.ui.screen.main.MainScreen
 import top.yogiczy.mytv.tv.ui.screen.monitor.MonitorPopup
 import top.yogiczy.mytv.tv.ui.screen.settings.SettingsViewModel
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
+import top.yogiczy.mytv.tv.ui.screen.timingclose.TimingClosePopup
 import top.yogiczy.mytv.tv.ui.theme.DESIGN_WIDTH
 import top.yogiczy.mytv.tv.ui.theme.SAFE_AREA_HORIZONTAL_PADDING
 import top.yogiczy.mytv.tv.ui.theme.SAFE_AREA_VERTICAL_PADDING
@@ -68,6 +69,7 @@ fun App(
                     }
                 },
             )
+            TimingClosePopup()
         }
 
         SnackbarUI()

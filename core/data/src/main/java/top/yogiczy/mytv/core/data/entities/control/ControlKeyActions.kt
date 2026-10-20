@@ -23,7 +23,8 @@ enum class ControlAction(val label: String) {
     EPG_PROGRAMME_LIST("节目单"), CHANNEL_LINE_LIST("线路列表"),
     VIDEO_PLAYER_DISPLAY_MODE_LIST("显示模式"), VIDEO_PLAYER_FACTORY_LIST("播放器内核"),
     VIDEO_PLAYER_VIDEO_TRACK_LIST("视轨"), VIDEO_PLAYER_AUDIO_TRACK_LIST("音轨"),
-    VIDEO_PLAYER_SUBTITLE_TRACK_LIST("字幕"), VIDEO_PLAYER_CONTROLLER("播放控制");
+    VIDEO_PLAYER_SUBTITLE_TRACK_LIST("字幕"), VIDEO_PLAYER_CONTROLLER("播放控制"),
+    TIMING_CLOSE("定时关闭");
 
     fun supports(key: ControlKey) = this != CHANNEL_NO_SELECT || key == ControlKey.ON_NUMBER
 }
