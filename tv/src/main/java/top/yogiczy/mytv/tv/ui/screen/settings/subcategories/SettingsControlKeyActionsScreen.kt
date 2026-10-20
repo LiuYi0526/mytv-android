@@ -173,8 +173,8 @@ private fun ControlActionPicker(
             }
             Text(
                 text = if (gridState.canScrollBackward || gridState.canScrollForward) {
-                    "上下移动或滑动查看更多 · 确认选择 · 返回关闭"
-                } else "方向键移动 · 确认选择 · 返回关闭",
+                    "上下移动或滑动查看更多 · 点击或确认选择 · 返回关闭"
+                } else "方向键移动 · 点击或确认选择 · 返回关闭",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 modifier = Modifier.padding(top = 8.dp),
@@ -192,7 +192,9 @@ private fun ControlActionOption(
 ) {
     Card(
         onClick = onSelected,
-        modifier = modifier.semantics { this.selected = selected },
+        modifier = modifier
+            .clickableNoIndication(onClick = onSelected)
+            .semantics { this.selected = selected },
         colors = CardDefaults.colors(
             containerColor = if (selected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
             else MaterialTheme.colors.surfaceContainerHigh,

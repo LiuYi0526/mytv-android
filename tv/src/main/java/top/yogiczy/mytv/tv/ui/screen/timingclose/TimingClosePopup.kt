@@ -33,12 +33,17 @@ import top.yogiczy.mytv.tv.ui.material.DrawerPosition
 import top.yogiczy.mytv.tv.ui.material.SimplePopup
 import top.yogiczy.mytv.tv.ui.material.Snackbar
 import top.yogiczy.mytv.tv.ui.theme.colors
+import top.yogiczy.mytv.tv.ui.utils.clickableNoIndication
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
 import top.yogiczy.mytv.tv.ui.utils.ifElse
 
 @Composable
 fun TimingClosePopup() {
     val viewModel = LocalTimingCloseViewModel.current
+    val selectMinutes: (Int) -> Unit = { minutes ->
+        viewModel.selectMinutes(minutes)
+        Snackbar.show(if (minutes > 0) "将在 $minutes 分钟后退出应用" else "定时关闭已取消")
+    }
 
     SimplePopup(
         visibleProvider = { viewModel.showPicker },
@@ -71,11 +76,9 @@ fun TimingClosePopup() {
                                     minutes == if (status.isActive) status.selectedMinutes else 15,
                                     Modifier.focusOnLaunchedSaveable(),
                                 )
+                                .clickableNoIndication { selectMinutes(minutes) }
                                 .semantics { this.selected = selected },
-                            onClick = {
-                                viewModel.selectMinutes(minutes)
-                                Snackbar.show("将在 $minutes 分钟后退出应用")
-                            },
+                            onClick = { selectMinutes(minutes) },
                             scale = CardDefaults.scale(focusedScale = 1f),
                             colors = CardDefaults.colors(
                                 containerColor = MaterialTheme.colors.surfaceContainerHigh,
@@ -95,11 +98,8 @@ fun TimingClosePopup() {
                     }
                 }
                 OutlinedButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        viewModel.selectMinutes(0)
-                        Snackbar.show("定时关闭已取消")
-                    },
+                    modifier = Modifier.fillMaxWidth().clickableNoIndication { selectMinutes(0) },
+                    onClick = { selectMinutes(0) },
                 ) { Text("取消定时") }
                 Text(
                     "重新选择将从现在开始计时；退出应用后本次定时失效。",
