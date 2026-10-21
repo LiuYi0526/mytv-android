@@ -111,17 +111,18 @@ fun SettingsCategoriesScreen(
 }
 
 @Composable
-private fun SettingsCategoryItem(
+fun SettingsCategoryItem(
     modifier: Modifier = Modifier,
     title: String,
     imageVector: ImageVector,
+    compact: Boolean = false,
     onSelected: () -> Unit = {},
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
     Surface(
         modifier = modifier
-            .size(2.gridColumns())
+            .size(if (compact) 1.6f.gridColumns() else 2.gridColumns())
             .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
             .handleKeyEvents(onSelect = onSelected),
         colors = ClickableSurfaceDefaults.colors(
@@ -138,9 +139,9 @@ private fun SettingsCategoryItem(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Icon(imageVector, contentDescription = null, modifier = Modifier.size(34.dp))
+            Icon(imageVector, contentDescription = null, modifier = Modifier.size(if (compact) 28.dp else 34.dp))
             Spacer(Modifier.height(10.dp))
-            Text(title, style = MaterialTheme.typography.titleLarge)
+            Text(title, style = if (compact) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleLarge)
         }
     }
 }

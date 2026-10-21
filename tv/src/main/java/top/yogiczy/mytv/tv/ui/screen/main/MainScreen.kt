@@ -17,6 +17,7 @@ import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelFavorite
 import top.yogiczy.mytv.core.data.entities.channel.ChannelFavoriteList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
+import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.channelList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.chanelGroup
 import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
@@ -167,6 +168,12 @@ fun MainScreen(
 
             composable(Screens.Dashboard()) {
                 DashboardScreen(
+                    recentChannelsProvider = {
+                        settingsViewModel.iptvChannelHistory.channels(
+                            settingsViewModel.iptvSourceCurrent, filteredChannelGroupListProvider().channelList,
+                        )
+                    },
+                    toSettingsCategoryScreen = { navController.navigateSingleTop(Screens.Settings.withArgs(it.name)) },
                     currentIptvSourceProvider = { settingsViewModel.iptvSourceCurrent },
                     channelFavoriteListProvider = { settingsViewModel.iptvChannelFavoriteList },
                     onChannelSelected = { onChannelSelected(it) },

@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelFavoriteList
+import top.yogiczy.mytv.core.data.entities.channel.ChannelHistoryList
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceList
@@ -212,6 +213,13 @@ class SettingsViewModel : ViewModel() {
         }
 
     private var _iptvChannelLastPlay by mutableStateOf(Channel.EMPTY)
+    var iptvChannelHistory by mutableStateOf(ChannelHistoryList())
+        private set
+
+    fun recordChannelWatch(channel: Channel) {
+        iptvChannelHistory = Configs.iptvChannelHistory.record(Configs.iptvSourceCurrent, channel)
+        Configs.iptvChannelHistory = iptvChannelHistory
+    }
     var iptvChannelLastPlay: Channel
         get() = _iptvChannelLastPlay
         set(value) {
@@ -643,6 +651,7 @@ class SettingsViewModel : ViewModel() {
         _iptvChannelFavoriteListVisible = Configs.iptvChannelFavoriteListVisible
         _iptvChannelFavoriteList = Configs.iptvChannelFavoriteList
         _iptvChannelLastPlay = Configs.iptvChannelLastPlay
+        iptvChannelHistory = Configs.iptvChannelHistory
         _iptvChannelLinePlayableHostList = Configs.iptvChannelLinePlayableHostList
         _iptvChannelLinePlayableUrlList = Configs.iptvChannelLinePlayableUrlList
         _iptvChannelChangeFlip = Configs.iptvChannelChangeFlip

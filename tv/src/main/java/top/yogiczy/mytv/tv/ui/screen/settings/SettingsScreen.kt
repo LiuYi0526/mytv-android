@@ -78,6 +78,10 @@ fun SettingsScreen(
 
     val navController = rememberNavController()
 
+    fun navigateBack() {
+        if (!navController.navigateUp()) onBackPressed()
+    }
+
     AppScreen(modifier = modifier, onBackPressed = onBackPressed) {
         NavHost(
             navController = navController,
@@ -93,7 +97,7 @@ fun SettingsScreen(
                 composable(SettingsCategories.APP.name) {
                     SettingsAppScreen(
                         onReload = onReload,
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -110,7 +114,7 @@ fun SettingsScreen(
                         toIptvHybridModeScreen = {
                             navController.navigateSingleTop(SettingsSubCategories.IPTV_HYBRID_MODE.name)
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -120,7 +124,7 @@ fun SettingsScreen(
                         toEpgRefreshTimeThresholdScreen = {
                             navController.navigateSingleTop(SettingsSubCategories.EPG_REFRESH_TIME_THRESHOLD.name)
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -138,7 +142,7 @@ fun SettingsScreen(
                         toUiFontScaleRatioScreen = {
                             navController.navigateSingleTop(SettingsSubCategories.UI_FONT_SCALE_RATIO.name)
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -147,14 +151,14 @@ fun SettingsScreen(
                         toControlKeyActionsScreen = {
                             navController.navigateSingleTop(SettingsSubCategories.CONTROL_KEY_ACTIONS.name)
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
                 composable(SettingsSubCategories.CONTROL_KEY_ACTIONS.name) {
                     SettingsControlKeyActionsScreen(
                         settingsViewModel = settingsViewModel,
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -172,7 +176,7 @@ fun SettingsScreen(
                         toVideoPlayerLoadTimeoutScreen = {
                             navController.navigateSingleTop(SettingsSubCategories.VIDEO_PLAYER_LOAD_TIMEOUT.name)
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -181,19 +185,19 @@ fun SettingsScreen(
                         toUpdateChannelScreen = {
                             navController.navigateSingleTop(SettingsSubCategories.UPDATE_CHANNEL.name)
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
                 composable(SettingsCategories.NETWORK.name) {
                     SettingsNetworkScreen(
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
                 composable(SettingsCategories.THEME.name) {
                     SettingsThemeScreen(
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -203,25 +207,25 @@ fun SettingsScreen(
                             navController.navigateSingleTop(SettingsSubCategories.CLOUD_SYNC_PROVIDER.name)
                         },
                         onReload = onReload,
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
                 composable(SettingsCategories.DEBUG.name) {
                     SettingsDebugScreen(
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
                 composable(SettingsCategories.LOG.name) {
                     SettingsLogScreen(
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
                 composable(SettingsCategories.PERMISSIONS.name) {
                     SettingsPermissionsScreen(
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -258,7 +262,7 @@ fun SettingsScreen(
                             settingsViewModel.iptvSourceCacheTime = it
                             navController.navigateUp()
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -285,7 +289,7 @@ fun SettingsScreen(
                             settingsViewModel.iptvHybridMode = it
                             navController.navigateUp()
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -307,7 +311,7 @@ fun SettingsScreen(
                                 Snackbar.show("缓存已清除")
                             }
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -315,7 +319,7 @@ fun SettingsScreen(
                     SettingsEpgRefreshTimeThresholdScreen(
                         timeThresholdProvider = { settingsViewModel.epgRefreshTimeThreshold },
                         onTimeThresholdChanged = { settingsViewModel.epgRefreshTimeThreshold = it },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -326,7 +330,7 @@ fun SettingsScreen(
                             settingsViewModel.uiTimeShowMode = it
                             navController.navigateUp()
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -337,7 +341,7 @@ fun SettingsScreen(
                             settingsViewModel.uiScreenAutoCloseDelay = it
                             navController.navigateUp()
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -345,7 +349,7 @@ fun SettingsScreen(
                     SettingsUiDensityScaleRatioScreen(
                         scaleRatioProvider = { settingsViewModel.uiDensityScaleRatio },
                         onScaleRatioChanged = { settingsViewModel.uiDensityScaleRatio = it },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -353,7 +357,7 @@ fun SettingsScreen(
                     SettingsUiFontScaleRatioScreen(
                         scaleRatioProvider = { settingsViewModel.uiFontScaleRatio },
                         onScaleRatioChanged = { settingsViewModel.uiFontScaleRatio = it },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -364,7 +368,7 @@ fun SettingsScreen(
                             settingsViewModel.videoPlayerCore = it
                             navController.navigateUp()
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -375,7 +379,7 @@ fun SettingsScreen(
                             settingsViewModel.videoPlayerRenderMode = it
                             navController.navigateUp()
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -386,7 +390,7 @@ fun SettingsScreen(
                             settingsViewModel.videoPlayerDisplayMode = it
                             navController.navigateUp()
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -397,7 +401,7 @@ fun SettingsScreen(
                             settingsViewModel.videoPlayerLoadTimeout = it
                             navController.navigateUp()
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -409,7 +413,7 @@ fun SettingsScreen(
                             navController.navigateUp()
                             onCheckUpdate()
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 
@@ -420,7 +424,7 @@ fun SettingsScreen(
                             settingsViewModel.cloudSyncProvider = it
                             navController.navigateUp()
                         },
-                        onBackPressed = { navController.navigateUp() },
+                        onBackPressed = { navigateBack() },
                     )
                 }
             }

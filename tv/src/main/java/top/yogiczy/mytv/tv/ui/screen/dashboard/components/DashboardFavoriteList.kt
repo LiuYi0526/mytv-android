@@ -39,13 +39,9 @@ fun DashboardFavoriteList(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(
-            "我的收藏",
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(horizontal = childPadding.start),
-        )
+        DashboardSectionHeader("我的收藏", channelFavoriteList.size)
 
-        LazyRow(
+        if (channelFavoriteList.isNotEmpty()) LazyRow(
             modifier = modifier,
             horizontalArrangement = Arrangement.spacedBy(20.dp),
             contentPadding = PaddingValues(start = childPadding.start, end = childPadding.end),

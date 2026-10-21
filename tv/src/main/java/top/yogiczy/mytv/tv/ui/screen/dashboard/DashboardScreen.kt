@@ -40,6 +40,9 @@ import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardFavoriteList
 import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardModuleList
 import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardTime
+import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardHistoryList
+import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardSettingsList
+import top.yogiczy.mytv.tv.ui.screen.settings.SettingsCategories
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.Configs
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunched
@@ -52,6 +55,8 @@ fun DashboardScreen(
     channelFavoriteListProvider: () -> ChannelFavoriteList = { ChannelFavoriteList() },
     onChannelSelected: (Channel) -> Unit = {},
     onChannelFavoriteToggle: (Channel) -> Unit = {},
+    recentChannelsProvider: () -> List<Channel> = { emptyList() },
+    toSettingsCategoryScreen: (SettingsCategories) -> Unit = {},
     epgListProvider: () -> EpgList = { EpgList() },
     toLiveScreen: () -> Unit = {},
     toChannelsScreen: () -> Unit = {},
@@ -86,8 +91,8 @@ fun DashboardScreen(
         onBackPressed = onBackPressed,
     ) {
         LazyColumn(
-            contentPadding = PaddingValues(top = 20.dp, bottom = childPadding.bottom),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+            contentPadding = PaddingValues(top = 12.dp, bottom = childPadding.bottom),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             item {
                 DashboardModuleList(
@@ -111,6 +116,13 @@ fun DashboardScreen(
                     epgListProvider = epgListProvider,
                 )
             }
+            item {
+                DashboardHistoryList(
+                    channels = recentChannelsProvider(), epgListProvider = epgListProvider,
+                    onChannelSelected = onChannelSelected, onChannelFavoriteToggle = onChannelFavoriteToggle,
+                )
+            }
+            item { DashboardSettingsList(toSettingsCategoryScreen) }
         }
     }
 }

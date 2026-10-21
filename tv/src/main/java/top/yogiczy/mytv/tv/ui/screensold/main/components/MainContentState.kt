@@ -147,6 +147,7 @@ class MainContentState(
         })
 
         videoPlayerState.onReady {
+            settingsViewModel.recordChannelWatch(currentChannel)
             settingsViewModel.iptvChannelLinePlayableUrlList += currentChannelLine.url
             settingsViewModel.iptvChannelLinePlayableHostList += currentChannelLine.url.urlHost()
         }
