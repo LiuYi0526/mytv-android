@@ -41,6 +41,7 @@ fun DashboardHistoryList(
         if (channels.isNotEmpty()) LazyRow(
             horizontalArrangement = Arrangement.spacedBy(20.dp),
             contentPadding = PaddingValues(start = padding.start, end = padding.end),
+            preservePaddingOnFocus = true,
         ) { runtime ->
             items(channels, runtime) { itemModifier, channel ->
                 ChannelsChannelItem(

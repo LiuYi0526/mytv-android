@@ -19,6 +19,7 @@ fun DashboardSettingsList(onCategorySelected: (SettingsCategories) -> Unit) {
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(20.dp),
             contentPadding = PaddingValues(start = padding.start, end = padding.end),
+            preservePaddingOnFocus = true,
         ) { runtime ->
             items(SettingsCategories.entries, runtime) { itemModifier, category ->
                 SettingsCategoryItem(
