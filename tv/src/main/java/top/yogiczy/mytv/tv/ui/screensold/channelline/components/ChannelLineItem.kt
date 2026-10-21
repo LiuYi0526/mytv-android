@@ -8,7 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -20,10 +19,9 @@ import androidx.tv.material3.ListItem
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.RadioButton
 import androidx.tv.material3.Text
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
-import top.yogiczy.mytv.core.data.network.request
+import top.yogiczy.mytv.core.data.network.ChannelLineProbe
 import top.yogiczy.mytv.core.data.utils.ChannelUtil
 import top.yogiczy.mytv.core.util.utils.isIPv6
 import top.yogiczy.mytv.tv.ui.material.Tag
@@ -32,8 +30,6 @@ import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
 import top.yogiczy.mytv.tv.ui.utils.ifElse
-import java.io.IOException
-import kotlin.system.measureTimeMillis
 
 @Composable
 fun ChannelLineItem(
@@ -96,29 +92,19 @@ fun ChannelLineItem(
 
 @Composable
 private fun rememberLineDelay(line: ChannelLine): Long {
-    var elapsedTime by remember { mutableLongStateOf(0) }
-    var hasError by remember { mutableStateOf(false) }
+    var elapsedTime by remember(line) { mutableLongStateOf(0) }
 
-    LaunchedEffect(Unit) {
-        runCatching {
-            withContext(Dispatchers.IO) {
-                elapsedTime = measureTimeMillis {
-                    try {
-                        line.url.request({ builder ->
-                            builder
-                                .apply {
-                                    line.httpUserAgent?.let { header("User-Agent", it) }
-                                }
-                        }) { body -> body.string() }
-                    } catch (_: IOException) {
-                        hasError = true
-                    }
-                }
-            }
+    LaunchedEffect(line) {
+        elapsedTime = try {
+            ChannelLineProbe.Default.measure(line.playableUrl, line.httpUserAgent)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            -1L
         }
     }
 
-    return if (hasError) -1 else elapsedTime
+    return elapsedTime
 }
 
 @Preview
