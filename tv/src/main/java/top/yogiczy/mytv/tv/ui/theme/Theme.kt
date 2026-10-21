@@ -34,10 +34,10 @@ val MaterialTheme.colors: Colors
     @Composable
     get() = LocalColors.current
 
-const val SAFE_AREA_HORIZONTAL_PADDING = 58
-const val SAFE_AREA_VERTICAL_PADDING = 24
+const val SAFE_AREA_HORIZONTAL_PADDING = 34
+const val SAFE_AREA_VERTICAL_PADDING = 20
 const val LAYOUT_GRID_SPACING = 20
-const val LAYOUT_GRID_WIDTH = 52
+const val LAYOUT_GRID_WIDTH = 56
 const val LAYOUT_GRID_COLUMNS = 12
 const val DESIGN_WIDTH = 960
 const val DESIGN_HEIGHT = 540

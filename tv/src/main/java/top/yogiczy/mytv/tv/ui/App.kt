@@ -2,6 +2,8 @@ package top.yogiczy.mytv.tv.ui
 
 import androidx.annotation.IntRange
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.runtime.Composable
@@ -12,7 +14,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
@@ -33,7 +34,7 @@ import top.yogiczy.mytv.tv.ui.screen.monitor.MonitorPopup
 import top.yogiczy.mytv.tv.ui.screen.settings.SettingsViewModel
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.screen.timingclose.TimingClosePopup
-import top.yogiczy.mytv.tv.ui.theme.DESIGN_WIDTH
+import top.yogiczy.mytv.tv.ui.theme.resolveUiScaleRatio
 import top.yogiczy.mytv.tv.ui.theme.SAFE_AREA_HORIZONTAL_PADDING
 import top.yogiczy.mytv.tv.ui.theme.SAFE_AREA_VERTICAL_PADDING
 import top.yogiczy.mytv.tv.ui.tooling.PreviewWithLayoutGrids
@@ -45,36 +46,36 @@ fun App(
     settingsViewModel: SettingsViewModel = settingsVM,
     onBackPressed: () -> Unit = {},
 ) {
-    val configuration = LocalConfiguration.current
     val doubleBackPressedExitState = rememberDoubleBackPressedExitState()
 
-    CompositionLocalProvider(
-        LocalDensity provides Density(
-            density = LocalDensity.current.density * when (settingsViewModel.uiDensityScaleRatio) {
-                0f -> configuration.screenWidthDp.toFloat() / DESIGN_WIDTH
-                else -> settingsViewModel.uiDensityScaleRatio
-            },
-            fontScale = LocalDensity.current.fontScale * settingsViewModel.uiFontScaleRatio,
-        ),
-    ) {
-        PopupHandleableApplication {
-            MainScreen(
-                modifier = modifier,
-                onBackPressed = {
-                    if (doubleBackPressedExitState.allowExit) {
-                        onBackPressed()
-                    } else {
-                        doubleBackPressedExitState.backPress()
-                        Snackbar.show("再按一次退出")
-                    }
-                },
-            )
-            TimingClosePopup()
-        }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        CompositionLocalProvider(
+            LocalDensity provides Density(
+                density = LocalDensity.current.density * resolveUiScaleRatio(
+                    maxWidth.value, maxHeight.value, settingsViewModel.uiDensityScaleRatio,
+                ),
+                fontScale = LocalDensity.current.fontScale * settingsViewModel.uiFontScaleRatio,
+            ),
+        ) {
+            PopupHandleableApplication {
+                MainScreen(
+                    modifier = modifier,
+                    onBackPressed = {
+                        if (doubleBackPressedExitState.allowExit) {
+                            onBackPressed()
+                        } else {
+                            doubleBackPressedExitState.backPress()
+                            Snackbar.show("再按一次退出")
+                        }
+                    },
+                )
+                TimingClosePopup()
+            }
 
-        SnackbarUI()
-        Visibility({ settingsViewModel.debugShowFps }) { MonitorPopup() }
-        Visibility({ settingsViewModel.debugShowLayoutGrids }) { PreviewWithLayoutGrids { } }
+            SnackbarUI()
+            Visibility({ settingsViewModel.debugShowFps }) { MonitorPopup() }
+            Visibility({ settingsViewModel.debugShowLayoutGrids }) { PreviewWithLayoutGrids { } }
+        }
     }
 
     if (settingsViewModel.iptvSourceCurrent.needExternalStoragePermission()) {

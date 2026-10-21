@@ -64,7 +64,6 @@ fun DashboardScreen(
     toSearchScreen: () -> Unit = {},
     toMultiViewScreen: () -> Unit = {},
     toPushScreen: () -> Unit = {},
-    toSettingsScreen: () -> Unit = {},
     toAboutScreen: () -> Unit = {},
     toSettingsIptvSourceScreen: () -> Unit = {},
     onReload: () -> Unit = {},
@@ -72,6 +71,8 @@ fun DashboardScreen(
 ) {
     val childPadding = rememberChildPadding()
     val coroutineScope = rememberCoroutineScope()
+    val favorites = channelFavoriteListProvider()
+    val recentChannels = recentChannelsProvider()
 
     AppScreen(
         modifier = modifier,
@@ -91,8 +92,8 @@ fun DashboardScreen(
         onBackPressed = onBackPressed,
     ) {
         LazyColumn(
-            contentPadding = PaddingValues(top = 12.dp, bottom = childPadding.bottom),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(top = 10.dp, bottom = childPadding.bottom),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             item {
                 DashboardModuleList(
@@ -103,22 +104,21 @@ fun DashboardScreen(
                     toSearchScreen = toSearchScreen,
                     toMultiViewScreen = toMultiViewScreen,
                     toPushScreen = toPushScreen,
-                    toSettingsScreen = toSettingsScreen,
                     toAboutScreen = toAboutScreen,
                 )
             }
 
-            item {
+            if (favorites.isNotEmpty()) item {
                 DashboardFavoriteList(
-                    channelFavoriteListProvider = channelFavoriteListProvider,
+                    channelFavoriteListProvider = { favorites },
                     onChannelSelected = onChannelSelected,
                     onChannelUnFavorite = onChannelFavoriteToggle,
                     epgListProvider = epgListProvider,
                 )
             }
-            item {
+            if (recentChannels.isNotEmpty()) item {
                 DashboardHistoryList(
-                    channels = recentChannelsProvider(), epgListProvider = epgListProvider,
+                    channels = recentChannels, epgListProvider = epgListProvider,
                     onChannelSelected = onChannelSelected, onChannelFavoriteToggle = onChannelFavoriteToggle,
                 )
             }

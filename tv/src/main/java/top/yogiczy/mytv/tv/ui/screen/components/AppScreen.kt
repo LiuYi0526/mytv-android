@@ -75,7 +75,7 @@ fun AppScreen(
     val density = LocalDensity.current
     var isTopBarVisible by remember { mutableStateOf(true) }
     var topBarHeightPx by rememberSaveable {
-        mutableIntStateOf(with(density) { 64.dp.toPx().roundToInt() })
+        mutableIntStateOf(with(density) { 58.dp.toPx().roundToInt() })
     }
     val topBarYOffsetPx by animateIntAsState(
         targetValue = if (isTopBarVisible) 0 else -topBarHeightPx,
@@ -93,7 +93,7 @@ fun AppScreen(
         if (enableTopBarHidden) {
             AppScaffoldTopBar(
                 modifier = Modifier
-                    .height(64.dp)
+                    .height(58.dp)
                     .offset { IntOffset(x = 0, y = topBarYOffsetPx) }
                     .onSizeChanged { topBarHeightPx = it.height },
                 header = header,
@@ -110,7 +110,7 @@ fun AppScreen(
         } else {
             Column {
                 AppScaffoldTopBar(
-                    modifier = Modifier.height(64.dp),
+                    modifier = Modifier.height(58.dp),
                     header = header,
                     headerExtra = headerExtra,
                     canBack = canBack,

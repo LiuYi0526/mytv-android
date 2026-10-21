@@ -4,13 +4,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CloudUpload
-import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.InsertChart
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material.icons.outlined.ViewCozy
 import androidx.compose.runtime.Composable
@@ -33,7 +31,6 @@ fun DashboardModuleList(
     toSearchScreen: () -> Unit = {},
     toMultiViewScreen: () -> Unit = {},
     toPushScreen: () -> Unit = {},
-    toSettingsScreen: () -> Unit = {},
     toAboutScreen: () -> Unit = {},
 ) {
     val childPadding = rememberChildPadding()
@@ -64,8 +61,8 @@ fun DashboardModuleList(
 
         item {
             DashboardModuleItem(
-                imageVector = Icons.Outlined.FavoriteBorder,
-                title = "收藏",
+                imageVector = Icons.Outlined.StarBorder,
+                title = "我的收藏",
                 onSelected = toFavoritesScreen,
             )
         }
@@ -88,17 +85,9 @@ fun DashboardModuleList(
 
         item {
             DashboardModuleItem(
-                imageVector = Icons.Outlined.CloudUpload,
+                imageVector = Icons.AutoMirrored.Outlined.Send,
                 title = "推送",
                 onSelected = toPushScreen,
-            )
-        }
-
-        item {
-            DashboardModuleItem(
-                imageVector = Icons.Outlined.Settings,
-                title = "设置",
-                onSelected = toSettingsScreen,
             )
         }
 

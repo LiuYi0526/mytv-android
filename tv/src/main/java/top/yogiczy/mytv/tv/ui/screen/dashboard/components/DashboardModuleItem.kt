@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -35,7 +36,7 @@ fun DashboardModuleItem(
 ) {
     Surface(
         modifier = modifier
-            .size(2.gridColumns())
+            .size(1.8f.gridColumns())
             .handleKeyEvents(onSelect = onSelected),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = MaterialTheme.colorScheme.onSurface.copy(0.1f),
@@ -49,7 +50,7 @@ fun DashboardModuleItem(
         ) {
             Icon(imageVector, contentDescription = null, modifier = Modifier.size(34.dp))
             Spacer(Modifier.height(10.dp))
-            Text(title, style = MaterialTheme.typography.titleLarge)
+            Text(title, style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp), maxLines = 1)
         }
 
         tag?.let { nnTag ->

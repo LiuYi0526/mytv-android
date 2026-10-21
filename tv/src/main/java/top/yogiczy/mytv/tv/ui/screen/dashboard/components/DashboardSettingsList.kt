@@ -17,13 +17,13 @@ fun DashboardSettingsList(onCategorySelected: (SettingsCategories) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         DashboardSectionHeader("设置")
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
             contentPadding = PaddingValues(start = padding.start, end = padding.end),
         ) { runtime ->
             items(SettingsCategories.entries, runtime) { itemModifier, category ->
                 SettingsCategoryItem(
                     modifier = itemModifier, title = category.title, imageVector = category.icon,
-                    compact = true, onSelected = { onCategorySelected(category) },
+                    onSelected = { onCategorySelected(category) },
                 )
             }
         }

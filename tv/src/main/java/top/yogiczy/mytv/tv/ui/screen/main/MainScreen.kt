@@ -184,7 +184,6 @@ fun MainScreen(
                     toSearchScreen = { navController.navigateSingleTop(Screens.Search()) },
                     toMultiViewScreen = { navController.navigateSingleTop(Screens.MultiView()) },
                     toPushScreen = { navController.navigateSingleTop(Screens.Push()) },
-                    toSettingsScreen = { navController.navigateSingleTop(Screens.Settings()) },
                     toAboutScreen = { navController.navigateSingleTop(Screens.About()) },
                     toSettingsIptvSourceScreen = {
                         navController.navigateSingleTop(

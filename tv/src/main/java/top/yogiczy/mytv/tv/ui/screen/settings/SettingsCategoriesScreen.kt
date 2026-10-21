@@ -115,14 +115,13 @@ fun SettingsCategoryItem(
     modifier: Modifier = Modifier,
     title: String,
     imageVector: ImageVector,
-    compact: Boolean = false,
     onSelected: () -> Unit = {},
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
     Surface(
         modifier = modifier
-            .size(if (compact) 1.6f.gridColumns() else 2.gridColumns())
+            .size(1.6f.gridColumns())
             .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
             .handleKeyEvents(onSelect = onSelected),
         colors = ClickableSurfaceDefaults.colors(
@@ -139,9 +138,9 @@ fun SettingsCategoryItem(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Icon(imageVector, contentDescription = null, modifier = Modifier.size(if (compact) 28.dp else 34.dp))
+            Icon(imageVector, contentDescription = null, modifier = Modifier.size(28.dp))
             Spacer(Modifier.height(10.dp))
-            Text(title, style = if (compact) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleLarge)
+            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
         }
     }
 }
