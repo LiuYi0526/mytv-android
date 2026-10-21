@@ -283,10 +283,6 @@ class MainViewModel : ViewModel() {
             })
         needRefresh()
     }
-
-    companion object {
-        var instance: MainViewModel? = null
-    }
 }
 
 sealed interface MainUiState {
@@ -300,6 +296,4 @@ sealed interface MainUiState {
 }
 
 val mainVM: MainViewModel
-    @Composable get() = MainViewModel.instance ?: viewModel<MainViewModel>().also {
-        MainViewModel.instance = it
-    }
+    @Composable get() = viewModel()
