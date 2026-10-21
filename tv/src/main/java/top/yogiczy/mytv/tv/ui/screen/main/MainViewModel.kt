@@ -32,17 +32,13 @@ import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
 import top.yogiczy.mytv.core.data.utils.ChannelAlias
 import top.yogiczy.mytv.core.data.utils.ChannelUtil
 import top.yogiczy.mytv.core.data.utils.Constants
-import top.yogiczy.mytv.core.data.utils.Logger
 import top.yogiczy.mytv.tv.sync.CloudSync
 import top.yogiczy.mytv.tv.sync.CloudSyncData
 import top.yogiczy.mytv.tv.ui.material.Snackbar
 import top.yogiczy.mytv.tv.ui.material.SnackbarType
 import top.yogiczy.mytv.tv.ui.utils.Configs
-import java.util.Calendar
 
 class MainViewModel : ViewModel() {
-    private val log = Logger.create("MainViewModel")
-
     private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
@@ -193,13 +189,6 @@ class MainViewModel : ViewModel() {
     private suspend fun refreshEpg() {
         if (!Configs.epgEnable) return
 
-        if (Calendar.getInstance().get(Calendar.HOUR_OF_DAY) < Configs.epgRefreshTimeThreshold) {
-            val threshold = Configs.epgRefreshTimeThreshold.toString().padStart(2, '0') + ":00"
-            log.i("当前时间未到${threshold}，不获取节目单")
-            return
-        }
-
-
         if (_uiState.value is MainUiState.Ready) {
             val channelGroupList = (_uiState.value as MainUiState.Ready).channelGroupList
 
@@ -216,7 +205,7 @@ class MainViewModel : ViewModel() {
                         }
                     } ?: Configs.epgSourceCurrent
 
-                emit(EpgRepository(epgSource).getEpgList())
+                emit(EpgRepository(epgSource).getEpgList(Configs.epgRefreshTimeThreshold))
             }
                 .retryWhen { e, attempt ->
                     if (attempt >= Constants.NETWORK_RETRY_COUNT) return@retryWhen false

@@ -12,8 +12,6 @@ import top.yogiczy.mytv.core.data.repositories.epg.fetcher.EpgFetcher
 import top.yogiczy.mytv.core.data.utils.Globals
 import top.yogiczy.mytv.core.data.utils.Logger
 import java.io.InputStream
-import java.text.SimpleDateFormat
-import java.util.Locale
 import kotlin.time.measureTimedValue
 
 /**
@@ -24,11 +22,6 @@ class EpgRepository(private val source: EpgSource) :
 
     private val log = Logger.create("EpgRepository")
     private val epgXmlRepository = EpgXmlRepository(source)
-
-    private fun isExpired(lastModified: Long): Boolean {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        return dateFormat.format(System.currentTimeMillis()) != dateFormat.format(lastModified)
-    }
 
     private suspend fun refresh(): String {
         val xml = epgXmlRepository.getXml()
@@ -41,9 +34,11 @@ class EpgRepository(private val source: EpgSource) :
     /**
      * 获取节目单列表
      */
-    suspend fun getEpgList(): EpgList = withContext(Dispatchers.Default) {
+    suspend fun getEpgList(refreshHour: Int = 0): EpgList = withContext(Dispatchers.Default) {
         try {
-            val xmlJson = getOrRefresh({ lastModified, _ -> isExpired(lastModified) }) { refresh() }
+            val xmlJson = getOrRefresh({ lastModified, _ ->
+                EpgCachePolicy.isExpired(lastModified, refreshHour)
+            }) { refresh() }
 
             return@withContext Globals.json.decodeFromString<EpgList>(xmlJson).also { epgList ->
                 log.i("加载节目单（${source.name}）：${epgList.size}个频道，${epgList.sumOf { it.programmeList.size }}个节目")

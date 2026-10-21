@@ -63,7 +63,7 @@ fun SettingsEpgScreen(
             SettingsListItem(
                 headlineContent = "刷新时间阈值",
                 trailingContent = { Text("${epgRefreshTimeThreshold}:00") },
-                supportingContent = "时间不到${epgRefreshTimeThreshold}:00节目单将不会刷新",
+                supportingContent = "每天${epgRefreshTimeThreshold}:00后重新获取节目单；此前使用缓存，无缓存时仍会获取",
                 onSelect = toEpgRefreshTimeThresholdScreen,
                 link = true,
             )
