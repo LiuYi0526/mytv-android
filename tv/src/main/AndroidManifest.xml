@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- This native-only AAR declares 23, but its 64-bit ELF libraries target API 21. -->
+    <uses-sdk tools:overrideLibrary="com.shuyu.gsyvideoplayer.ex_so" />
+
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />

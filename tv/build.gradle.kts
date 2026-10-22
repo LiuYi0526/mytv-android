@@ -126,7 +126,8 @@ dependencies {
     }
 
     implementation("com.github.CarGuo.GSYVideoPlayer:gsyvideoplayer-java:v10.0.0")
-    implementation("com.github.CarGuo.GSYVideoPlayer:gsyvideoplayer-ex_so:v10.0.0")
+    // 12.0.0 also aligns the x86_64 IJK libraries to 16 KB.
+    implementation("io.github.carguo:gsyvideoplayer-ex_so:12.0.0")
 
     // 二维码
     implementation(libs.qrose)
@@ -154,6 +155,8 @@ dependencies {
 }
 
 sentry {
+    // Keep the Gradle plugin while using the 16 KB compatible native SDK.
+    autoInstallation.sentryVersion.set("7.22.6")
     org.set("yogiczy")
     projectName.set("mytv-android")
     authToken.set(getProperty("sentry.auth_token") ?: System.getenv("SENTRY_AUTH_TOKEN"))
