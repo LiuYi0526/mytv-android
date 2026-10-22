@@ -18,7 +18,8 @@ class M3uIptvParser : IptvParser {
             val channelList = mutableListOf<IptvParser.ChannelItem>()
 
             var addedChannels: List<IptvParser.ChannelItem> = listOf()
-            lines.forEach { line ->
+            lines.forEach { rawLine ->
+                val line = rawLine.trim()
                 if (line.isBlank()) return@forEach
 
                 if (line.startsWith("#EXTINF")) {
@@ -45,6 +46,12 @@ class M3uIptvParser : IptvParser {
                             logo = logo,
                             httpUserAgent = httpUserAgent,
                         )
+                    }
+                } else if (line.substringBefore('=').trim() == "#EXTVLCOPT:http-user-agent") {
+                    // VLC options belong to the current EXTINF entry, including all its groups.
+                    val userAgent = line.substringAfter('=', "").trim().removeSurrounding("\"")
+                    if (userAgent.isNotBlank()) {
+                        addedChannels = addedChannels.map { it.copy(httpUserAgent = userAgent) }
                     }
                 } else if (line.startsWith("#KODIPROP:inputstream.adaptive.manifest_type")) {
                     addedChannels =
