@@ -21,6 +21,7 @@ android {
         applicationId = "top.yogiczy.slcs.tv"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 2
         versionName = "3.3.10"
         vectorDrawables {
@@ -117,8 +118,11 @@ dependencies {
         implementation(project(":media3:lib-ui"))
         implementation(project(":media3:lib-datasource-okhttp"))
     } else {
+        check(libs.versions.media3.get() == "1.4.1") {
+            "Rebuild scripts/media3 HLS compatibility AAR before upgrading Media3"
+        }
         implementation(libs.androidx.media3.exoplayer)
-        implementation(libs.androidx.media3.exoplayer.hls)
+        // Local 1.4.1 HLS compatibility AAR keeps AAC + AV3A queues (scripts/media3).
         implementation(libs.androidx.media3.exoplayer.rtsp)
         implementation(libs.androidx.media3.exoplayer.dash)
         implementation(libs.androidx.media3.ui)
@@ -145,9 +149,14 @@ dependencies {
     implementation(project(":core:util"))
     // implementation(project(":tbsx5"))
 
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"))))
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"),
+        "exclude" to listOf("media3-exoplayer-hls-*.aar"))))
+    if (!mediaSettingsFile.exists()) {
+        implementation(files("libs/media3-exoplayer-hls-1.4.1-multi-audio.aar"))
+    }
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

@@ -9,6 +9,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
@@ -43,11 +44,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
+import top.yogiczy.mytv.core.data.media.Av3aHeader
 import top.yogiczy.mytv.core.data.network.HttpBasicAuth
 import top.yogiczy.mytv.core.data.network.HttpBasicAuthInterceptor
 import top.yogiczy.mytv.core.data.network.TrustAllSSLSocketFactory
 import top.yogiczy.mytv.core.util.utils.toHeaders
 import top.yogiczy.mytv.tv.ui.utils.Configs
+import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.av3a.Av3aExtractorsFactory
+import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.av3a.Av3aHlsExtractorFactory
 import java.util.concurrent.TimeUnit
 
 @OptIn(UnstableApi::class)
@@ -77,6 +81,7 @@ class Media3VideoPlayer(
     }
 
     private fun getPlayer(): ExoPlayer {
+        MimeTypes.registerCustomMimeType(Av3aHeader.MIME_TYPE, "av3a", C.TRACK_TYPE_AUDIO)
         val renderersFactory =
             DefaultRenderersFactory(context)
                 .setExtensionRendererMode(
@@ -176,7 +181,11 @@ class Media3VideoPlayer(
         val dataSourceFactory = getDataSourceFactory()
         return when (contentTypeForce ?: Util.inferContentType(uri)) {
             C.CONTENT_TYPE_HLS -> {
-                HlsMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+                HlsMediaSource.Factory(dataSourceFactory)
+                    .setExtractorFactory(Av3aHlsExtractorFactory())
+                    // Some playlists omit AV3A from CODECS; discover all tracks from the TS PMT.
+                    .setAllowChunklessPreparation(false)
+                    .createMediaSource(mediaItem)
             }
 
             C.CONTENT_TYPE_DASH -> {
@@ -226,7 +235,8 @@ class Media3VideoPlayer(
             }
 
             C.CONTENT_TYPE_OTHER -> {
-                ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+                ProgressiveMediaSource.Factory(dataSourceFactory, Av3aExtractorsFactory())
+                    .createMediaSource(mediaItem)
             }
 
             else -> {
@@ -442,7 +452,7 @@ class Media3VideoPlayer(
     private fun Format.toAudioMetadata(audio: Metadata.Audio? = null): Metadata.Audio {
         return (audio ?: Metadata.Audio()).copy(
             channels = channelCount,
-            // channelsLabel = if (sampleMimeType == MimeTypes.AUDIO_AV3A) "菁彩声" else null,
+            channelsLabel = if (sampleMimeType == Av3aHeader.MIME_TYPE) "菁彩声" else null,
             sampleRate = sampleRate,
             bitrate = bitrate,
             mimeType = sampleMimeType,

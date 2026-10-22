@@ -1,0 +1,7 @@
+Synthetic MPEG-TS fixture, not playable programme audio.
+PAT: programme 1, PMT PID 0x100; PMT: stream_type 0xD5, ES/PCR PID 0x101.
+One private-stream PES with PTS 90000 and one 1024-byte AATF frame.
+Header fff200400211000000: profile 0, 48 kHz, 5.1.4 (10 channels), 384 kb/s.
+Payload is zero-filled and is used only for extraction tests, never decoder tests.
+PSI sections include valid MPEG-2 CRCs. TS packets are 188 bytes with continuity
+counters and adaptation-field padding, so the AATF frame crosses TS boundaries.
