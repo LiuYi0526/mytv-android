@@ -28,9 +28,19 @@ data class IptvSource(
      * 转换js
      */
     val transformJs: String? = null,
+    /** Explicit guide URLs for this subscription, in priority order. Empty follows the source/global guide. */
+    val epgUrls: List<String> = emptyList(),
 ) {
+    // Keep the original four-field key: editing guide settings must not discard channel caches.
+    internal fun channelCacheKey(): Int {
+        var key = name.hashCode()
+        key = 31 * key + url.hashCode()
+        key = 31 * key + isLocal.hashCode()
+        return 31 * key + (transformJs?.hashCode() ?: 0)
+    }
+
     fun cacheFileName(ext: String) =
-        "${cacheDir.name}/iptv_source_${hashCode().toUInt().toString(16)}.$ext"
+        "${cacheDir.name}/iptv_source_${channelCacheKey().toUInt().toString(16)}.$ext"
 
     companion object {
         val cacheDir by lazy { File(Globals.cacheDir, "iptv_source_cache") }

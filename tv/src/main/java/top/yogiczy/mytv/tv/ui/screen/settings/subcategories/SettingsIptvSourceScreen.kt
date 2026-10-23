@@ -2,473 +2,144 @@ package top.yogiczy.mytv.tv.ui.screen.settings.subcategories
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.ArrowBackIosNew
-import androidx.compose.material.icons.outlined.ClearAll
-import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.outlined.QrCode
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.ListItem
-import androidx.tv.material3.ListItemDefaults
-import androidx.tv.material3.LocalContentColor
-import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.channelList
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceList
 import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
-import top.yogiczy.mytv.core.data.utils.Constants
-import top.yogiczy.mytv.tv.ui.material.CircularProgressIndicator
 import top.yogiczy.mytv.tv.ui.material.Drawer
 import top.yogiczy.mytv.tv.ui.material.DrawerPosition
-import top.yogiczy.mytv.tv.ui.material.LocalPopupManager
 import top.yogiczy.mytv.tv.ui.material.SimplePopup
-import top.yogiczy.mytv.tv.ui.material.Tag
-import top.yogiczy.mytv.tv.ui.material.TagDefaults
+import top.yogiczy.mytv.tv.ui.material.Snackbar
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScaffoldHeaderBtn
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.screen.push.PushContent
-import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunched
-import top.yogiczy.mytv.tv.ui.utils.gridColumns
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
-import top.yogiczy.mytv.tv.ui.utils.ifElse
 
 @Composable
 fun SettingsIptvSourceScreen(
     modifier: Modifier = Modifier,
     currentIptvSourceProvider: () -> IptvSource = { IptvSource() },
     iptvSourceListProvider: () -> IptvSourceList = { IptvSourceList() },
+    onSave: (IptvSource?, IptvSource) -> Unit = { _, _ -> },
     onSetCurrent: (IptvSource) -> Unit = {},
     onDelete: (IptvSource) -> Unit = {},
     onClearCache: (IptvSource) -> Unit = {},
     onBackPressed: () -> Unit = {},
 ) {
-    val iptvSourceList = IptvSourceList(Constants.IPTV_SOURCE_LIST + iptvSourceListProvider())
-
-    val coroutineScope = rememberCoroutineScope()
-    val iptvSourceDetails = remember { mutableStateMapOf<Int, IptvSourceDetail>() }
-
-    suspend fun refreshAll() {
-        if (iptvSourceDetails.values.any { it == IptvSourceDetail.Loading }) return
-
-        iptvSourceDetails.clear()
-        iptvSourceList.forEach { source ->
-            iptvSourceDetails[source.hashCode()] = IptvSourceDetail.Loading
+    val sources = iptvSourceListProvider()
+    // The built-in fallback is an invalid placeholder, not an editable user subscription.
+    var selectedUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedName by rememberSaveable { mutableStateOf<String?>(null) }
+    var adding by rememberSaveable { mutableStateOf(false) }
+    var lastIndex by rememberSaveable { mutableIntStateOf(0) }
+    var showQr by remember { mutableStateOf(false) }
+    var refreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    val selected = sources.firstOrNull { it.url == selectedUrl && it.name == selectedName }
+    if (adding || selected != null) {
+        key(adding, selectedUrl, selectedName) {
+            SettingsIptvSourceDetailScreen(
+                original = selected,
+                sources = sources,
+                isCurrent = selected == currentIptvSourceProvider(),
+                onSave = { updated ->
+                    onSave(selected, updated)
+                    adding = false
+                    selectedUrl = null
+                    selectedName = null
+                },
+                onSetCurrent = { selected?.let(onSetCurrent) },
+                onClearCache = { selected?.let(onClearCache) },
+                onDelete = { selected?.let(onDelete); selectedUrl = null; selectedName = null },
+                onBackPressed = { adding = false; selectedUrl = null; selectedName = null },
+            )
         }
-
-        iptvSourceList.forEach { iptvSource ->
-            try {
-                val channelGroupList = IptvRepository(iptvSource).getChannelGroupList(0)
-                iptvSourceDetails[iptvSource.hashCode()] = IptvSourceDetail.Ready(
-                    channelGroupCount = channelGroupList.size,
-                    channelCount = channelGroupList.channelList.size,
-                    lineCount = channelGroupList.channelList.sumOf { it.lineList.size },
-                )
-            } catch (_: Exception) {
-                iptvSourceDetails[iptvSource.hashCode()] = IptvSourceDetail.Error
-            }
-        }
+        return
     }
-
+    val padding = rememberChildPadding()
     AppScreen(
         modifier = modifier,
-        header = { Text("设置 / 直播源 / 自定义直播源") },
+        header = { Text("订阅源") },
         headerExtra = {
-            AppScaffoldHeaderBtn(
-                title = "刷新全部",
-                imageVector = Icons.Default.Refresh,
-                onSelect = {
-                    coroutineScope.launch {
-                        refreshAll()
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AppScaffoldHeaderBtn(title = if (refreshing) "刷新中" else "刷新全部", imageVector = Icons.Outlined.Refresh, onSelect = {
+                    if (!refreshing) scope.launch {
+                        refreshing = true
+                        var failures = 0
+                        try {
+                            for (source in sources.toList()) {
+                                try { IptvRepository(source).getChannelGroupList(0) }
+                                catch (ex: CancellationException) { throw ex }
+                                catch (_: Exception) { failures++ }
+                            }
+                            Snackbar.show(if (failures == 0) "订阅源已刷新" else "刷新完成，${failures}个订阅源失败")
+                        } finally { refreshing = false }
                     }
-                },
-            )
+                })
+                AppScaffoldHeaderBtn(title = "扫码添加", imageVector = Icons.Outlined.QrCode, onSelect = { showQr = true })
+                AppScaffoldHeaderBtn(title = "手动添加", imageVector = Icons.Outlined.Add, onSelect = { adding = true })
+            }
         },
         canBack = true,
         onBackPressed = onBackPressed,
     ) {
-        SettingsIptvSourceContent(
-            currentIptvSourceProvider = currentIptvSourceProvider,
-            iptvSourceListProvider = { iptvSourceList },
-            iptvSourceDetailsProvider = { iptvSourceDetails },
-            onSetCurrent = onSetCurrent,
-            onDelete = onDelete,
-            onClearCache = onClearCache,
-        )
-    }
-}
-
-@Composable
-private fun SettingsIptvSourceContent(
-    modifier: Modifier = Modifier,
-    currentIptvSourceProvider: () -> IptvSource = { IptvSource() },
-    iptvSourceListProvider: () -> IptvSourceList = { IptvSourceList() },
-    iptvSourceDetailsProvider: () -> Map<Int, IptvSourceDetail> = { emptyMap() },
-    onSetCurrent: (IptvSource) -> Unit = {},
-    onDelete: (IptvSource) -> Unit = {},
-    onClearCache: (IptvSource) -> Unit = {},
-) {
-    val iptvSourceList = iptvSourceListProvider()
-
-    val childPadding = rememberChildPadding()
-
-    LazyColumn(
-        modifier = modifier.padding(top = 10.dp),
-        contentPadding = childPadding.copy(top = 10.dp).paddingValues,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        items(iptvSourceList) { iptvSource ->
-            IptvSourceItem(
-                iptvSourceProvider = { iptvSource },
-                iptvSourceDetailProvider = {
-                    iptvSourceDetailsProvider()[iptvSource.hashCode()] ?: IptvSourceDetail.None
-                },
-                isSelectedProvider = { currentIptvSourceProvider() == iptvSource },
-                onSetCurrent = { onSetCurrent(iptvSource) },
-                onDelete = { onDelete(iptvSource) },
-                onClearCache = { onClearCache(iptvSource) },
-            )
-        }
-
-        item {
-            var visible by remember { mutableStateOf(false) }
-
-            ListItem(
-                modifier = Modifier.handleKeyEvents(onSelect = { visible = true }),
-                headlineContent = { Text("添加其他直播源") },
-                selected = false,
-                onClick = {},
-            )
-
-            SimplePopup(
-                visibleProvider = { visible },
-                onDismissRequest = { visible = false },
-            ) {
-                PushContent()
-            }
-        }
-    }
-}
-
-@Composable
-private fun IptvSourceItem(
-    modifier: Modifier = Modifier,
-    iptvSourceProvider: () -> IptvSource = { IptvSource() },
-    iptvSourceDetailProvider: () -> IptvSourceDetail = { IptvSourceDetail.Loading },
-    isSelectedProvider: () -> Boolean = { false },
-    onSetCurrent: () -> Unit = {},
-    onDelete: () -> Unit = {},
-    onClearCache: () -> Unit = {},
-) {
-    val iptvSource = iptvSourceProvider()
-    val iptvSourceDetail = iptvSourceDetailProvider()
-    val isSelected = isSelectedProvider()
-
-    val popupManager = LocalPopupManager.current
-    val focusRequester = remember { FocusRequester() }
-
-    var actionsVisible by remember { mutableStateOf(false) }
-
-    ListItem(
-        modifier = modifier
-            .focusRequester(focusRequester)
-            .handleKeyEvents(
-                onSelect = {
-                    popupManager.push(focusRequester, true)
-                    actionsVisible = true
-                },
-                onLongSelect = {
-                    popupManager.push(focusRequester, true)
-                    actionsVisible = true
-                },
-            ),
-        headlineContent = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(iptvSource.name)
-
-                Tag(
-                    if (iptvSource.isLocal) "本地" else "远程",
-                    colors = TagDefaults.colors(
-                        containerColor = LocalContentColor.current.copy(0.1f)
-                    ),
-                )
-
-                if (!iptvSource.transformJs.isNullOrEmpty()) {
-                    Tag(
-                        "转换JS",
-                        colors = TagDefaults.colors(
-                            containerColor = LocalContentColor.current.copy(0.1f)
-                        ),
-                    )
-                }
-            }
-        },
-        supportingContent = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(iptvSource.url)
-
-                if (iptvSourceDetail is IptvSourceDetail.Ready) {
-                    Text(
-                        listOf(
-                            "共${iptvSourceDetail.channelGroupCount}个分组",
-                            "${iptvSourceDetail.channelCount}个频道",
-                            "${iptvSourceDetail.lineCount}条线路"
-                        ).joinToString("，")
-                    )
-                }
-            }
-        },
-        trailingContent = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (isSelected) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null)
-                }
-
-                when (iptvSourceDetail) {
-                    is IptvSourceDetail.Loading -> CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 3.dp,
-                        color = LocalContentColor.current,
-                        trackColor = MaterialTheme.colorScheme.surface.copy(0.1f),
-                    )
-
-                    is IptvSourceDetail.Error -> Icon(
-                        Icons.Default.Error,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                    )
-
-                    else -> Unit
-                }
-            }
-        },
-        selected = false,
-        onClick = {},
-    )
-
-    SimplePopup(
-        visibleProvider = { actionsVisible },
-        onDismissRequest = { actionsVisible = false },
-    ) {
-        SettingsIptvSourceActions(
-            iptvSourceProvider = { iptvSource },
-            onDismissRequest = { actionsVisible = false },
-            onSetCurrent = {
-                onSetCurrent()
-                actionsVisible = false
-            },
-            onDelete = {
-                onDelete()
-                actionsVisible = false
-            },
-            onClearCache = {
-                onClearCache()
-                actionsVisible = false
-            },
-        )
-    }
-}
-
-@Composable
-private fun SettingsIptvSourceActions(
-    modifier: Modifier = Modifier,
-    currentIptvSourceProvider: () -> IptvSource = { IptvSource() },
-    iptvSourceProvider: () -> IptvSource = { IptvSource() },
-    onDismissRequest: () -> Unit = {},
-    onSetCurrent: () -> Unit = {},
-    onDelete: () -> Unit = {},
-    onClearCache: () -> Unit = {},
-) {
-    val currentIptvSource = currentIptvSourceProvider()
-    val iptvSource = iptvSourceProvider()
-
-    Drawer(
-        modifier = modifier.width(5.gridColumns()),
-        onDismissRequest = onDismissRequest,
-        position = DrawerPosition.Center,
-        header = {
-            Text(
-                iptvSource.name,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-    ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(vertical = 10.dp),
+        LazyColumn(
+            state = listState,
+            contentPadding = padding.copy(top = 10.dp).paddingValues,
             verticalArrangement = Arrangement.spacedBy(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item {
-                SettingsIptvSourceActionItem(
-                    title = "设为当前",
-                    imageVector = Icons.Outlined.Add,
-                    onSelected = onSetCurrent,
-                    disabled = currentIptvSource == iptvSource,
-                    modifier = Modifier.focusOnLaunched(),
-                )
+            if (sources.isEmpty()) item {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("暂无订阅源")
+                    Text("选择右上角“扫码添加”或“手动添加”来添加订阅源。")
+                }
             }
-
-            item {
-                SettingsIptvSourceActionItem(
-                    title = "删除",
-                    imageVector = Icons.Outlined.DeleteOutline,
-                    onSelected = onDelete,
-                )
-            }
-
-            item {
-                SettingsIptvSourceActionItem(
-                    title = "清除缓存",
-                    imageVector = Icons.Outlined.ClearAll,
-                    onSelected = onClearCache,
-                )
-            }
-
-            item {
-                SettingsIptvSourceActionItem(
-                    title = "返回",
-                    imageVector = Icons.Outlined.ArrowBackIosNew,
-                    onSelected = onDismissRequest,
+            itemsIndexed(sources, key = { _, source -> source.name + "\n" + source.url }) { index, source ->
+                val open = { lastIndex = index; selectedUrl = source.url; selectedName = source.name }
+                ListItem(
+                    modifier = (if (index == lastIndex) Modifier.focusOnLaunched() else Modifier).handleKeyEvents(onSelect = open),
+                    selected = false,
+                    onClick = {},
+                    leadingContent = { Text("#${index + 1}") },
+                    headlineContent = { Text(source.name) },
+                    supportingContent = { Text(source.url, maxLines = 2) },
+                    trailingContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (source == currentIptvSourceProvider()) Icon(Icons.Default.CheckCircle, "当前订阅源", Modifier.size(18.dp))
+                            Icon(Icons.Default.ChevronRight, "查看订阅源")
+                        }
+                    },
                 )
             }
         }
     }
-}
-
-@Composable
-private fun SettingsIptvSourceActionItem(
-    modifier: Modifier = Modifier,
-    title: String,
-    imageVector: ImageVector,
-    onSelected: () -> Unit = {},
-    disabled: Boolean = false,
-) {
-    ListItem(
-        modifier = modifier
-            .fillMaxWidth()
-            .ifElse(
-                !disabled,
-                Modifier.handleKeyEvents(onSelect = onSelected),
-            ),
-        colors = ListItemDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.onSurface.copy(0.1f),
-        ),
-        selected = false,
-        onClick = {},
-        leadingContent = { Icon(imageVector, contentDescription = null) },
-        headlineContent = { Text(title) },
-        enabled = !disabled,
-    )
-}
-
-private sealed interface IptvSourceDetail {
-    data object None : IptvSourceDetail
-    data object Loading : IptvSourceDetail
-    data object Error : IptvSourceDetail
-    data class Ready(
-        val channelGroupCount: Int,
-        val channelCount: Int,
-        val lineCount: Int,
-    ) : IptvSourceDetail
-}
-
-@Preview
-@Composable
-private fun SettingsIptvSourceItemPreview() {
-    MyTvTheme {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            IptvSourceItem(
-                iptvSourceProvider = { IptvSource.EXAMPLE },
-            )
-
-            IptvSourceItem(
-                iptvSourceProvider = { IptvSource.EXAMPLE },
-                iptvSourceDetailProvider = { IptvSourceDetail.Ready(10, 100, lineCount = 1000) },
-            )
-
-            IptvSourceItem(
-                iptvSourceProvider = { IptvSource.EXAMPLE },
-                iptvSourceDetailProvider = { IptvSourceDetail.Error },
-            )
-
-            IptvSourceItem(
-                iptvSourceProvider = { IptvSource.EXAMPLE },
-                isSelectedProvider = { true },
-            )
-
-            IptvSourceItem(
-                modifier = Modifier.focusOnLaunched(),
-                iptvSourceProvider = { IptvSource.EXAMPLE },
-                iptvSourceDetailProvider = { IptvSourceDetail.Error },
-                isSelectedProvider = { true },
-            )
+    SimplePopup(visibleProvider = { showQr }, onDismissRequest = { showQr = false }) {
+        Drawer(position = DrawerPosition.Center, onDismissRequest = { showQr = false }, header = { Text("扫码添加订阅源") }) {
+            PushContent()
         }
-    }
-}
-
-@Preview
-@Composable
-private fun SettingsIptvSourceActionsPreview() {
-    MyTvTheme {
-        SettingsIptvSourceActions()
-    }
-}
-
-@Preview(device = "id:Android TV (720p)")
-@Composable
-private fun SettingsIptvSourceScreenPreview() {
-    MyTvTheme {
-        SettingsIptvSourceScreen(
-            currentIptvSourceProvider = { IptvSourceList.EXAMPLE.first() },
-            iptvSourceListProvider = { IptvSourceList.EXAMPLE },
-            onSetCurrent = {},
-        )
     }
 }

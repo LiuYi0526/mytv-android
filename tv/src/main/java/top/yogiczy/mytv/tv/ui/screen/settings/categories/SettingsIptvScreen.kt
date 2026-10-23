@@ -43,7 +43,7 @@ fun SettingsIptvScreen(
 
             SettingsListItem(
                 modifier = Modifier.focusRequester(firstItemFocusRequester),
-                headlineContent = "自定义直播源",
+                headlineContent = "订阅源",
                 trailingContent = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

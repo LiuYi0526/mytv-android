@@ -15,6 +15,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
+import top.yogiczy.mytv.core.data.entities.channel.ChannelFavoriteList
+import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceList
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceList
 import top.yogiczy.mytv.core.data.repositories.epg.EpgRepository
@@ -233,6 +235,30 @@ fun SettingsScreen(
                     SettingsIptvSourceScreen(
                         currentIptvSourceProvider = { settingsViewModel.iptvSourceCurrent },
                         iptvSourceListProvider = { settingsViewModel.iptvSourceList },
+                        onSave = { old, updated ->
+                            val wasEmpty = settingsViewModel.iptvSourceList.isEmpty()
+                            settingsViewModel.iptvSourceList = IptvSourceList(
+                                if (old == null) settingsViewModel.iptvSourceList + updated
+                                else settingsViewModel.iptvSourceList.map { if (it == old) updated else it }
+                            )
+                            if (old != null) {
+                                settingsViewModel.iptvChannelFavoriteList = ChannelFavoriteList(
+                                    settingsViewModel.iptvChannelFavoriteList.map {
+                                        if (it.iptvSourceName == old.name) it.copy(iptvSourceName = updated.name) else it
+                                    }
+                                )
+                                settingsViewModel.updateHistorySource(old, updated)
+                            }
+                            if (old == settingsViewModel.iptvSourceCurrent || wasEmpty) {
+                                settingsViewModel.iptvSourceCurrent = updated
+                                if (old?.url != updated.url) {
+                                    settingsViewModel.iptvChannelGroupHiddenList = emptySet()
+                                    settingsViewModel.iptvChannelLastPlay = Channel.EMPTY
+                                }
+                                onReload()
+                            }
+                            Snackbar.show("订阅源已保存")
+                        },
                         onSetCurrent = {
                             settingsViewModel.iptvSourceCurrent = it
                             settingsViewModel.iptvChannelGroupHiddenList = emptySet()
@@ -242,6 +268,12 @@ fun SettingsScreen(
                         onDelete = {
                             settingsViewModel.iptvSourceList =
                                 IptvSourceList(settingsViewModel.iptvSourceList - it)
+                            if (settingsViewModel.iptvSourceCurrent == it) {
+                                settingsViewModel.iptvSourceCurrent = settingsViewModel.iptvSourceList.firstOrNull() ?: IptvSource()
+                                settingsViewModel.iptvChannelGroupHiddenList = emptySet()
+                                settingsViewModel.iptvChannelLastPlay = Channel.EMPTY
+                                onReload()
+                            }
                         },
                         onClearCache = {
                             coroutineScope.launch {
@@ -249,9 +281,7 @@ fun SettingsScreen(
                                 Snackbar.show("缓存已清除")
                             }
                         },
-                        onBackPressed = {
-                            if (!navController.navigateUp()) onBackPressed()
-                        },
+                        onBackPressed = { navigateBack() },
                     )
                 }
 

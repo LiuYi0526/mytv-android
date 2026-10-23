@@ -1,5 +1,6 @@
 package top.yogiczy.mytv.tv.ui.material
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
@@ -75,6 +76,7 @@ fun PopupContent(
     content: @Composable BoxScope.() -> Unit,
 ) {
     if (!visibleProvider()) return
+    BackHandler { onDismissRequest?.invoke() }
 
     Box(
         modifier
@@ -102,6 +104,10 @@ fun SimplePopup(
     val visible = visibleProvider()
     val key = remember { UUID.randomUUID().toString() }
     val popupState = LocalPopupState.current
+
+    DisposableEffect(key) {
+        onDispose { popupState.removeAll { it.key == key } }
+    }
 
     if (visible) {
         popupState.add(

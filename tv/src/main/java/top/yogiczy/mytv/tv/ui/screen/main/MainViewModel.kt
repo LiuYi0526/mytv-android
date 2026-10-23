@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -80,6 +81,10 @@ class MainViewModel : ViewModel() {
     }
 
     private suspend fun refreshChannel() {
+        if (Configs.iptvSourceCurrent.url.isBlank()) {
+            _uiState.value = MainUiState.Ready()
+            return
+        }
         _uiState.value = MainUiState.Loading("加载直播源")
 
         flow {
@@ -191,21 +196,28 @@ class MainViewModel : ViewModel() {
 
         if (_uiState.value is MainUiState.Ready) {
             val channelGroupList = (_uiState.value as MainUiState.Ready).channelGroupList
-
+            if (channelGroupList.isEmpty()) return
             flow {
-                val epgSource = Configs.epgSourceFollowIptv
-                    .takeIf { it }
-                    ?.let {
-                        val iptvRepository = IptvRepository(Configs.iptvSourceCurrent)
-                        iptvRepository.getEpgUrl()?.let { epgUrl ->
-                            EpgSource(
-                                name = Configs.iptvSourceCurrent.name,
-                                url = epgUrl,
-                            )
-                        }
-                    } ?: Configs.epgSourceCurrent
-
-                emit(EpgRepository(epgSource).getEpgList(Configs.epgRefreshTimeThreshold))
+                val source = Configs.iptvSourceCurrent
+                val urls = if (Configs.epgSourceFollowIptv) {
+                    source.epgUrls.ifEmpty { listOfNotNull(IptvRepository(source).getEpgUrl()) }
+                } else emptyList()
+                val epgSources = urls.map { EpgSource(name = source.name, url = it) }
+                    .ifEmpty { listOf(Configs.epgSourceCurrent) }
+                val guides = mutableListOf<EpgList>()
+                var failure: Exception? = null
+                for (epgSource in epgSources) {
+                    try {
+                        guides += EpgRepository(epgSource).getEpgList(Configs.epgRefreshTimeThreshold)
+                    } catch (ex: CancellationException) {
+                        throw ex
+                    } catch (ex: Exception) {
+                        failure = ex
+                    }
+                }
+                if (guides.isEmpty()) throw (failure ?: IllegalStateException("节目单为空"))
+                if (failure != null) Snackbar.show("部分节目单加载失败，已保留可用节目单", type = SnackbarType.ERROR)
+                emit(EpgList(guides.flatMap { it.value }))
             }
                 .retryWhen { e, attempt ->
                     if (attempt >= Constants.NETWORK_RETRY_COUNT) return@retryWhen false

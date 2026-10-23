@@ -9,6 +9,12 @@ data class ChannelHistoryItem(val sourceName: String, val sourceUrl: String, val
 
 @Serializable
 data class ChannelHistoryList(val value: List<ChannelHistoryItem> = emptyList()) {
+    fun updateSource(old: IptvSource, updated: IptvSource) = ChannelHistoryList(value.map { entry ->
+        if (entry.sourceName == old.name && entry.sourceUrl == IptvSourceUrl.parse(old.url).requestUrl) {
+            entry.copy(sourceName = updated.name, sourceUrl = IptvSourceUrl.parse(updated.url).requestUrl)
+        } else entry
+    })
+
     fun record(source: IptvSource, channel: Channel): ChannelHistoryList {
         if (channel.name.isBlank() || channel.lineList.none { it.url.isNotBlank() }) return this
         val entry = ChannelHistoryItem(source.name, IptvSourceUrl.parse(source.url).requestUrl, channel)

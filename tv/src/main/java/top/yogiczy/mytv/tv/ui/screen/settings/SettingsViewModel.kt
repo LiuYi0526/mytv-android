@@ -216,6 +216,11 @@ class SettingsViewModel : ViewModel() {
     var iptvChannelHistory by mutableStateOf(ChannelHistoryList())
         private set
 
+    fun updateHistorySource(old: IptvSource, updated: IptvSource) {
+        iptvChannelHistory = Configs.iptvChannelHistory.updateSource(old, updated)
+        Configs.iptvChannelHistory = iptvChannelHistory
+    }
+
     fun recordChannelWatch(channel: Channel) {
         iptvChannelHistory = Configs.iptvChannelHistory.record(Configs.iptvSourceCurrent, channel)
         Configs.iptvChannelHistory = iptvChannelHistory
