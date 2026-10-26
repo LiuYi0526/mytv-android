@@ -1,7 +1,11 @@
 package top.yogiczy.mytv.core.data.repositories.iptv
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
@@ -102,12 +106,26 @@ class IptvRepository(private val source: IptvSource) :
         }
     }
 
-    suspend fun getEpgUrl(): String? {
-        return runCatching {
+    suspend fun getEpgUrl(): String? = getEpgUrls().firstOrNull()
+
+    suspend fun getEpgUrls(): List<String> {
+        return try {
             val sourceData = rawRepository.getRaw(Long.MAX_VALUE)
             val parser = IptvParser.instances.first { it.isSupport(sourceUrl.requestUrl, sourceData) }
-            parser.getEpgUrl(sourceData)
-        }.getOrNull()
+            parser.getEpgUrls(sourceData)
+        } catch (ex: CancellationException) {
+            throw ex
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            emptyList()
+        }
+    }
+
+    /** Guide discovery is optional: an unavailable playlist must not prevent adding a source. */
+    suspend fun withDetectedEpgUrls(): IptvSource {
+        if (source.epgUrls.isNotEmpty()) return source
+        val detected = withTimeoutOrNull(10_000) { getEpgUrls() }.orEmpty()
+        return source.copy(epgUrls = detected)
     }
 
     override suspend fun clearCache() {

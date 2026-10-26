@@ -27,6 +27,8 @@ interface IptvParser {
         return null
     }
 
+    suspend fun getEpgUrls(data: String): List<String> = listOfNotNull(getEpgUrl(data))
+
     companion object {
         val instances = listOf(
             M3uIptvParser(),

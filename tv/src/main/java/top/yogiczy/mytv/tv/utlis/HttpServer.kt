@@ -241,12 +241,20 @@ object HttpServer : Loggable("HttpServer") {
             }
         }
 
-        newIptvSource?.let {
-            Configs.iptvSourceList = IptvSourceList(Configs.iptvSourceList + it)
-            Configs.iptvSourceCurrent = it
+        val source = newIptvSource
+        if (source == null) {
+            responseSuccess(response)
+            return
         }
-
-        responseSuccess(response)
+        // Keep network discovery off the HTTP event loop so configs and the QR page remain responsive.
+        CoroutineScope(Dispatchers.IO).launch {
+            val detected = IptvRepository(source).withDetectedEpgUrls()
+            AsyncServer.getDefault().post {
+                Configs.iptvSourceList = IptvSourceList(Configs.iptvSourceList + detected)
+                Configs.iptvSourceCurrent = detected
+                responseSuccess(response)
+            }
+        }
     }
 
     private fun handleEpgSourcePush(

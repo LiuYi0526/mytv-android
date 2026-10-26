@@ -9,7 +9,7 @@ import kotlinx.coroutines.withContext
 class M3uIptvParser : IptvParser {
 
     override fun isSupport(url: String, data: String): Boolean {
-        return data.startsWith("#EXTM3U")
+        return data.trimStart { it.isWhitespace() || it == '\uFEFF' }.startsWith("#EXTM3U", ignoreCase = true)
     }
 
     override suspend fun parse(data: String) =
@@ -72,17 +72,23 @@ class M3uIptvParser : IptvParser {
             channelList
         }
 
-    override suspend fun getEpgUrl(data: String): String? {
-        val lines = data.split("\r\n", "\n")
-        return lines.firstOrNull { it.startsWith("#EXTM3U") }?.let { defLine ->
-            Regex("x-tvg-url=\"(.*?)\"").find(defLine)?.groupValues?.get(1)
-                ?.split(",")
-                ?.firstOrNull()
-                ?.trim()
-                ?: Regex("url-tvg=\"(.*?)\"").find(defLine)?.groupValues?.get(1)
-                    ?.split(",")
-                    ?.firstOrNull()
-                    ?.trim()
-        }
+    override suspend fun getEpgUrl(data: String): String? = getEpgUrls(data).firstOrNull()
+
+    override suspend fun getEpgUrls(data: String): List<String> {
+        val header = data.lineSequence().map { it.trim().trimStart('\uFEFF').trimStart() }
+            .firstOrNull { it.isNotEmpty() } ?: return emptyList()
+        if (!header.startsWith("#EXTM3U", ignoreCase = true)) return emptyList()
+        // Read header attributes only: channel attributes must not become subscription guides.
+        val attributes = Regex("""(?:^|\s)([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s]+))""")
+        return attributes.findAll(header).filter {
+            it.groupValues[1].equals("url-tvg", true) || it.groupValues[1].equals("x-tvg-url", true)
+        }.flatMap { match ->
+            match.groupValues.drop(2).firstOrNull { it.isNotEmpty() }.orEmpty().split(',').asSequence()
+        }.map { it.trim() }.filter { value ->
+            runCatching {
+                val uri = java.net.URI(value)
+                (uri.scheme.equals("http", true) || uri.scheme.equals("https", true)) && !uri.host.isNullOrBlank()
+            }.getOrDefault(false)
+        }.distinct().toList()
     }
 }

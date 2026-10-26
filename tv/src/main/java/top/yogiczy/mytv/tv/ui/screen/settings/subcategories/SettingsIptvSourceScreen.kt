@@ -12,7 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.QrCode
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -27,14 +26,10 @@ import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceList
 import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
-import top.yogiczy.mytv.tv.ui.material.Drawer
-import top.yogiczy.mytv.tv.ui.material.DrawerPosition
-import top.yogiczy.mytv.tv.ui.material.SimplePopup
 import top.yogiczy.mytv.tv.ui.material.Snackbar
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScaffoldHeaderBtn
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
-import top.yogiczy.mytv.tv.ui.screen.push.PushContent
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunched
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
 
@@ -55,7 +50,6 @@ fun SettingsIptvSourceScreen(
     var selectedName by rememberSaveable { mutableStateOf<String?>(null) }
     var adding by rememberSaveable { mutableStateOf(false) }
     var lastIndex by rememberSaveable { mutableIntStateOf(0) }
-    var showQr by remember { mutableStateOf(false) }
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -100,8 +94,7 @@ fun SettingsIptvSourceScreen(
                         } finally { refreshing = false }
                     }
                 })
-                AppScaffoldHeaderBtn(title = "扫码添加", imageVector = Icons.Outlined.QrCode, onSelect = { showQr = true })
-                AppScaffoldHeaderBtn(title = "手动添加", imageVector = Icons.Outlined.Add, onSelect = { adding = true })
+                AppScaffoldHeaderBtn(title = "添加订阅源", imageVector = Icons.Outlined.Add, onSelect = { adding = true })
             }
         },
         canBack = true,
@@ -115,7 +108,7 @@ fun SettingsIptvSourceScreen(
             if (sources.isEmpty()) item {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("暂无订阅源")
-                    Text("选择右上角“扫码添加”或“手动添加”来添加订阅源。")
+                    Text("选择右上角“添加订阅源”，扫码或手动配置。")
                 }
             }
             itemsIndexed(sources, key = { _, source -> source.name + "\n" + source.url }) { index, source ->
@@ -135,11 +128,6 @@ fun SettingsIptvSourceScreen(
                     },
                 )
             }
-        }
-    }
-    SimplePopup(visibleProvider = { showQr }, onDismissRequest = { showQr = false }) {
-        Drawer(position = DrawerPosition.Center, onDismissRequest = { showQr = false }, header = { Text("扫码添加订阅源") }) {
-            PushContent()
         }
     }
 }

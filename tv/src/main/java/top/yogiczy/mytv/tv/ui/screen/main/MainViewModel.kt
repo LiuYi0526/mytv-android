@@ -200,7 +200,7 @@ class MainViewModel : ViewModel() {
             flow {
                 val source = Configs.iptvSourceCurrent
                 val urls = if (Configs.epgSourceFollowIptv) {
-                    source.epgUrls.ifEmpty { listOfNotNull(IptvRepository(source).getEpgUrl()) }
+                    source.epgUrls.ifEmpty { IptvRepository(source).getEpgUrls() }
                 } else emptyList()
                 val epgSources = urls.map { EpgSource(name = source.name, url = it) }
                     .ifEmpty { listOf(Configs.epgSourceCurrent) }
