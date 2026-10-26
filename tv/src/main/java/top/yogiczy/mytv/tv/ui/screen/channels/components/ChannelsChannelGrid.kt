@@ -1,6 +1,7 @@
 package top.yogiczy.mytv.tv.ui.screen.channels.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -32,6 +33,7 @@ import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
+import top.yogiczy.mytv.tv.ui.theme.resolveChannelGridColumns
 import top.yogiczy.mytv.tv.ui.tooling.PreviewWithLayoutGrids
 import top.yogiczy.mytv.tv.ui.utils.backHandler
 import top.yogiczy.mytv.tv.ui.utils.ifElse
@@ -72,49 +74,52 @@ fun ChannelsChannelGrid(
         updateTopBarVisibility(shouldShowTopBar)
     }
 
-    LazyVerticalGrid(
-        modifier = modifier
-            .backHandler {
-                if (!isFirstItemFocused) {
-                    coroutineScope.launch {
-                        gridState.scrollToItem(0)
-                        firstItemFocusRequester.saveRequestFocus()
+    BoxWithConstraints(modifier) {
+        val columnCount = resolveChannelGridColumns((maxWidth - childPadding.start - childPadding.end).value)
+        LazyVerticalGrid(
+            modifier = Modifier
+                .backHandler {
+                    if (!isFirstItemFocused) {
+                        coroutineScope.launch {
+                            gridState.scrollToItem(0)
+                            firstItemFocusRequester.saveRequestFocus()
+                        }
+                    } else {
+                        focusManager.moveFocus(FocusDirection.Up)
                     }
-                } else {
-                    focusManager.moveFocus(FocusDirection.Up)
                 }
-            }
-            .ifElse(
-                settingsVM.uiFocusOptimize && channelList.isNotEmpty(),
-                Modifier.saveFocusRestorer { firstItemFocusRequester }
-            ),
-        state = gridState,
-        columns = GridCells.Fixed(5),
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = childPadding.copy(top = 10.dp).paddingValues,
-    ) {
-        itemsIndexed(channelList) { index, channel ->
-            ChannelsChannelItem(
-                modifier = Modifier
-                    .ifElse(
-                        index == 0,
-                        Modifier
-                            .focusRequester(firstItemFocusRequester)
-                            .onFocusChanged { isFirstItemFocused = it.isFocused },
-                    ),
-                channelProvider = { channel },
-                onChannelSelected = { onChannelSelected(channel) },
-                onChannelFavoriteToggle = {
-                    if (inFavoriteMode) {
-                        if (index % 5 == 0 && index == channelList.size - 1)
-                            focusManager.moveFocus(FocusDirection.Up)
-                    }
+                .ifElse(
+                    settingsVM.uiFocusOptimize && channelList.isNotEmpty(),
+                    Modifier.saveFocusRestorer { firstItemFocusRequester }
+                ),
+            state = gridState,
+            columns = GridCells.Fixed(columnCount),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = childPadding.copy(top = 10.dp).paddingValues,
+        ) {
+            itemsIndexed(channelList) { index, channel ->
+                ChannelsChannelItem(
+                    modifier = Modifier
+                        .ifElse(
+                            index == 0,
+                            Modifier
+                                .focusRequester(firstItemFocusRequester)
+                                .onFocusChanged { isFirstItemFocused = it.isFocused },
+                        ),
+                    channelProvider = { channel },
+                    onChannelSelected = { onChannelSelected(channel) },
+                    onChannelFavoriteToggle = {
+                        if (inFavoriteMode) {
+                            if (index % columnCount == 0 && index == channelList.size - 1)
+                                focusManager.moveFocus(FocusDirection.Up)
+                        }
 
-                    onChannelFavoriteToggle(channel)
-                },
-                recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
-            )
+                        onChannelFavoriteToggle(channel)
+                    },
+                    recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
+                )
+            }
         }
     }
 }

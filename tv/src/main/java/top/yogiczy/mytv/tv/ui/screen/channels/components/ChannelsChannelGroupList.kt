@@ -35,7 +35,8 @@ fun ChannelsChannelGroupList(
     ) {
         LazyRow(
             contentPadding = PaddingValues(start = childPadding.start, end = childPadding.end),
-            horizontalArrangement = Arrangement.spacedBy(20.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            preservePaddingOnFocus = true,
         ) { runtime ->
             items(channelGroupList, runtime) { itemModifier, channelGroup ->
                 ChannelsChannelGroupItem(
