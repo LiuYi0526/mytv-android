@@ -18,6 +18,7 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.match
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
+import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
 import top.yogiczy.mytv.core.data.repositories.epg.EpgRepository
 import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
 import top.yogiczy.mytv.tv.ui.material.PopupContent
@@ -380,7 +381,8 @@ fun MainContent(
                 settingsViewModel.iptvChannelLinePlayableUrlList = emptySet()
                 coroutineScope.launch {
                     IptvRepository(settingsViewModel.iptvSourceCurrent).clearCache()
-                    EpgRepository(settingsViewModel.epgSourceCurrent).clearCache()
+                    EpgSourceCatalog.resolve(settingsViewModel.iptvSourceCurrent, settingsViewModel.epgSourceList,
+                        settingsViewModel.epgSourceCurrent).forEach { EpgRepository(it).clearCache() }
                     Snackbar.show("缓存已清除，请重启应用")
                 }
             },

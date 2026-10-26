@@ -26,6 +26,7 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.match
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
+import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
 import top.yogiczy.mytv.core.data.network.HttpException
 import top.yogiczy.mytv.core.data.repositories.epg.EpgRepository
@@ -59,6 +60,7 @@ class MainViewModel : ViewModel() {
     fun init() {
         _lastJob?.cancel()
         _lastJob = viewModelScope.launch {
+            Configs.reconcileEpgCatalog()
             ChannelAlias.refresh()
             refreshChannel()
             refreshEpg()
@@ -198,12 +200,8 @@ class MainViewModel : ViewModel() {
             val channelGroupList = (_uiState.value as MainUiState.Ready).channelGroupList
             if (channelGroupList.isEmpty()) return
             flow {
-                val source = Configs.iptvSourceCurrent
-                val urls = if (Configs.epgSourceFollowIptv) {
-                    source.epgUrls.ifEmpty { IptvRepository(source).getEpgUrls() }
-                } else emptyList()
-                val epgSources = urls.map { EpgSource(name = source.name, url = it) }
-                    .ifEmpty { listOf(Configs.epgSourceCurrent) }
+                val epgSources = EpgSourceCatalog.resolve(Configs.iptvSourceCurrent, Configs.epgSourceList, Configs.epgSourceCurrent)
+                if (epgSources.isEmpty()) { emit(EpgList()); return@flow }
                 val guides = mutableListOf<EpgList>()
                 var failure: Exception? = null
                 for (epgSource in epgSources) {

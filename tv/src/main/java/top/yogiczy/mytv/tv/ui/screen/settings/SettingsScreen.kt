@@ -22,6 +22,7 @@ import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceList
 import top.yogiczy.mytv.core.data.repositories.epg.EpgRepository
 import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
 import top.yogiczy.mytv.tv.ui.material.Snackbar
+import top.yogiczy.mytv.tv.ui.utils.Configs
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.categories.SettingsAppScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.categories.SettingsCloudSyncScreen
@@ -235,7 +236,10 @@ fun SettingsScreen(
                     SettingsIptvSourceScreen(
                         currentIptvSourceProvider = { settingsViewModel.iptvSourceCurrent },
                         iptvSourceListProvider = { settingsViewModel.iptvSourceList },
+                        epgSourcesProvider = { settingsViewModel.epgSourceList },
+                        defaultEpgSourceProvider = { settingsViewModel.epgSourceCurrent },
                         onSave = { old, updated ->
+                            Configs.registerEpgUrls(updated.epgUrls, "${updated.name} 节目单")
                             val wasEmpty = settingsViewModel.iptvSourceList.isEmpty()
                             settingsViewModel.iptvSourceList = IptvSourceList(
                                 if (old == null) settingsViewModel.iptvSourceList + updated
@@ -258,6 +262,7 @@ fun SettingsScreen(
                                 onReload()
                             }
                             Snackbar.show("订阅源已保存")
+                            settingsViewModel.refresh()
                         },
                         onSetCurrent = {
                             settingsViewModel.iptvSourceCurrent = it
@@ -327,13 +332,20 @@ fun SettingsScreen(
                     SettingsEpgSourceScreen(
                         currentEpgSourceProvider = { settingsViewModel.epgSourceCurrent },
                         epgSourceListProvider = { settingsViewModel.epgSourceList },
+                        onSave = { old, updated ->
+                            settingsViewModel.saveEpgSource(old, updated)
+                            Snackbar.show("节目单已保存")
+                            if (old != null) onReload()
+                        },
                         onSetCurrent = {
                             settingsViewModel.epgSourceCurrent = it
+                            Snackbar.show("已设为默认节目单")
                             onReload()
                         },
                         onDelete = {
-                            settingsViewModel.epgSourceList =
-                                EpgSourceList(settingsViewModel.epgSourceList - it)
+                            settingsViewModel.deleteEpgSource(it)
+                            Snackbar.show("节目单已删除")
+                            onReload()
                         },
                         onClearCache = {
                             coroutineScope.launch {

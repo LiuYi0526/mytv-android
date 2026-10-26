@@ -36,22 +36,12 @@ fun SettingsEpgScreen(
         }
 
         item {
-            SettingsListItem(
-                headlineContent = "跟随直播源",
-                supportingContent = "优先使用直播源中定义的节目单",
-                trailingContent = { Switch(settingsViewModel.epgSourceFollowIptv, null) },
-                onSelect = {
-                    settingsViewModel.epgSourceFollowIptv = !settingsViewModel.epgSourceFollowIptv
-                },
-            )
-        }
-
-        item {
             val currentEpgSource = settingsViewModel.epgSourceCurrent
 
             SettingsListItem(
-                headlineContent = "自定义节目单",
-                trailingContent = { Text(currentEpgSource.name) },
+                headlineContent = "节目单管理",
+                supportingContent = "添加、编辑节目单或设置默认节目单；订阅源可单独选择",
+                trailingContent = { Text("默认：${currentEpgSource.name.ifBlank { "未设置" }}") },
                 onSelect = toEpgSourceScreen,
                 link = true,
             )

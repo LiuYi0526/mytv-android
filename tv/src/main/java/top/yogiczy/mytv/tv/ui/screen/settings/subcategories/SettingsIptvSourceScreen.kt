@@ -24,6 +24,7 @@ import androidx.tv.material3.Text
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
+import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceList
 import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
 import top.yogiczy.mytv.tv.ui.material.Snackbar
@@ -38,6 +39,8 @@ fun SettingsIptvSourceScreen(
     modifier: Modifier = Modifier,
     currentIptvSourceProvider: () -> IptvSource = { IptvSource() },
     iptvSourceListProvider: () -> IptvSourceList = { IptvSourceList() },
+    epgSourcesProvider: () -> List<EpgSource> = { emptyList() },
+    defaultEpgSourceProvider: () -> EpgSource = { EpgSource() },
     onSave: (IptvSource?, IptvSource) -> Unit = { _, _ -> },
     onSetCurrent: (IptvSource) -> Unit = {},
     onDelete: (IptvSource) -> Unit = {},
@@ -59,6 +62,8 @@ fun SettingsIptvSourceScreen(
             SettingsIptvSourceDetailScreen(
                 original = selected,
                 sources = sources,
+                epgSources = epgSourcesProvider(),
+                defaultEpgSource = defaultEpgSourceProvider(),
                 isCurrent = selected == currentIptvSourceProvider(),
                 onSave = { updated ->
                     onSave(selected, updated)

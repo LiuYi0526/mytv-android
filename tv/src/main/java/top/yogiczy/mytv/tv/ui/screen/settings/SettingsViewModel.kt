@@ -287,6 +287,18 @@ class SettingsViewModel : ViewModel() {
             afterSetWhenCloudSyncAutoPull()
         }
 
+    fun saveEpgSource(old: EpgSource?, updated: EpgSource) {
+        Configs.saveEpgSource(old, updated)
+        refresh()
+        afterSetWhenCloudSyncAutoPull()
+    }
+
+    fun deleteEpgSource(source: EpgSource) {
+        Configs.deleteEpgSource(source)
+        refresh()
+        afterSetWhenCloudSyncAutoPull()
+    }
+
     private var _epgSourceCurrent by mutableStateOf(EpgSource())
     var epgSourceCurrent: EpgSource
         get() = _epgSourceCurrent
@@ -311,15 +323,6 @@ class SettingsViewModel : ViewModel() {
         set(value) {
             _epgRefreshTimeThreshold = value
             Configs.epgRefreshTimeThreshold = value
-            afterSetWhenCloudSyncAutoPull()
-        }
-
-    private var _epgSourceFollowIptv by mutableStateOf(false)
-    var epgSourceFollowIptv: Boolean
-        get() = _epgSourceFollowIptv
-        set(value) {
-            _epgSourceFollowIptv = value
-            Configs.epgSourceFollowIptv = value
             afterSetWhenCloudSyncAutoPull()
         }
 
@@ -634,6 +637,7 @@ class SettingsViewModel : ViewModel() {
     }
 
     fun refresh() {
+        Configs.reconcileEpgCatalog()
         _controlKeyActions = Configs.controlKeyActions
         _appBootLaunch = Configs.appBootLaunch
         _appPipEnable = Configs.appPipEnable
@@ -666,7 +670,6 @@ class SettingsViewModel : ViewModel() {
         _epgSourceCurrent = Configs.epgSourceCurrent
         _epgSourceList = Configs.epgSourceList
         _epgRefreshTimeThreshold = Configs.epgRefreshTimeThreshold
-        _epgSourceFollowIptv = Configs.epgSourceFollowIptv
         _epgChannelReserveList = Configs.epgChannelReserveList
         _uiShowEpgProgrammeProgress = Configs.uiShowEpgProgrammeProgress
         _uiShowEpgProgrammePermanentProgress = Configs.uiShowEpgProgrammePermanentProgress

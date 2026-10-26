@@ -110,7 +110,7 @@
                         </van-cell>
                     </van-cell-group>
 
-                    <van-cell-group inset title="节目单">
+                    <van-cell-group inset title="节目单" id="epg">
                         <van-cell title="自定义节目单">
                             <template #label>
                                 <van-space class="w-full" direction="vertical" size="small">
@@ -476,6 +476,10 @@
                     await refreshInfo()
                     await refreshChannelAlias()
                     await refreshConfigs()
+                    if (window.location.hash === '#epg') {
+                        await nextTick()
+                        document.getElementById('epg')?.scrollIntoView()
+                    }
                 })
 
                 return {

@@ -34,6 +34,8 @@ import androidx.tv.material3.ListItem
 import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceEdit
+import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
+import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
 import top.yogiczy.mytv.tv.ui.material.*
 import top.yogiczy.mytv.tv.ui.screen.components.AppScaffoldHeaderBtn
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
@@ -50,6 +52,8 @@ import top.yogiczy.mytv.tv.ui.utils.clickableNoIndication
 fun SettingsIptvSourceDetailScreen(
     original: IptvSource?,
     sources: List<IptvSource>,
+    epgSources: List<EpgSource>,
+    defaultEpgSource: EpgSource,
     isCurrent: Boolean,
     onSave: (IptvSource) -> Unit,
     onSetCurrent: () -> Unit,
@@ -130,16 +134,17 @@ fun SettingsIptvSourceDetailScreen(
             )
         }
         item {
-            SourceEditField(
-                title = "节目单链接", value = epg, hint = "节目单链接",
+            SourceEpgField(
+                epgUrls = epg.lineSequence().filter { it.isNotBlank() }.toList(),
+                sources = EpgSourceCatalog.register(epgSources, epg.lines(), "${name.ifBlank { "订阅源" }} 节目单"),
+                defaultSource = defaultEpgSource,
                 compact = original == null,
-                description = "启用“节目单跟随直播源”后使用，留空自动读取。支持 XML、XML.GZ；多个链接换行分隔。",
-                multiline = true, uri = true, onChange = { epgManuallyEdited = true; epg = it },
+                onChange = { epgManuallyEdited = true; epg = it.joinToString("\n") },
             )
         }
         if (original == null) item {
             Text(
-                if (epgManuallyEdited) "使用手动填写的节目单；多个链接换行分隔" else detectionMessage,
+                if (epgManuallyEdited) "使用所选节目单；未指定时使用默认节目单" else detectionMessage,
                 modifier = Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -176,20 +181,24 @@ fun SettingsIptvSourceDetailScreen(
 }
 
 @Composable
-private fun SourceDetailLayout(
+internal fun SourceDetailLayout(
     adding: Boolean,
     headerExtra: @Composable (() -> Unit)?,
     onBackPressed: () -> Unit,
+    addTitle: String = "添加订阅源",
+    editTitle: String = "订阅源",
+    qrUrl: String = HttpServer.serverUrl,
+    qrDescription: String = "使用手机扫码配置订阅源",
     content: LazyListScope.(FocusRequester) -> Unit,
 ) {
     if (!adding) {
-        SettingsCategoryScreen(header = { Text("订阅源") }, headerExtra = headerExtra,
+        SettingsCategoryScreen(header = { Text(editTitle) }, headerExtra = headerExtra,
             onBackPressed = onBackPressed, content = content)
         return
     }
     val padding = rememberChildPadding()
     val firstFocus = remember { FocusRequester() }
-    AppScreen(header = { Text("添加订阅源") }, canBack = true, onBackPressed = onBackPressed) {
+    AppScreen(header = { Text(addTitle) }, canBack = true, onBackPressed = onBackPressed) {
         Row(
             Modifier.fillMaxSize().padding(padding.copy(top = 10.dp).paddingValues),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
@@ -198,9 +207,9 @@ private fun SourceDetailLayout(
                 val qrSize = minOf(maxWidth - 24.dp, maxHeight - 110.dp, 250.dp).coerceAtLeast(64.dp)
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("扫码添加", style = MaterialTheme.typography.titleMedium)
-                    Qrcode(Modifier.size(qrSize), text = HttpServer.serverUrl)
-                    Text("使用手机扫码配置订阅源", style = MaterialTheme.typography.bodyMedium)
-                    Text(HttpServer.serverUrl, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
+                    Qrcode(Modifier.size(qrSize), text = qrUrl)
+                    Text(qrDescription, style = MaterialTheme.typography.bodyMedium)
+                    Text(qrUrl, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
                 }
             }
             Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)))
@@ -217,7 +226,7 @@ private fun SourceDetailLayout(
 }
 
 @Composable
-private fun SourceEditField(
+internal fun SourceEditField(
     modifier: Modifier = Modifier,
     title: String, value: String, hint: String, description: String,
     multiline: Boolean = false, uri: Boolean = false,
@@ -294,6 +303,6 @@ private fun SourceTextEditor(
 }
 
 @Composable
-private fun SourceDialogButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun SourceDialogButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Button(onClick = onClick, modifier = modifier.handleKeyEvents(onSelect = onClick)) { Text(text) }
 }

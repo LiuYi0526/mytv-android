@@ -9,6 +9,7 @@ import top.yogiczy.mytv.core.data.entities.control.ControlKeyActions
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceList
+import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceList
 import top.yogiczy.mytv.core.data.utils.Constants
@@ -123,8 +124,8 @@ object Configs {
         /** 节目单刷新时间阈值（小时） */
         EPG_REFRESH_TIME_THRESHOLD,
 
-        /** 节目单跟随直播源 */
-        EPG_SOURCE_FOLLOW_IPTV,
+        /** 独立节目单目录已初始化 */
+        EPG_CATALOG_INITIALIZED,
 
         /** 节目预约列表 */
         EPG_CHANNEL_RESERVE_LIST,
@@ -429,10 +430,47 @@ object Configs {
         get() = SP.getInt(KEY.EPG_REFRESH_TIME_THRESHOLD.name, Constants.EPG_REFRESH_TIME_THRESHOLD)
         set(value) = SP.putInt(KEY.EPG_REFRESH_TIME_THRESHOLD.name, value)
 
-    /** 节目单跟随直播源 */
-    var epgSourceFollowIptv: Boolean
-        get() = SP.getBoolean(KEY.EPG_SOURCE_FOLLOW_IPTV.name, false)
-        set(value) = SP.putBoolean(KEY.EPG_SOURCE_FOLLOW_IPTV.name, value)
+    /** Merge legacy bindings/imported configs without reintroducing deleted built-in entries. */
+    @Synchronized
+    fun reconcileEpgCatalog() {
+        val stored = epgSourceList
+        val initialized = SP.getBoolean(KEY.EPG_CATALOG_INITIALIZED.name, false)
+        val seed = if (initialized) stored else EpgSourceList((stored + Constants.EPG_SOURCE_LIST).distinctBy { it.url })
+        val catalog = EpgSourceCatalog.migrate(seed, epgSourceCurrent, iptvSourceList + iptvSourceCurrent)
+        if (catalog != stored) epgSourceList = catalog
+        val default = EpgSourceCatalog.defaultSource(catalog, epgSourceCurrent)
+        if (default != epgSourceCurrent) epgSourceCurrent = default
+        if (!initialized) SP.putBoolean(KEY.EPG_CATALOG_INITIALIZED.name, true)
+    }
+
+    @Synchronized
+    fun registerEpgUrls(urls: List<String>, name: String) {
+        reconcileEpgCatalog()
+        val updated = EpgSourceCatalog.register(epgSourceList, urls, name)
+        if (updated != epgSourceList) epgSourceList = updated
+        if (epgSourceCurrent.url.isBlank()) epgSourceCurrent = updated.firstOrNull() ?: EpgSource()
+    }
+
+    @Synchronized
+    fun saveEpgSource(old: EpgSource?, updated: EpgSource) {
+        reconcileEpgCatalog()
+        val checked = EpgSourceCatalog.prepare(updated.name, updated.url, epgSourceList.filter { it.url != old?.url })
+        epgSourceList = EpgSourceList(if (old == null) epgSourceList + checked
+            else epgSourceList.map { if (it.url == old.url) checked else it })
+        if (old != null) {
+            iptvSourceList = IptvSourceList(iptvSourceList.map { EpgSourceCatalog.updateBinding(it, old.url, checked.url) })
+            iptvSourceCurrent = EpgSourceCatalog.updateBinding(iptvSourceCurrent, old.url, checked.url)
+        }
+        if (epgSourceCurrent.url == old?.url || epgSourceCurrent.url.isBlank()) epgSourceCurrent = checked
+    }
+
+    @Synchronized
+    fun deleteEpgSource(source: EpgSource) {
+        epgSourceList = EpgSourceList(epgSourceList.filter { it.url != source.url })
+        iptvSourceList = IptvSourceList(iptvSourceList.map { EpgSourceCatalog.updateBinding(it, source.url, null) })
+        iptvSourceCurrent = EpgSourceCatalog.updateBinding(iptvSourceCurrent, source.url, null)
+        epgSourceCurrent = EpgSourceCatalog.defaultSource(epgSourceList, epgSourceCurrent)
+    }
 
     /** 节目预约列表 */
     var epgChannelReserveList: EpgProgrammeReserveList
@@ -701,6 +739,7 @@ object Configs {
     }
 
     fun toPartial(): Partial {
+        reconcileEpgCatalog()
         return Partial(
             controlKeyActions = controlKeyActions,
             appBootLaunch = appBootLaunch,
@@ -734,7 +773,6 @@ object Configs {
             epgSourceCurrent = epgSourceCurrent,
             epgSourceList = epgSourceList,
             epgRefreshTimeThreshold = epgRefreshTimeThreshold,
-            epgSourceFollowIptv = epgSourceFollowIptv,
             epgChannelReserveList = epgChannelReserveList,
             uiShowEpgProgrammeProgress = uiShowEpgProgrammeProgress,
             uiShowEpgProgrammePermanentProgress = uiShowEpgProgrammePermanentProgress,
@@ -805,7 +843,6 @@ object Configs {
         configs.epgSourceCurrent?.let { epgSourceCurrent = it }
         configs.epgSourceList?.let { epgSourceList = it }
         configs.epgRefreshTimeThreshold?.let { epgRefreshTimeThreshold = it }
-        configs.epgSourceFollowIptv?.let { epgSourceFollowIptv = it }
         configs.epgChannelReserveList?.let { epgChannelReserveList = it }
         configs.uiShowEpgProgrammeProgress?.let { uiShowEpgProgrammeProgress = it }
         configs.uiShowEpgProgrammePermanentProgress?.let {
@@ -841,6 +878,7 @@ object Configs {
         configs.cloudSyncWebDavUrl?.let { cloudSyncWebDavUrl = it }
         configs.cloudSyncWebDavUsername?.let { cloudSyncWebDavUsername = it }
         configs.cloudSyncWebDavPassword?.let { cloudSyncWebDavPassword = it }
+        reconcileEpgCatalog()
     }
 
     @Serializable
@@ -877,7 +915,6 @@ object Configs {
         val epgSourceCurrent: EpgSource? = null,
         val epgSourceList: EpgSourceList? = null,
         val epgRefreshTimeThreshold: Int? = null,
-        val epgSourceFollowIptv: Boolean? = null,
         val epgChannelReserveList: EpgProgrammeReserveList? = null,
         val uiShowEpgProgrammeProgress: Boolean? = null,
         val uiShowEpgProgrammePermanentProgress: Boolean? = null,

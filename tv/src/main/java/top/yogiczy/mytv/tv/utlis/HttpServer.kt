@@ -250,6 +250,7 @@ object HttpServer : Loggable("HttpServer") {
         CoroutineScope(Dispatchers.IO).launch {
             val detected = IptvRepository(source).withDetectedEpgUrls()
             AsyncServer.getDefault().post {
+                Configs.registerEpgUrls(detected.epgUrls, "${detected.name} 节目单")
                 Configs.iptvSourceList = IptvSourceList(Configs.iptvSourceList + detected)
                 Configs.iptvSourceCurrent = detected
                 responseSuccess(response)
@@ -265,9 +266,15 @@ object HttpServer : Loggable("HttpServer") {
         val name = body.get("name").toString()
         val url = body.get("url").toString()
 
-        EpgSource(name, url).let {
-            Configs.epgSourceList = EpgSourceList(Configs.epgSourceList + it)
-            Configs.epgSourceCurrent = it
+        try {
+            Configs.saveEpgSource(null, EpgSource(name, url))
+        } catch (ex: IllegalArgumentException) {
+            wrapResponse(response).apply {
+                code(400)
+                setContentType("text/plain; charset=utf-8")
+                send(ex.message ?: "节目单配置无效")
+            }
+            return
         }
 
         responseSuccess(response)
