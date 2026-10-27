@@ -55,6 +55,7 @@ import top.yogiczy.mytv.tv.ui.utils.handleLiveControls
 @Composable
 fun MainContent(
     modifier: Modifier = Modifier,
+    videoSurfaceVisible: Boolean = true,
     filteredChannelGroupListProvider: () -> ChannelGroupList = { ChannelGroupList() },
     favoriteChannelListProvider: () -> ChannelList = { ChannelList() },
     epgListProvider: () -> EpgList = { EpgList() },
@@ -120,6 +121,7 @@ fun MainContent(
     ) {
         VideoPlayerScreen(
             state = videoPlayerState,
+            surfaceVisible = videoSurfaceVisible,
             showMetadataProvider = { settingsViewModel.debugShowVideoPlayerMetadata },
         )
 

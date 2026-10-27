@@ -1,5 +1,6 @@
 package top.yogiczy.mytv.tv.ui.screen.main
 
+import androidx.compose.animation.EnterExitState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -141,6 +142,8 @@ fun MainScreen(
         modifier = modifier,
         navController = navController,
         startDestination = if (settingsViewModel.appAgreementAgreed) Screens.Loading() else Screens.Agreement(),
+        popEnterTransition = { livePopEnterTransition() },
+        popExitTransition = { livePopExitTransition() },
         builder = {
             composable(Screens.Agreement()) {
                 AgreementScreen(
@@ -200,6 +203,7 @@ fun MainScreen(
 
                 key(settingsViewModel.videoPlayerCore) {
                     top.yogiczy.mytv.tv.ui.screensold.main.components.MainContent(
+                        videoSurfaceVisible = transition.targetState != EnterExitState.PostExit,
                         filteredChannelGroupListProvider = filteredChannelGroupListProvider,
                         favoriteChannelListProvider = favoriteChannelListProvider,
                         epgListProvider = epgListProvider,

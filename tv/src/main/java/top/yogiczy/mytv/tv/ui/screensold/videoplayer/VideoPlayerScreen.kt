@@ -2,6 +2,7 @@ package top.yogiczy.mytv.tv.ui.screensold.videoplayer
 
 import android.view.SurfaceView
 import android.view.TextureView
+import android.view.View
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,7 @@ import top.yogiczy.mytv.tv.ui.utils.Configs
 fun VideoPlayerScreen(
     modifier: Modifier = Modifier,
     state: VideoPlayerState = rememberVideoPlayerState(),
+    surfaceVisible: Boolean = true,
     showMetadataProvider: () -> Boolean = { false },
 ) {
     val context = LocalContext.current
@@ -58,7 +60,12 @@ fun VideoPlayerScreen(
                         .align(Alignment.Center)
                         .then(displayModeModifier),
                     factory = { SurfaceView(context) },
-                    update = { state.setVideoSurfaceView(it) },
+                    update = {
+                        // SurfaceView does not follow the Compose destination's alpha.
+                        // Hide it at exit start instead of waiting for route disposal.
+                        it.visibility = if (surfaceVisible) View.VISIBLE else View.INVISIBLE
+                        if (surfaceVisible) state.setVideoSurfaceView(it)
+                    },
                 )
             }
 
@@ -68,7 +75,10 @@ fun VideoPlayerScreen(
                         .align(Alignment.Center)
                         .then(displayModeModifier),
                     factory = { TextureView(context) },
-                    update = { state.setVideoTextureView(it) },
+                    update = {
+                        it.visibility = if (surfaceVisible) View.VISIBLE else View.INVISIBLE
+                        if (surfaceVisible) state.setVideoTextureView(it)
+                    },
                 )
             }
         }
