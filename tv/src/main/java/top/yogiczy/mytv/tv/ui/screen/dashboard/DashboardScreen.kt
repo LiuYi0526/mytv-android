@@ -165,7 +165,7 @@ fun DashboardScreeIptvSource(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(currentIptvSource.name)
+            Text(if (currentIptvSource.url.isBlank()) "添加订阅源" else currentIptvSource.name)
             if (isFocused) Icon(Icons.Default.SyncAlt, contentDescription = null)
         }
     }

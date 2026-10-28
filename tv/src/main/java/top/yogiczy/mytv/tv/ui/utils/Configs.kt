@@ -11,6 +11,7 @@ import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceList
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
+import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceDefaults
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceList
 import top.yogiczy.mytv.core.data.utils.Constants
 import top.yogiczy.mytv.core.data.utils.Globals
@@ -286,8 +287,10 @@ object Configs {
     /** ==================== 直播源 ==================== */
     /** 当前直播源 */
     var iptvSourceCurrent: IptvSource
-        get() = Globals.json.decodeFromString(SP.getString(KEY.IPTV_SOURCE_CURRENT.name, "")
-            .ifBlank { Globals.json.encodeToString(Constants.IPTV_SOURCE_LIST.first()) })
+        get() = IptvSourceDefaults.current(
+            SP.getString(KEY.IPTV_SOURCE_CURRENT.name, "").takeIf { it.isNotBlank() }
+                ?.let { Globals.json.decodeFromString<IptvSource>(it) }
+        )
         set(value) = SP.putString(KEY.IPTV_SOURCE_CURRENT.name, Globals.json.encodeToString(value))
 
     /** 直播源列表 */

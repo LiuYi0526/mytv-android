@@ -49,13 +49,13 @@ fun SettingsIptvScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Tag(
+                        if (currentIptvSource.url.isNotBlank()) Tag(
                             if (currentIptvSource.isLocal) "本地" else "远程",
                             colors = TagDefaults.colors(
                                 containerColor = LocalContentColor.current.copy(0.1f)
                             ),
                         )
-                        Text(currentIptvSource.name)
+                        Text(if (currentIptvSource.url.isBlank()) "尚未添加订阅源" else currentIptvSource.name)
                     }
                 },
                 onSelect = toIptvSourceScreen,
