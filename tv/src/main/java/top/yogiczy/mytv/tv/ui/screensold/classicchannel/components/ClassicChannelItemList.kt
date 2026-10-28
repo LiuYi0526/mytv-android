@@ -1,8 +1,11 @@
 package top.yogiczy.mytv.tv.ui.screensold.classicchannel.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,6 +69,7 @@ import top.yogiczy.mytv.tv.ui.utils.saveFocusRestorer
 import top.yogiczy.mytv.tv.ui.utils.saveRequestFocus
 import kotlin.math.max
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ClassicChannelItemList(
     modifier: Modifier = Modifier,
@@ -130,72 +134,82 @@ fun ClassicChannelItemList(
         }
     }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxHeight()
-            .width(if (showChannelLogoProvider()) 280.dp else 220.dp)
-            .background(MaterialTheme.colorScheme.surface.copy(0.8f))
-            .ifElse(
-                settingsVM.uiFocusOptimize,
-                Modifier.saveFocusRestorer {
-                    itemFocusRequesterList.getOrElse(channelList.indexOf(focusedChannel)) {
-                        FocusRequester.Default
-                    }
-                },
-            ),
-        state = listState,
-        contentPadding = PaddingValues(8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        itemsIndexed(channelList, key = { _, channel -> channel.hashCode() }) { index, channel ->
-            val isSelected by remember { derivedStateOf { channel == focusedChannel } }
-            val initialFocused by remember {
-                derivedStateOf { !hasFocused && channel == initialChannel }
-            }
-
-            ClassicChannelItem(
-                modifier = Modifier
-                    .ifElse(
-                        index == 0,
-                        Modifier
-                            .focusRequester(firstFocusRequester)
-                            .handleKeyEvents(onUp = { scrollToLast() })
-                    )
-                    .ifElse(
-                        index == channelList.lastIndex,
-                        Modifier
-                            .focusRequester(lastFocusRequester)
-                            .handleKeyEvents(onDown = { scrollToFirst() })
-                    ),
-                channelProvider = { channel },
-                onChannelSelected = { onChannelSelected(channel) },
-                onChannelFavoriteToggle = {
-                    if (inFavoriteModeProvider()) {
-                        if (channelList.size == 1) {
-                            focusManager.moveFocus(FocusDirection.Left)
-                        } else if (channelList.first() == channel) {
-                            focusManager.moveFocus(FocusDirection.Down)
-                        } else if (channelList.last() == channel) {
-                            focusManager.moveFocus(FocusDirection.Up)
-                        } else {
-                            focusManager.moveFocus(FocusDirection.Down)
+    CompositionLocalProvider(LocalBringIntoViewSpec provides CenteredChannelScrollSpec) {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxHeight()
+                .width(if (showChannelLogoProvider()) 280.dp else 220.dp)
+                .background(MaterialTheme.colorScheme.surface.copy(0.8f))
+                .ifElse(
+                    settingsVM.uiFocusOptimize,
+                    Modifier.saveFocusRestorer {
+                        itemFocusRequesterList.getOrElse(channelList.indexOf(focusedChannel)) {
+                            FocusRequester.Default
                         }
-                    }
-                    onChannelFavoriteToggle(channel)
-                },
-                onChannelFocused = {
-                    focusedChannel = channel
-                    onChannelFocusedDebounce.send()
-                },
-                recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
-                showEpgProgrammeProgressProvider = showEpgProgrammeProgressProvider,
-                focusRequesterProvider = { itemFocusRequesterList[index] },
-                initialFocusedProvider = { initialFocused },
-                onInitialFocused = { hasFocused = true },
-                isSelectedProvider = { isSelected },
-                showChannelLogoProvider = showChannelLogoProvider,
-            )
+                    },
+                ),
+            state = listState,
+            contentPadding = PaddingValues(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            itemsIndexed(channelList, key = { _, channel -> channel.hashCode() }) { index, channel ->
+                val isSelected by remember { derivedStateOf { channel == focusedChannel } }
+                val initialFocused by remember {
+                    derivedStateOf { !hasFocused && channel == initialChannel }
+                }
+
+                ClassicChannelItem(
+                    modifier = Modifier
+                        .ifElse(
+                            index == 0,
+                            Modifier
+                                .focusRequester(firstFocusRequester)
+                                .handleKeyEvents(onUp = { scrollToLast() })
+                        )
+                        .ifElse(
+                            index == channelList.lastIndex,
+                            Modifier
+                                .focusRequester(lastFocusRequester)
+                                .handleKeyEvents(onDown = { scrollToFirst() })
+                        ),
+                    channelProvider = { channel },
+                    onChannelSelected = { onChannelSelected(channel) },
+                    onChannelFavoriteToggle = {
+                        if (inFavoriteModeProvider()) {
+                            if (channelList.size == 1) {
+                                focusManager.moveFocus(FocusDirection.Left)
+                            } else if (channelList.first() == channel) {
+                                focusManager.moveFocus(FocusDirection.Down)
+                            } else if (channelList.last() == channel) {
+                                focusManager.moveFocus(FocusDirection.Up)
+                            } else {
+                                focusManager.moveFocus(FocusDirection.Down)
+                            }
+                        }
+                        onChannelFavoriteToggle(channel)
+                    },
+                    onChannelFocused = {
+                        focusedChannel = channel
+                        onChannelFocusedDebounce.send()
+                    },
+                    recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
+                    showEpgProgrammeProgressProvider = showEpgProgrammeProgressProvider,
+                    focusRequesterProvider = { itemFocusRequesterList[index] },
+                    initialFocusedProvider = { initialFocused },
+                    onInitialFocused = { hasFocused = true },
+                    isSelectedProvider = { isSelected },
+                    showChannelLogoProvider = showChannelLogoProvider,
+                )
+            }
         }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+private object CenteredChannelScrollSpec : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        // LazyColumn clamps at the first/last item; touch scrolling does not request focus scrolling.
+        return offset - (containerSize - size.coerceAtMost(containerSize)) / 2f
     }
 }
 
