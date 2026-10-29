@@ -54,6 +54,8 @@ import top.yogiczy.mytv.core.data.media.Av3aHeader
 import top.yogiczy.mytv.core.data.network.ClearKeyLicenseFetcher
 import top.yogiczy.mytv.core.data.network.HttpBasicAuth
 import top.yogiczy.mytv.core.data.network.HttpBasicAuthInterceptor
+import top.yogiczy.mytv.core.data.network.PlaybackCookieJar
+import top.yogiczy.mytv.core.data.network.PlaybackCookieInterceptor
 import top.yogiczy.mytv.core.data.network.TrustAllSSLSocketFactory
 import top.yogiczy.mytv.core.util.utils.toHeaders
 import top.yogiczy.mytv.tv.ui.utils.Configs
@@ -75,6 +77,7 @@ class Media3VideoPlayer(
     private var textureView: TextureView? = null
 
     private var currentChannelLine = ChannelLine()
+    private var playbackCookies = PlaybackCookieJar()
     private val contentTypeAttempts = mutableMapOf<Int, Boolean>()
     private var updatePositionJob: Job? = null
     private var playbackRange: PlaybackRange? = null
@@ -146,23 +149,25 @@ class Media3VideoPlayer(
         prepare()
     }
 
-    private fun getDataSourceFactory(): DefaultDataSource.Factory {
+    private fun getDataSourceFactory(usePlaybackCookies: Boolean = true): DefaultDataSource.Factory {
         val authentication = HttpBasicAuth.parse(currentChannelLine.playableUrl)
         val userAgent = currentChannelLine.httpUserAgent ?: Configs.videoPlayerUserAgent
-        val httpFactory: HttpDataSource.Factory = if (authentication != null) {
+        val httpFactory: HttpDataSource.Factory = if (usePlaybackCookies || authentication != null) {
             // OkHttp removes Authorization on redirects to another origin. The interceptor also
             // limits inherited playlist credentials to segment/key URLs from the same origin.
-            val client = OkHttpClient.Builder()
+            val clientBuilder = OkHttpClient.Builder()
                 .addInterceptor(HttpBasicAuthInterceptor(authentication))
                 .connectTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
                 .readTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
-                .sslSocketFactory(
+            if (usePlaybackCookies) {
+                clientBuilder.addNetworkInterceptor(PlaybackCookieInterceptor(playbackCookies))
+            }
+            if (authentication != null) clientBuilder.sslSocketFactory(
                     TrustAllSSLSocketFactory.sslSocketFactory,
                     TrustAllSSLSocketFactory.trustManager,
                 )
                 .hostnameVerifier { _, _ -> true }
-                .build()
-            OkHttpDataSource.Factory(client).setUserAgent(userAgent)
+            OkHttpDataSource.Factory(clientBuilder.build()).setUserAgent(userAgent)
         } else {
             DefaultHttpDataSource.Factory().apply {
                 setUserAgent(userAgent)
@@ -230,7 +235,8 @@ class Media3VideoPlayer(
                                 ClearKeyLicense.keyIds(fetcher.load(licenseUrl,
                                     """{"kids":[],"type":"temporary"}""".toByteArray(Charsets.UTF_8)))
                             }
-                            val provisionCallback = HttpMediaDrmCallback(licenseUrl, getDataSourceFactory())
+                            // Keep the existing provisioning POST/redirect behavior independent of media cookies.
+                            val provisionCallback = HttpMediaDrmCallback(licenseUrl, getDataSourceFactory(false))
                             object : MediaDrmCallback {
                                 override fun executeProvisionRequest(uuid: UUID, request: ExoMediaDrm.ProvisionRequest) =
                                     provisionCallback.executeProvisionRequest(uuid, request)
@@ -669,6 +675,7 @@ class Media3VideoPlayer(
     }
 
     override fun release() {
+        playbackCookies.clear()
         onCuesListeners.clear()
         videoPlayer.removeListener(playerListener)
         videoPlayer.removeAnalyticsListener(metadataListener)
@@ -688,6 +695,9 @@ class Media3VideoPlayer(
 
         contentTypeAttempts.clear()
         currentChannelLine = line
+        // A new channel/programme must not inherit another playback's authenticated session.
+        // Internal reconnects and decoder fallback reuse the current jar.
+        playbackCookies = PlaybackCookieJar()
         this.playbackRange = playbackRange
         playbackPositionAt = playbackRange?.startAt
         pendingPlaybackPositionAt = playbackRange?.startAt
