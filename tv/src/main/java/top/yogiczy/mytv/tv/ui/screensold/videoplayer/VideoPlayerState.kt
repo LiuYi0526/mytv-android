@@ -17,6 +17,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
+import top.yogiczy.mytv.core.data.media.PlaybackRange
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.IjkVideoPlayer
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.Media3VideoPlayer
@@ -61,10 +62,12 @@ class VideoPlayerState(
     /** 元数据 */
     var metadata by mutableStateOf(VideoPlayer.Metadata())
 
-    fun prepare(line: ChannelLine) {
+    fun prepare(line: ChannelLine, playbackRange: PlaybackRange? = null) {
         error = null
+        currentPosition = playbackRange?.startAt ?: 0L
+        duration = playbackRange?.durationMs ?: 0L
         metadata = VideoPlayer.Metadata()
-        instance.prepare(line)
+        instance.prepare(line, playbackRange)
     }
 
     fun play() {

@@ -27,6 +27,7 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserve
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
 import top.yogiczy.mytv.core.data.utils.ChannelPlayback
+import top.yogiczy.mytv.core.data.media.PlaybackRange
 import top.yogiczy.mytv.core.data.utils.Constants
 import top.yogiczy.mytv.core.data.utils.Loggable
 import top.yogiczy.mytv.core.util.utils.urlHost
@@ -307,7 +308,7 @@ class MainContentState(
             videoPlayerState.metadata = VideoPlayer.Metadata()
             videoPlayerState.stop()
         } else {
-            videoPlayerState.prepare(line)
+            videoPlayerState.prepare(line, playbackEpgProgramme?.let { PlaybackRange(it.startAt, it.endAt) })
         }
     }
 

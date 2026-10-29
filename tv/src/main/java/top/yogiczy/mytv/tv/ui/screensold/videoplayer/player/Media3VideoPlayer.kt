@@ -10,6 +10,7 @@ import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
@@ -48,6 +49,7 @@ import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
 import top.yogiczy.mytv.core.data.media.ClearKeyLicense
+import top.yogiczy.mytv.core.data.media.PlaybackRange
 import top.yogiczy.mytv.core.data.media.Av3aHeader
 import top.yogiczy.mytv.core.data.network.ClearKeyLicenseFetcher
 import top.yogiczy.mytv.core.data.network.HttpBasicAuth
@@ -63,6 +65,7 @@ import java.util.concurrent.TimeUnit
 class Media3VideoPlayer(
     private val context: Context,
     private val coroutineScope: CoroutineScope,
+    private val mediaSourceFactory: MediaSource.Factory? = null,
 ) : VideoPlayer(coroutineScope) {
 
     private var videoPlayer = getPlayer()
@@ -74,6 +77,13 @@ class Media3VideoPlayer(
     private var currentChannelLine = ChannelLine()
     private val contentTypeAttempts = mutableMapOf<Int, Boolean>()
     private var updatePositionJob: Job? = null
+    private var playbackRange: PlaybackRange? = null
+    private var playbackPositionAt: Long? = null
+    private var pendingPlaybackPositionAt: Long? = null
+    private var playbackShouldPlay = true
+    private var playbackEnded = false
+    private var playbackUnavailable = false
+    private var playbackRetryCount = 0
 
     private val onCuesListeners = mutableListOf<(ImmutableList<Cue>) -> Unit>()
 
@@ -117,6 +127,7 @@ class Media3VideoPlayer(
     }
 
     private fun reInitPlayer() {
+        rememberPlaybackPosition()
         onCuesListeners.clear()
         videoPlayer.removeListener(playerListener)
         videoPlayer.removeAnalyticsListener(metadataListener)
@@ -172,6 +183,7 @@ class Media3VideoPlayer(
         val playableUrl = currentChannelLine.playableUrl
         val uri = Uri.parse(HttpBasicAuth.parse(playableUrl)?.url?.toString() ?: playableUrl)
         val mediaItem = MediaItem.fromUri(uri)
+        mediaSourceFactory?.let { return it.createMediaSource(mediaItem) }
 
         var contentTypeForce = contentType
 
@@ -283,26 +295,110 @@ class Media3VideoPlayer(
     }
 
     private fun prepare(contentType: Int? = null) {
+        updatePositionJob?.cancel()
+        updatePositionJob = null
         val uri = Uri.parse(currentChannelLine.playableUrl)
         val mediaSource = getMediaSource(contentType)
 
         if (mediaSource != null) {
             contentTypeAttempts[contentType ?: Util.inferContentType(uri)] = true
-            videoPlayer.setMediaSource(mediaSource)
-            videoPlayer.prepare()
-            videoPlayer.play()
             triggerPrepared()
+            if (playbackRange != null) {
+                pendingPlaybackPositionAt = playbackPositionAt ?: playbackRange!!.startAt
+                videoPlayer.playWhenReady = false
+                videoPlayer.setMediaSource(mediaSource, 0L)
+            } else {
+                videoPlayer.setMediaSource(mediaSource)
+            }
+            videoPlayer.prepare()
+            if (playbackRange == null) videoPlayer.play()
         }
-        updatePositionJob?.cancel()
-        updatePositionJob = null
+    }
+
+    private fun playbackWindow(): Timeline.Window? {
+        val timeline = videoPlayer.currentTimeline
+        if (timeline.isEmpty) return null
+        return timeline.getWindow(videoPlayer.currentMediaItemIndex, Timeline.Window())
+            .takeUnless { it.isPlaceholder }
+    }
+
+    private fun Timeline.Window.startAtOrNull(): Long? =
+        windowStartTimeMs.takeUnless { it == C.TIME_UNSET }
+
+    private fun applyPendingPlaybackPosition() {
+        val range = playbackRange ?: return
+        val target = pendingPlaybackPositionAt ?: return
+        val window = playbackWindow() ?: return
+        val position = range.windowPosition(target, window.startAtOrNull(),
+            window.durationMs.takeIf { it != C.TIME_UNSET })
+        if (position == null || (!window.isSeekable && position > 0)) {
+            playbackUnavailable = true
+            pendingPlaybackPositionAt = null
+            videoPlayer.pause()
+            cancelPlaybackMonitoring()
+            triggerBuffering(false)
+            triggerError(PlaybackException.PLAYBACK_UNAVAILABLE)
+            return
+        }
+        pendingPlaybackPositionAt = null
+        playbackPositionAt = range.absolutePosition(position, window.startAtOrNull())
+        videoPlayer.seekTo(position)
+        videoPlayer.playWhenReady = playbackShouldPlay
+    }
+
+    private fun rememberPlaybackPosition() {
+        val range = playbackRange ?: return
+        if (pendingPlaybackPositionAt != null || playbackEnded || playbackUnavailable) return
+        playbackWindow()?.let {
+            playbackPositionAt = range.absolutePosition(videoPlayer.currentPosition, it.startAtOrNull())
+        }
+    }
+
+    private fun retryPlayback(error: androidx.media3.common.PlaybackException) {
+        if (playbackUnavailable || playbackEnded) return
+        if (++playbackRetryCount > 2) {
+            videoPlayer.pause()
+            cancelPlaybackMonitoring()
+            triggerBuffering(false)
+            triggerError(PlaybackException(error.errorCodeName, error.errorCode))
+            return
+        }
+        // Reload the stable source URL (including playseek), then resume its saved UTC position.
+        // This also allows an authenticated redirect to obtain a fresh destination URL.
+        prepare()
+    }
+
+    private fun finishPlayback() {
+        val range = playbackRange ?: return
+        playbackEnded = true
+        playbackShouldPlay = false
+        playbackPositionAt = range.endAt
+        videoPlayer.pause()
+        triggerCurrentPosition(range.endAt)
+        triggerBuffering(false)
+        cancelPlaybackMonitoring()
     }
 
     private val playerListener = object : Player.Listener {
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+            applyPendingPlaybackPosition()
+        }
         override fun onVideoSizeChanged(videoSize: VideoSize) {
             triggerResolution(videoSize.width, videoSize.height)
         }
 
         override fun onPlayerError(ex: androidx.media3.common.PlaybackException) {
+            if (playbackRange != null && ex.errorCode in setOf(
+                    androidx.media3.common.PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
+                    androidx.media3.common.PlaybackException.ERROR_CODE_DECODING_FAILED,
+                    androidx.media3.common.PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+                    androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                    androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+                    androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+                )) {
+                retryPlayback(ex)
+                return
+            }
             when (ex.errorCode) {
                 // 如果是直播加载位置错误，尝试重新播放
                 androidx.media3.common.PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
@@ -355,20 +451,30 @@ class Media3VideoPlayer(
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackUnavailable) return
             if (playbackState == Player.STATE_BUFFERING) {
                 triggerError(null)
                 triggerBuffering(true)
             } else if (playbackState == Player.STATE_READY) {
+                applyPendingPlaybackPosition()
+                if (playbackUnavailable || pendingPlaybackPositionAt != null) return
                 triggerReady()
-                triggerDuration(videoPlayer.duration)
+                triggerDuration(playbackRange?.durationMs ?: videoPlayer.duration)
 
                 updatePositionJob?.cancel()
                 updatePositionJob = coroutineScope.launch {
                     while (true) {
-                        val livePosition =
-                            System.currentTimeMillis() - videoPlayer.currentLiveOffset
-
-                        triggerCurrentPosition(if (livePosition > 0) livePosition else videoPlayer.currentPosition)
+                        val range = playbackRange
+                        if (range != null && !playbackEnded && pendingPlaybackPositionAt == null) {
+                            rememberPlaybackPosition()
+                            val position = playbackPositionAt ?: range.startAt
+                            triggerCurrentPosition(position)
+                            if (position >= range.endAt) finishPlayback()
+                        } else if (range == null) {
+                            val liveOffset = videoPlayer.currentLiveOffset
+                            triggerCurrentPosition(if (liveOffset != C.TIME_UNSET)
+                                System.currentTimeMillis() - liveOffset else videoPlayer.currentPosition)
+                        }
                         delay(500)
                     }
                 }
@@ -379,8 +485,11 @@ class Media3VideoPlayer(
             }
 
             if (playbackState == Player.STATE_ENDED) {
-                videoPlayer.seekToDefaultPosition()
-                videoPlayer.prepare()
+                if (playbackRange != null) finishPlayback()
+                else {
+                    videoPlayer.seekToDefaultPosition()
+                    videoPlayer.prepare()
+                }
             }
         }
 
@@ -570,24 +679,53 @@ class Media3VideoPlayer(
     }
 
     override fun prepare(line: ChannelLine) {
+        prepare(line, null)
+    }
+
+    override fun prepare(line: ChannelLine, playbackRange: PlaybackRange?) {
         if (Configs.videoPlayerStopPreviousMediaItem)
             videoPlayer.stop()
 
         contentTypeAttempts.clear()
         currentChannelLine = line
+        this.playbackRange = playbackRange
+        playbackPositionAt = playbackRange?.startAt
+        pendingPlaybackPositionAt = playbackRange?.startAt
+        playbackShouldPlay = true
+        playbackEnded = false
+        playbackUnavailable = false
+        playbackRetryCount = 0
         prepare(null)
     }
 
     override fun play() {
-        videoPlayer.play()
+        playbackShouldPlay = true
+        if (playbackUnavailable) return
+        if (playbackEnded || videoPlayer.playerError != null) {
+            if (playbackEnded) playbackPositionAt = playbackRange?.startAt
+            playbackEnded = false
+            playbackRetryCount = 0
+            prepare()
+        } else if (pendingPlaybackPositionAt == null) videoPlayer.play()
     }
 
     override fun pause() {
+        playbackShouldPlay = false
+        rememberPlaybackPosition()
         videoPlayer.pause()
+        cancelPlaybackMonitoring()
     }
 
     override fun seekTo(position: Long) {
-        videoPlayer.seekTo(position)
+        val range = playbackRange
+        if (range == null) videoPlayer.seekTo(position)
+        else {
+            playbackPositionAt = position.coerceIn(range.startAt, range.endAt)
+            playbackEnded = false
+            pendingPlaybackPositionAt = playbackPositionAt
+            if (playbackPositionAt == range.endAt) finishPlayback()
+            else applyPendingPlaybackPosition()
+        }
     }
 
     override fun setVolume(volume: Float) {

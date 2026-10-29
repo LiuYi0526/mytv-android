@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
+import top.yogiczy.mytv.core.data.media.PlaybackRange
 import top.yogiczy.mytv.core.util.utils.humanizeAudioChannels
 import top.yogiczy.mytv.core.util.utils.humanizeBitrate
 import top.yogiczy.mytv.core.util.utils.humanizeLanguage
@@ -28,6 +29,8 @@ abstract class VideoPlayer(
 
     abstract fun prepare(line: ChannelLine)
 
+    open fun prepare(line: ChannelLine, playbackRange: PlaybackRange?) = prepare(line)
+
     abstract fun play()
 
     abstract fun pause()
@@ -39,9 +42,13 @@ abstract class VideoPlayer(
     abstract fun getVolume(): Float
 
     open fun stop() {
+        cancelPlaybackMonitoring()
+        currentPosition = 0L
+    }
+
+    protected fun cancelPlaybackMonitoring() {
         loadTimeoutJob?.cancel()
         interruptJob?.cancel()
-        currentPosition = 0L
     }
 
     abstract fun selectVideoTrack(track: Metadata.Video?)
@@ -57,6 +64,7 @@ abstract class VideoPlayer(
     private var loadTimeoutJob: Job? = null
     private var interruptJob: Job? = null
     private var currentPosition = 0L
+    private var isPlaying = false
 
     private val onResolutionListeners = mutableListOf<(width: Int, height: Int) -> Unit>()
     private val onErrorListeners = mutableListOf<(error: PlaybackException?) -> Unit>()
@@ -116,6 +124,8 @@ abstract class VideoPlayer(
     }
 
     protected fun triggerIsPlayingChanged(isPlaying: Boolean) {
+        this.isPlaying = isPlaying
+        if (!isPlaying) interruptJob?.cancel()
         onIsPlayingChanged.forEach { it(isPlaying) }
     }
 
@@ -130,9 +140,11 @@ abstract class VideoPlayer(
     protected fun triggerCurrentPosition(position: Long) {
         if (currentPosition != position) {
             interruptJob?.cancel()
-            interruptJob = coroutineScope.launch {
-                delay(Configs.videoPlayerLoadTimeout)
-                onInterruptListeners.forEach { it() }
+            if (isPlaying) {
+                interruptJob = coroutineScope.launch {
+                    delay(Configs.videoPlayerLoadTimeout)
+                    onInterruptListeners.forEach { it() }
+                }
             }
         }
         currentPosition = position
@@ -184,6 +196,7 @@ abstract class VideoPlayer(
         companion object {
             val UNSUPPORTED_TYPE = PlaybackException("ERROR_UNSUPPORTED_TYPE", 10002)
             val LOAD_TIMEOUT = PlaybackException("ERROR_LOAD_TIMEOUT", 10003)
+            val PLAYBACK_UNAVAILABLE = PlaybackException("回看内容已超出可用窗口", 10004)
         }
     }
 
