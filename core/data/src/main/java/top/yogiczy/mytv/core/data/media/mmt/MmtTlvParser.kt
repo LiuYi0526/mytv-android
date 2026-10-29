@@ -11,6 +11,7 @@ class MmtTlvParser(private val listener: Listener) {
 
     private class MediaState {
         val fragments = MmtFragments(MAX_SAMPLE_BYTES)
+        val subtitle = MmtSubtitle()
         var identity: List<Long>? = null
         var mpu = -1L
         var sampleIndex = -1
@@ -174,7 +175,7 @@ class MmtTlvParser(private val listener: Listener) {
 
     private fun media(s: Session, packetId: Int, sequence: Long, timestamp: Long, bytes: MmtBytes) {
         val track = s.signaling.tracks[packetId] ?: return
-        if (!track.isVideo && !track.isAudio) return
+        if (!track.isVideo && !track.isAudio && !track.isSubtitle) return
         if (s.media.size >= MAX_TRACKS && packetId !in s.media) return
         val state = s.media.getOrPut(packetId) { MediaState() }
         val previousIdentity = state.identity
@@ -201,11 +202,20 @@ class MmtTlvParser(private val listener: Listener) {
             // Continuations must belong to the same MPU/sample, not merely consecutive packets.
             if (fragment >= 2 && previousIdentity != identity) {
                 state.fragments.reset()
+                state.subtitle.reset()
                 listener.onDiscontinuity(s.context, packetId)
                 return
             }
             state.identity = identity
             val data = state.fragments.append(fragment, part.bytes()) ?: return
+            if (track.isSubtitle) {
+                val xml = state.subtitle.consume(mpu, data) ?: return
+                // Text must use the media clock; never let an early subtitle establish A/V's origin.
+                val origin = originUs ?: return
+                val absolute = track.subtitleReferenceUs ?: compactTimestamp(timestamp, s.signaling.ntpReferenceUs) ?: return
+                listener.onSample(s.context, track, MmtSubtitle.prepareTtml(xml,track.subtitleResolution), absolute - origin)
+                return
+            }
             if (state.mpu != mpu) {
                 state.mpu = mpu
                 state.sampleIndex = -1

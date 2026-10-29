@@ -14,6 +14,13 @@ class MmtTrack internal constructor(val id: Int, val assetType: String) {
         internal set
     internal var frameRateNumerator = 0
     internal var frameRateDenominator = 1
+    var subtitleSupported = false
+        internal set
+    var subtitleSuperimpose = false
+        internal set
+    var subtitleResolution = 0
+        internal set
+    internal var subtitleReferenceUs: Long? = null
     internal val timestamps = linkedMapOf<Long, Long>()
     internal val durations = linkedMapOf<Long, Timing>()
     internal data class Timing(val decodeOffset: Int, val composition: IntArray, val duration: IntArray)
@@ -25,6 +32,10 @@ class MmtTrack internal constructor(val id: Int, val assetType: String) {
         timeScale = next.timeScale
         frameRateNumerator = next.frameRateNumerator
         frameRateDenominator = next.frameRateDenominator
+        subtitleSupported = next.subtitleSupported
+        subtitleSuperimpose = next.subtitleSuperimpose
+        subtitleResolution = next.subtitleResolution
+        subtitleReferenceUs = next.subtitleReferenceUs
         next.timestamps.forEach { (k, v) -> timestamps.putBounded(k, v, 32) }
         next.durations.forEach { (k, v) -> durations.putBounded(k, v, 32) }
     }
@@ -38,6 +49,7 @@ class MmtTrack internal constructor(val id: Int, val assetType: String) {
     }
     val isVideo get() = assetType in listOf("hev1", "hvc1", "avc1", "avc3")
     val isAudio get() = assetType == "mp4a"
+    val isSubtitle get() = assetType == "stpp" && subtitleSupported
 }
 
 internal class MmtSignaling(private val onTracks: (List<MmtTrack>) -> Unit) {
@@ -139,6 +151,24 @@ internal class MmtSignaling(private val onTracks: (List<MmtTrack>) -> Unit) {
         }
         val d = bytes.part(length)
         when (tag) {
+            0x8020 -> {
+                if (d.u16() != 0x20) return
+                d.skip(1)
+                val flags = d.u8()
+                track.language = String(d.bytes(3), Charsets.US_ASCII)
+                val format = d.u8()
+                val timeMode = d.u8() ushr 4
+                val display = d.u8()
+                track.subtitleSuperimpose = format ushr 6 == 1
+                track.subtitleResolution = display ushr 4
+                track.subtitleSupported = ((format ushr 2) and 15) == 0 &&
+                    (display and 15) == 0 && track.subtitleResolution <= 2
+                if (flags and 8 != 0) d.skip(4)
+                if (timeMode == 2) {
+                    track.subtitleReferenceUs = ntpTimeUs(d.u32(), d.u32())
+                    d.skip(1)
+                }
+            }
             1 -> while (d.remaining >= 12) {
                 val mpu = d.u32()
                 val time = ntpTimeUs(d.u32(), d.u32())

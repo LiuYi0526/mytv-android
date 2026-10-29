@@ -15,6 +15,8 @@ import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.PositionHolder
 import androidx.media3.extractor.SeekMap
 import androidx.media3.extractor.TrackOutput
+import androidx.media3.extractor.text.DefaultSubtitleParserFactory
+import androidx.media3.extractor.text.SubtitleTranscodingExtractorOutput
 import androidx.media3.extractor.ts.ElementaryStreamReader
 import androidx.media3.extractor.ts.H264Reader
 import androidx.media3.extractor.ts.H265Reader
@@ -47,8 +49,10 @@ class MmtExtractorsFactory(private val forceMmt: Boolean = false) : ExtractorsFa
 @OptIn(UnstableApi::class)
 class MmtExtractor : Extractor {
     private lateinit var output: ExtractorOutput
+    private lateinit var subtitleOutput: SubtitleTranscodingExtractorOutput
     private val readers = linkedMapOf<Int, ElementaryStreamReader>()
     private val rawAudio = linkedMapOf<Int, TrackOutput>()
+    private val subtitles = linkedMapOf<Int, TrackOutput>()
     private val rawFormats = hashMapOf<Int, List<Byte>>()
     private val buffer = ByteArray(32768)
     private var tracksEnded = false
@@ -56,7 +60,7 @@ class MmtExtractor : Extractor {
         override fun onTracks(context: Int, tracks: List<MmtTrack>) {
             for (track in tracks) {
                 val id = (context shl 16) or track.id
-                if (id in readers || id in rawAudio || tracksEnded) continue
+                if (id in readers || id in rawAudio || id in subtitles || tracksEnded) continue
                 val reader: ElementaryStreamReader = when (track.assetType) {
                     "hev1", "hvc1" -> H265Reader(SeiReader(emptyList()))
                     "avc1", "avc3" -> H264Reader(SeiReader(emptyList()), true, true)
@@ -67,6 +71,17 @@ class MmtExtractor : Extractor {
                             continue
                         }
                         LatmReader(track.language, 0)
+                    }
+                    "stpp" -> {
+                        if (!track.isSubtitle) continue
+                        subtitles[id] = output.track(id, C.TRACK_TYPE_TEXT).apply {
+                            format(Format.Builder().setId(id.toString()).setSampleMimeType(MimeTypes.APPLICATION_TTML)
+                                .setSubsampleOffsetUs(Format.OFFSET_SAMPLE_RELATIVE)
+                                .setLanguage(track.language).setLabel(if (track.subtitleSuperimpose) "叠加字幕" else "普通字幕")
+                                .setRoleFlags(C.ROLE_FLAG_CAPTION).setWidth(1920 shl track.subtitleResolution)
+                                .setHeight(1080 shl track.subtitleResolution).build())
+                        }
+                        continue
                     }
                     else -> continue
                 }
@@ -81,6 +96,11 @@ class MmtExtractor : Extractor {
 
         override fun onSample(context: Int, track: MmtTrack, data: ByteArray, timeUs: Long) {
             val id = (context shl 16) or track.id
+            subtitles[id]?.let {
+                it.sampleData(ParsableByteArray(data), data.size)
+                it.sampleMetadata(timeUs, C.BUFFER_FLAG_KEY_FRAME, data.size, 0, null)
+                return
+            }
             val raw = rawAudio[id]
             if (raw != null) {
                 val config = track.audioConfig ?: return
@@ -126,7 +146,8 @@ class MmtExtractor : Extractor {
     }
 
     override fun init(output: ExtractorOutput) {
-        this.output = output
+        subtitleOutput = SubtitleTranscodingExtractorOutput(output, DefaultSubtitleParserFactory())
+        this.output = subtitleOutput
         output.seekMap(SeekMap.Unseekable(C.TIME_UNSET))
     }
 
@@ -142,7 +163,8 @@ class MmtExtractor : Extractor {
 
     override fun seek(position: Long, timeUs: Long) {
         parser.reset()
+        subtitleOutput.resetSubtitleParsers()
         readers.values.forEach { it.seek() }
     }
-    override fun release() { parser.reset(); readers.clear(); rawAudio.clear(); rawFormats.clear() }
+    override fun release() { parser.reset(); readers.clear(); rawAudio.clear(); rawFormats.clear(); subtitles.clear() }
 }

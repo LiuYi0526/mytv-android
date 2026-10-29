@@ -285,22 +285,28 @@ abstract class VideoPlayer(
             val bitrate: Int? = null,
             val mimeType: String? = null,
             val language: String? = null,
+            val label: String? = null,
         ) {
             override fun equals(other: Any?): Boolean {
                 if (other !is Subtitle) return false
 
-                return bitrate == other.bitrate && mimeType == other.mimeType && language == other.language
+                return index == other.index && isSelected == other.isSelected && label == other.label &&
+                    bitrate == other.bitrate && mimeType == other.mimeType && language == other.language
             }
 
             override fun hashCode(): Int {
                 var result = (bitrate ?: 0)
                 result = 31 * result + (mimeType?.hashCode() ?: 0)
                 result = 31 * result + (language?.hashCode() ?: 0)
+                result = 31 * result + (index ?: 0)
+                result = 31 * result + (isSelected?.hashCode() ?: 0)
+                result = 31 * result + (label?.hashCode() ?: 0)
                 return result
             }
 
             val shortLabel: String
                 get() = listOfNotNull(
+                    label?.takeIf { it.isNotBlank() },
                     language?.humanizeLanguage(),
                 ).joinToString(", ")
         }

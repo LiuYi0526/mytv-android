@@ -81,6 +81,8 @@ class MmtPlaybackTest {
         val playing = AtomicBoolean()
         val width = AtomicInteger()
         val videoDecoderInitialized = AtomicBoolean()
+        val subtitles = AtomicReference<List<VideoPlayer.Metadata.Subtitle>>(emptyList())
+        val expectedSubtitles = InstrumentationRegistry.getArguments().getString("expectedSubtitleTracks")?.toInt() ?: 0
         val firstPosition = AtomicLong(Long.MAX_VALUE)
         val lastPosition = AtomicLong()
         lateinit var player: Media3VideoPlayer
@@ -91,6 +93,7 @@ class MmtPlaybackTest {
             player.onResolution { w, _ -> width.set(w) }
             // A headless player may not emit onVideoSizeChanged without a display surface.
             player.onMetadata {
+                subtitles.set(it.subtitleTracks)
                 it.video?.width?.takeIf { value -> value > 0 }?.let(width::set)
                 if (!it.video?.decoder.isNullOrBlank()) videoDecoderInitialized.set(true)
             }
@@ -111,6 +114,23 @@ class MmtPlaybackTest {
             assertTrue("Video track format was not discovered", width.get() > 0)
             assertTrue("Video decoder was not initialized", videoDecoderInitialized.get())
             assertTrue("MMT playback position did not advance", lastPosition.get() - firstPosition.get() >= 500)
+            assertTrue("Subtitle options were filtered out: ${subtitles.get().size}", subtitles.get().size >= expectedSubtitles)
+            if (expectedSubtitles > 0) {
+                val options = subtitles.get()
+                assertEquals("Subtitle labels must distinguish the two Japanese tracks",
+                    options.size, options.map { it.shortLabel }.distinct().size)
+                for (option in options.reversed()) {
+                    val selected = CountDownLatch(1)
+                    instrumentation.runOnMainSync {
+                        player.onMetadata { if (it.subtitle?.index == option.index) selected.countDown() }
+                        player.selectSubtitleTrack(option)
+                    }
+                    assertTrue("Subtitle option ${option.index} could not be selected", selected.await(5, TimeUnit.SECONDS))
+                }
+                Thread.sleep(1000)
+                assertNull("Playback failed after subtitle selection: ${error.get()?.errorCodeName}", error.get())
+                assertTrue("Playback stopped after subtitle selection", playing.get())
+            }
         } finally {
             instrumentation.runOnMainSync { player.stop(); player.release(); scope.cancel() }
         }

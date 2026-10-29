@@ -553,12 +553,12 @@ class Media3VideoPlayer(
                     List(group.mediaTrackGroup.length) { trackIndex ->
                         group.mediaTrackGroup
                             .getFormat(trackIndex)
-                            .takeIf { it.roleFlags == C.ROLE_FLAG_SUBTITLE }
-                            ?.toSubtitleMetadata()
-                            ?.copy(isSelected = group.isTrackSelected(trackIndex))
+                            // Text tracks may be subtitles, captions, combined roles, or untagged.
+                            // Keep the same flattened list used by fromIndexFindTrack when selecting.
+                            .toSubtitleMetadata()
+                            .copy(isSelected = group.isTrackSelected(trackIndex))
                     }
                 }
-                .mapNotNull { it }
                 .mapIndexed { index, metadata ->
                     metadata.copy(index = index)
                 }
@@ -620,6 +620,7 @@ class Media3VideoPlayer(
             bitrate = bitrate,
             mimeType = sampleMimeType,
             language = language,
+            label = label,
         )
     }
 
@@ -795,7 +796,7 @@ class Media3VideoPlayer(
     }
 
     override fun selectSubtitleTrack(track: Metadata.Subtitle?) {
-        if (track?.language == null) {
+        if (track == null) {
             videoPlayer.trackSelectionParameters = videoPlayer.trackSelectionParameters
                 .buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
@@ -804,10 +805,11 @@ class Media3VideoPlayer(
             return
         }
 
+        val (group, trackIndex) = (track.index ?: return).fromIndexFindTrack(C.TRACK_TYPE_TEXT)
         videoPlayer.trackSelectionParameters = videoPlayer.trackSelectionParameters
             .buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            .setPreferredTextLanguages(track.language)
+            .setOverrideForType(TrackSelectionOverride(group, trackIndex))
             .build()
     }
 
