@@ -44,7 +44,7 @@ fun SettingsIptvSourceScreen(
     onSave: (IptvSource?, IptvSource) -> Unit = { _, _ -> },
     onSetCurrent: (IptvSource) -> Unit = {},
     onDelete: (IptvSource) -> Unit = {},
-    onClearCache: (IptvSource) -> Unit = {},
+    onUpdate: suspend (IptvSource) -> Unit = {},
     onBackPressed: () -> Unit = {},
 ) {
     val sources = iptvSourceListProvider()
@@ -71,7 +71,7 @@ fun SettingsIptvSourceScreen(
                     selectedName = null
                 },
                 onSetCurrent = { selected?.let(onSetCurrent) },
-                onClearCache = { selected?.let(onClearCache) },
+                onUpdate = { selected?.let { onUpdate(it) } },
                 onDelete = { selected?.let(onDelete); selectedUrl = null; selectedName = null },
                 onBackPressed = {
                     if (sources.isEmpty()) onBackPressed()

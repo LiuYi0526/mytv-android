@@ -280,11 +280,9 @@ fun SettingsScreen(
                                 onReload()
                             }
                         },
-                        onClearCache = {
-                            coroutineScope.launch {
-                                IptvRepository(it).clearCache()
-                                Snackbar.show("缓存已清除")
-                            }
+                        onUpdate = {
+                            IptvRepository(it).getChannelGroupList(0)
+                            if (it == settingsViewModel.iptvSourceCurrent) onReload()
                         },
                         onBackPressed = { navigateBack() },
                     )

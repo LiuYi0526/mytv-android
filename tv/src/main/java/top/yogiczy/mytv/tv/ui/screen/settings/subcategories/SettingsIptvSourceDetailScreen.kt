@@ -10,8 +10,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -37,7 +35,8 @@ import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceEdit
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
 import top.yogiczy.mytv.tv.ui.material.*
-import top.yogiczy.mytv.tv.ui.screen.components.AppScaffoldHeaderBtn
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.screen.components.Qrcode
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
@@ -57,7 +56,7 @@ fun SettingsIptvSourceDetailScreen(
     isCurrent: Boolean,
     onSave: (IptvSource) -> Unit,
     onSetCurrent: () -> Unit,
-    onClearCache: () -> Unit,
+    onUpdate: suspend () -> Unit,
     onDelete: () -> Unit,
     onBackPressed: () -> Unit,
 ) {
@@ -68,10 +67,10 @@ fun SettingsIptvSourceDetailScreen(
     var detectingEpg by remember { mutableStateOf(false) }
     var detectionMessage by remember { mutableStateOf("填写订阅链接后自动识别节目单") }
     var deleting by remember { mutableStateOf(false) }
-    var more by remember { mutableStateOf(false) }
+    var updating by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val popupManager = LocalPopupManager.current
     val deleteFocus = remember { FocusRequester() }
-    val moreFocus = remember { FocusRequester() }
 
     LaunchedEffect(url) {
         if (original != null) return@LaunchedEffect
@@ -111,10 +110,7 @@ fun SettingsIptvSourceDetailScreen(
     SourceDetailLayout(
         adding = original == null,
         showBackButton = sources.isNotEmpty(),
-        headerExtra = if (original != null) {{
-            AppScaffoldHeaderBtn(modifier = Modifier.focusRequester(moreFocus), title = "更多", imageVector = Icons.Default.MoreHoriz,
-                onSelect = { popupManager.push(moreFocus, true); more = true })
-        }} else null,
+        headerExtra = null,
         onBackPressed = onBackPressed,
     ) { firstFocus ->
         item {
@@ -154,17 +150,35 @@ fun SettingsIptvSourceDetailScreen(
         if (original != null) {
             item {
                 SettingsListItem(
+                    headlineContent = if (updating) "更新中…" else "更新订阅源",
+                    supportingContent = "重新获取已保存订阅源的频道列表",
+                    onSelect = {
+                        if (!updating) {
+                            updating = true
+                            scope.launch {
+                                try {
+                                    onUpdate()
+                                    Snackbar.show("订阅源已更新")
+                                } catch (ex: CancellationException) {
+                                    throw ex
+                                } catch (ex: Exception) {
+                                    Snackbar.show("更新失败：${ex.message ?: "请稍后重试"}", type = SnackbarType.ERROR)
+                                } finally {
+                                    updating = false
+                                }
+                            }
+                        }
+                    },
+                )
+            }
+            if (!isCurrent) item {
+                SettingsListItem(headlineContent = "设为当前订阅源", onSelect = onSetCurrent)
+            }
+            item {
+                SettingsListItem(
                     modifier = Modifier.focusRequester(deleteFocus), headlineContent = "删除订阅源",
                     onSelect = { popupManager.push(deleteFocus, true); deleting = true },
                 )
-            }
-        }
-    }
-    SimplePopup(visibleProvider = { more }, onDismissRequest = { more = false }) {
-        Drawer(modifier = Modifier.width(360.dp), position = DrawerPosition.Center, header = { Text("订阅源操作") }, onDismissRequest = { more = false }) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (!isCurrent) SourceDialogButton("设为当前订阅源", modifier = Modifier.fillMaxWidth().focusOnLaunched(), onClick = { more = false; onSetCurrent() })
-                SourceDialogButton("清除缓存", modifier = if (isCurrent) Modifier.fillMaxWidth().focusOnLaunched() else Modifier.fillMaxWidth(), onClick = { more = false; onClearCache() })
             }
         }
     }
