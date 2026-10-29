@@ -59,7 +59,7 @@ import top.yogiczy.mytv.core.data.network.PlaybackCookieInterceptor
 import top.yogiczy.mytv.core.data.network.TrustAllSSLSocketFactory
 import top.yogiczy.mytv.core.util.utils.toHeaders
 import top.yogiczy.mytv.tv.ui.utils.Configs
-import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.av3a.Av3aExtractorsFactory
+import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.mmt.MmtExtractorsFactory
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.av3a.Av3aHlsExtractorFactory
 import java.util.concurrent.TimeUnit
 
@@ -196,8 +196,12 @@ class Media3VideoPlayer(
             contentTypeForce = C.CONTENT_TYPE_RTSP
         }
 
-        if (currentChannelLine.manifestType?.trim()?.removeSurrounding("\"")?.equals("mpd", true) == true) {
+        val manifestType = currentChannelLine.manifestType?.trim()?.removeSurrounding("\"")?.lowercase()
+        val forceMmt = manifestType == "mmt" || manifestType == "custom"
+        if (manifestType == "mpd") {
             contentTypeForce = C.CONTENT_TYPE_DASH
+        } else if (forceMmt) {
+            contentTypeForce = C.CONTENT_TYPE_OTHER
         }
 
         val dataSourceFactory = getDataSourceFactory()
@@ -289,7 +293,7 @@ class Media3VideoPlayer(
             }
 
             C.CONTENT_TYPE_OTHER -> {
-                ProgressiveMediaSource.Factory(dataSourceFactory, Av3aExtractorsFactory())
+                ProgressiveMediaSource.Factory(dataSourceFactory, MmtExtractorsFactory(forceMmt))
                     .createMediaSource(mediaItem)
             }
 
