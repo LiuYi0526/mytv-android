@@ -22,6 +22,7 @@ import androidx.tv.material3.Text
 import kotlinx.coroutines.CancellationException
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
 import top.yogiczy.mytv.core.data.network.ChannelLineProbe
+import top.yogiczy.mytv.core.data.utils.ChannelPlayback
 import top.yogiczy.mytv.core.data.utils.ChannelUtil
 import top.yogiczy.mytv.core.util.utils.isIPv6
 import top.yogiczy.mytv.tv.ui.material.Tag
@@ -63,7 +64,7 @@ fun ChannelLineItem(
                 } else {
                     Tag(if (line.url.isIPv6()) "IPv6" else "IPv4")
 
-                    if (ChannelUtil.urlSupportPlayback(line.url)) Tag("回放")
+                    if (ChannelPlayback.isSupported(line)) Tag("回放")
 
                     if (lineDelay > 0L) {
                         if (lineDelay < 500) {

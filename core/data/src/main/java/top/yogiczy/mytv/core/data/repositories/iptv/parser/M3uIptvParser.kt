@@ -18,12 +18,24 @@ class M3uIptvParser : IptvParser {
             val channelList = mutableListOf<IptvParser.ChannelItem>()
 
             var addedChannels: List<IptvParser.ChannelItem> = listOf()
+            var defaults = emptyMap<String, String>()
             lines.forEach { rawLine ->
-                val line = rawLine.trim()
+                val line = rawLine.trim().trimStart('\uFEFF')
                 if (line.isBlank()) return@forEach
 
-                if (line.startsWith("#EXTINF")) {
-                    val name = line.split(",").last().trim()
+                if (line.startsWith("#EXTM3U", ignoreCase = true)) {
+                    defaults = attributes(line)
+                } else if (line.startsWith("#EXTINF")) {
+                    // A catchup template may contain commas inside its quoted attributes.
+                    var quote: Char? = null
+                    val separator = line.indexOfFirst { char ->
+                        if (char == '"' || char == '\'') {
+                            if (quote == char) quote = null else if (quote == null) quote = char
+                        }
+                        char == ',' && quote == null
+                    }
+                    val name = if (separator >= 0) line.substring(separator + 1).trim() else ""
+                    val options = defaults + attributes(if (separator >= 0) line.take(separator) else line)
                     val epgName =
                         Regex("tvg-name=\"(.*?)\"").find(line)?.groupValues?.get(1)?.trim()
                             ?.ifBlank { name } ?: name
@@ -45,6 +57,9 @@ class M3uIptvParser : IptvParser {
                             url = "",
                             logo = logo,
                             httpUserAgent = httpUserAgent,
+                            catchup = options["catchup"],
+                            catchupSource = options["catchup-source"],
+                            pltv2tvod = !options["pltv2tvod"].equals("false", ignoreCase = true),
                         )
                     }
                 } else if (line.substringBefore('=').trim() == "#EXTVLCOPT:http-user-agent") {
@@ -61,6 +76,9 @@ class M3uIptvParser : IptvParser {
                             "#kodiprop:inputstream.adaptive.manifest_type" -> it.copy(manifestType = value)
                             "#kodiprop:inputstream.adaptive.license_type" -> it.copy(licenseType = value)
                             "#kodiprop:inputstream.adaptive.license_key" -> it.copy(licenseKey = value)
+                            "#kodiprop:catchup" -> it.copy(catchup = value)
+                            "#kodiprop:catchup-source" -> it.copy(catchupSource = value)
+                            "#kodiprop:pltv2tvod" -> it.copy(pltv2tvod = !value.equals("false", true))
                             else -> it
                         }
                     }
@@ -73,6 +91,13 @@ class M3uIptvParser : IptvParser {
 
             channelList
         }
+
+    private fun attributes(line: String): Map<String, String> =
+        Regex("""(?:^|\s)([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s]+))""")
+            .findAll(line).associate { match ->
+                match.groupValues[1].lowercase() to match.groupValues.drop(2)
+                    .firstOrNull { it.isNotEmpty() }.orEmpty()
+            }
 
     override suspend fun getEpgUrl(data: String): String? = getEpgUrls(data).firstOrNull()
 

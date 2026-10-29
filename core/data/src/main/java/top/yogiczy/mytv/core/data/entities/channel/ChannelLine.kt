@@ -13,6 +13,9 @@ data class ChannelLine(
     val manifestType: String? = null,
     val licenseType: String? = null,
     val licenseKey: String? = null,
+    val catchup: String? = null,
+    val catchupSource: String? = null,
+    val pltv2tvod: Boolean = true,
 ) {
 
     val playableUrl: String

@@ -23,8 +23,8 @@ import kotlin.time.measureTimedValue
  * 直播源数据获取
  */
 class IptvRepository(private val source: IptvSource) :
-    // Reparse cached playlists so previously ignored EXTVLCOPT User-Agents become effective.
-    FileCacheRepository(source.cacheFileName("v3.json")) {
+    // Reparse the raw playlist so existing subscriptions also acquire catchup metadata.
+    FileCacheRepository(source.cacheFileName("v4.json")) {
 
     private val log = Logger.create("IptvRepository")
     private val sourceUrl = IptvSourceUrl.parse(source.url)

@@ -26,7 +26,7 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserve
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
-import top.yogiczy.mytv.core.data.utils.ChannelUtil
+import top.yogiczy.mytv.core.data.utils.ChannelPlayback
 import top.yogiczy.mytv.core.data.utils.Constants
 import top.yogiczy.mytv.core.data.utils.Loggable
 import top.yogiczy.mytv.core.util.utils.urlHost
@@ -36,9 +36,6 @@ import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.VideoPlayerState
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.VideoPlayer
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.rememberVideoPlayerState
-import java.net.URI
-import java.text.SimpleDateFormat
-import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 
@@ -255,6 +252,7 @@ class MainContentState(
     }
 
     private fun getLineIdx(lineList: ChannelLineList, lineIdx: Int? = null): Int {
+        if (lineList.isEmpty()) return 0
         val idx = if (lineIdx == null) {
             val idx = lineList.indexOfFirst { line ->
                 settingsViewModel.iptvChannelLinePlayableUrlList.contains(line.url)
@@ -275,6 +273,16 @@ class MainContentState(
         lineIdx: Int? = null,
         playbackEpgProgramme: EpgProgramme? = null,
     ) {
+        val selectedLineIdx = getLineIdx(channel.lineList, lineIdx)
+        val selectedLine = channel.lineList.getOrNull(selectedLineIdx) ?: return
+        val url = if (playbackEpgProgramme != null) {
+            ChannelPlayback.playbackUrl(selectedLine, playbackEpgProgramme.startAt, playbackEpgProgramme.endAt)
+                ?: run {
+                    Snackbar.show("无法生成回看地址，请检查直播源的回看配置")
+                    return
+                }
+        } else selectedLine.playableUrl
+
         settingsViewModel.iptvChannelLastPlay = channel
 
         if (channel == _currentChannel && lineIdx == _currentChannelLineIdx && playbackEpgProgramme == _currentPlaybackEpgProgramme) return
@@ -287,22 +295,10 @@ class MainContentState(
         _isTempChannelScreenVisible = true
 
         _currentChannel = channel
-        _currentChannelLineIdx = getLineIdx(_currentChannel.lineList, lineIdx)
+        _currentChannelLineIdx = selectedLineIdx
 
         _currentPlaybackEpgProgramme = playbackEpgProgramme
 
-        var url = currentChannelLine.playableUrl
-        if (_currentPlaybackEpgProgramme != null) {
-            val timeFormat = SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault())
-            val query = listOf(
-                "playseek=",
-                timeFormat.format(_currentPlaybackEpgProgramme!!.startAt),
-                "-",
-                timeFormat.format(_currentPlaybackEpgProgramme!!.endAt),
-            ).joinToString("")
-            url = if (URI(url).query.isNullOrBlank()) "$url?$query" else "$url&$query"
-            url = ChannelUtil.urlToCanPlayback(url)
-        }
         val line = currentChannelLine.copy(url = url)
 
         log.d("播放${_currentChannel.name}（${_currentChannelLineIdx + 1}/${_currentChannel.lineList.size}）: $line")
@@ -351,7 +347,7 @@ class MainContentState(
         lineIdx: Int? = _currentChannelLineIdx,
     ): Boolean {
         val currentLineIdx = getLineIdx(channel.lineList, lineIdx)
-        return ChannelUtil.urlSupportPlayback(channel.lineList[currentLineIdx].url)
+        return channel.lineList.getOrNull(currentLineIdx)?.let(ChannelPlayback::isSupported) == true
     }
 }
 
