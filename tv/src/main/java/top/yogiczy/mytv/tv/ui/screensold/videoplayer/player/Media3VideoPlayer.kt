@@ -2,7 +2,6 @@ package top.yogiczy.mytv.tv.ui.screensold.videoplayer.player
 
 import android.content.Context
 import android.net.Uri
-import android.util.Base64
 import android.view.SurfaceView
 import android.view.TextureView
 import androidx.annotation.OptIn
@@ -30,6 +29,10 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
 import androidx.media3.exoplayer.drm.FrameworkMediaDrm
+import androidx.media3.exoplayer.drm.HttpMediaDrmCallback
+import androidx.media3.exoplayer.drm.MediaDrmCallback
+import androidx.media3.exoplayer.drm.ExoMediaDrm
+import java.util.UUID
 import androidx.media3.exoplayer.drm.LocalMediaDrmCallback
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.rtsp.RtspMediaSource
@@ -44,7 +47,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
+import top.yogiczy.mytv.core.data.media.ClearKeyLicense
 import top.yogiczy.mytv.core.data.media.Av3aHeader
+import top.yogiczy.mytv.core.data.network.ClearKeyLicenseFetcher
 import top.yogiczy.mytv.core.data.network.HttpBasicAuth
 import top.yogiczy.mytv.core.data.network.HttpBasicAuthInterceptor
 import top.yogiczy.mytv.core.data.network.TrustAllSSLSocketFactory
@@ -174,7 +179,7 @@ class Media3VideoPlayer(
             contentTypeForce = C.CONTENT_TYPE_RTSP
         }
 
-        if (currentChannelLine.manifestType == "mpd") {
+        if (currentChannelLine.manifestType?.trim()?.removeSurrounding("\"")?.equals("mpd", true) == true) {
             contentTypeForce = C.CONTENT_TYPE_DASH
         }
 
@@ -189,45 +194,54 @@ class Media3VideoPlayer(
             }
 
             C.CONTENT_TYPE_DASH -> {
-                DashMediaSource.Factory(dataSourceFactory)
-                    .apply {
-                        if (!(currentChannelLine.manifestType == "mpd" && currentChannelLine.licenseType == "clearkey" && currentChannelLine.licenseKey != null))
-                            return@apply
-
-                        runCatching {
-                            val (drmKeyId, drmKey) = currentChannelLine.licenseKey!!.split(":")
-                            val encodedDrmKey = Base64.encodeToString(
-                                drmKey.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
-                                Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
-                            )
-                            val encodedDrmKeyId = Base64.encodeToString(
-                                drmKeyId.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
-                                Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
-                            )
-                            val drmBody =
-                                "{\"keys\":[{\"kty\":\"oct\",\"k\":\"${encodedDrmKey}\",\"kid\":\"${encodedDrmKeyId}\"}],\"type\":\"temporary\"}"
-
-                            val drmCallback = LocalMediaDrmCallback(drmBody.toByteArray())
-                            val drmSessionManager = DefaultDrmSessionManager.Builder()
-                                .setMultiSession(true)
-                                .setUuidAndExoMediaDrmProvider(
-                                    C.CLEARKEY_UUID,
-                                    FrameworkMediaDrm.DEFAULT_PROVIDER
-                                )
-                                .build(drmCallback)
-
-                            setDrmSessionManagerProvider { drmSessionManager }
-                        }
-                            .onFailure {
-                                triggerError(
-                                    PlaybackException(
-                                        "MEDIA3_ERROR_DRM_LICENSE_EXPIRED",
-                                        androidx.media3.common.PlaybackException.ERROR_CODE_DRM_LICENSE_EXPIRED
-                                    )
-                                )
+                val factory = DashMediaSource.Factory(dataSourceFactory)
+                if (ClearKeyLicense.isSupported(currentChannelLine.licenseType)) {
+                    lateinit var manifestKeyIds: () -> List<UUID>
+                    val licenseKey = currentChannelLine.licenseKey
+                    val drmCallback = try {
+                        val licenseUrl = ClearKeyLicense.remoteUrl(licenseKey)
+                        if (licenseUrl == null) {
+                            manifestKeyIds = { ClearKeyLicense.keyIds(ClearKeyLicense.response(licenseKey)) }
+                            LocalMediaDrmCallback(ClearKeyLicense.response(licenseKey))
+                        } else {
+                            val headers = Configs.videoPlayerHeaders.toHeaders().toMutableMap()
+                            if (headers.keys.none { it.equals("User-Agent", true) }) {
+                                headers["User-Agent"] = currentChannelLine.httpUserAgent ?: Configs.videoPlayerUserAgent
                             }
+                            val client = OkHttpClient.Builder()
+                                .addInterceptor(HttpBasicAuthInterceptor())
+                                .connectTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
+                                .readTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
+                                .build()
+                            val fetcher = ClearKeyLicenseFetcher(client, headers)
+                            manifestKeyIds = {
+                                ClearKeyLicense.keyIds(fetcher.load(licenseUrl,
+                                    """{"kids":[],"type":"temporary"}""".toByteArray(Charsets.UTF_8)))
+                            }
+                            val provisionCallback = HttpMediaDrmCallback(licenseUrl, getDataSourceFactory())
+                            object : MediaDrmCallback {
+                                override fun executeProvisionRequest(uuid: UUID, request: ExoMediaDrm.ProvisionRequest) =
+                                    provisionCallback.executeProvisionRequest(uuid, request)
+
+                                override fun executeKeyRequest(uuid: UUID, request: ExoMediaDrm.KeyRequest) =
+                                    fetcher.load(licenseUrl, request.data)
+                            }
+                        }
+                    } catch (_: IllegalArgumentException) {
+                        triggerError(PlaybackException(
+                            "Invalid ClearKey license configuration",
+                            androidx.media3.common.PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR,
+                        ))
+                        return null
                     }
-                    .createMediaSource(mediaItem)
+                    val drmSessionManager = DefaultDrmSessionManager.Builder()
+                        .setMultiSession(true)
+                        .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
+                        .build(drmCallback)
+                    factory.setManifestParser(ClearKeyDashManifestParser(manifestKeyIds))
+                    factory.setDrmSessionManagerProvider { drmSessionManager }
+                }
+                factory.createMediaSource(mediaItem)
             }
 
             C.CONTENT_TYPE_RTSP -> {

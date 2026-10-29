@@ -53,15 +53,17 @@ class M3uIptvParser : IptvParser {
                     if (userAgent.isNotBlank()) {
                         addedChannels = addedChannels.map { it.copy(httpUserAgent = userAgent) }
                     }
-                } else if (line.startsWith("#KODIPROP:inputstream.adaptive.manifest_type")) {
-                    addedChannels =
-                        addedChannels.map { it.copy(manifestType = line.split("=").last()) }
-                } else if (line.startsWith("#KODIPROP:inputstream.adaptive.license_type")) {
-                    addedChannels =
-                        addedChannels.map { it.copy(licenseType = line.split("=").last()) }
-                } else if (line.startsWith("#KODIPROP:inputstream.adaptive.license_key")) {
-                    addedChannels =
-                        addedChannels.map { it.copy(licenseKey = line.split("=").last()) }
+                } else if (line.startsWith("#KODIPROP:", ignoreCase = true)) {
+                    val property = line.substringBefore('=').trim().lowercase()
+                    val value = line.substringAfter('=', "").trim().removeSurrounding("\"")
+                    addedChannels = addedChannels.map {
+                        when (property) {
+                            "#kodiprop:inputstream.adaptive.manifest_type" -> it.copy(manifestType = value)
+                            "#kodiprop:inputstream.adaptive.license_type" -> it.copy(licenseType = value)
+                            "#kodiprop:inputstream.adaptive.license_key" -> it.copy(licenseKey = value)
+                            else -> it
+                        }
+                    }
                 } else if (line.startsWith("#") || line.startsWith("//")) {
                     return@forEach
                 } else {
