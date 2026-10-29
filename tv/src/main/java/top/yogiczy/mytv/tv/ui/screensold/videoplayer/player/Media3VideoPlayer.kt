@@ -240,6 +240,28 @@ class Media3VideoPlayer(
                         .build(drmCallback)
                     factory.setManifestParser(ClearKeyDashManifestParser(manifestKeyIds))
                     factory.setDrmSessionManagerProvider { drmSessionManager }
+                } else if (WidevineLicenseCallback.isSupported(currentChannelLine.licenseType)) {
+                    val client = OkHttpClient.Builder()
+                        .addInterceptor(HttpBasicAuthInterceptor())
+                        .connectTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
+                        .readTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
+                        .build()
+                    val licenseDataSource = OkHttpDataSource.Factory(client)
+                        .setUserAgent(currentChannelLine.httpUserAgent ?: Configs.videoPlayerUserAgent)
+                        .setDefaultRequestProperties(Configs.videoPlayerHeaders.toHeaders())
+                    val callback = try {
+                        WidevineLicenseCallback.create(currentChannelLine.licenseKey, licenseDataSource,
+                            Configs.videoPlayerHeaders.toHeaders())
+                    } catch (_: IllegalArgumentException) {
+                        triggerError(PlaybackException("Invalid Widevine license URL",
+                            androidx.media3.common.PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR))
+                        return null
+                    }
+                    val manager = DefaultDrmSessionManager.Builder()
+                        .setMultiSession(true)
+                        .setUuidAndExoMediaDrmProvider(C.WIDEVINE_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
+                        .build(callback)
+                    factory.setDrmSessionManagerProvider { manager }
                 }
                 factory.createMediaSource(mediaItem)
             }
