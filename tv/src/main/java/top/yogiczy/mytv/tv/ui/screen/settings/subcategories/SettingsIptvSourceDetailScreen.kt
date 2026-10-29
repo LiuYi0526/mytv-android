@@ -110,6 +110,7 @@ fun SettingsIptvSourceDetailScreen(
 
     SourceDetailLayout(
         adding = original == null,
+        showBackButton = sources.isNotEmpty(),
         headerExtra = if (original != null) {{
             AppScaffoldHeaderBtn(modifier = Modifier.focusRequester(moreFocus), title = "更多", imageVector = Icons.Default.MoreHoriz,
                 onSelect = { popupManager.push(moreFocus, true); more = true })
@@ -185,6 +186,7 @@ internal fun SourceDetailLayout(
     adding: Boolean,
     headerExtra: @Composable (() -> Unit)?,
     onBackPressed: () -> Unit,
+    showBackButton: Boolean = true,
     addTitle: String = "添加订阅源",
     editTitle: String = "订阅源",
     qrUrl: String = HttpServer.serverUrl,
@@ -198,7 +200,7 @@ internal fun SourceDetailLayout(
     }
     val padding = rememberChildPadding()
     val firstFocus = remember { FocusRequester() }
-    AppScreen(header = { Text(addTitle) }, canBack = true, onBackPressed = onBackPressed) {
+    AppScreen(header = { Text(addTitle) }, canBack = showBackButton, onBackPressed = onBackPressed) {
         Row(
             Modifier.fillMaxSize().padding(padding.copy(top = 10.dp).paddingValues),
             horizontalArrangement = Arrangement.spacedBy(24.dp),

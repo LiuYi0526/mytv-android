@@ -160,8 +160,14 @@ fun MainScreen(
                 LoadingScreen(
                     mainUiState = uiState,
                     toDashboardScreen = {
-                        navController.navigateUp()
-                        navController.navigateSingleTop(settingsViewModel.appStartupScreen)
+                        val destination = if (settingsViewModel.iptvSourceList.isEmpty()) {
+                            Screens.Settings.withArgs(SettingsSubCategories.IPTV_SOURCE)
+                        } else settingsViewModel.appStartupScreen
+                        navController.navigate(destination) {
+                            // Startup/reload is complete; Back must not reopen the agreement or loading screen.
+                            popUpTo(navController.graph.id) { inclusive = true }
+                            launchSingleTop = true
+                        }
                         checkUpdate()
                     },
                     toSettingsScreen = { navController.navigateSingleTop(Screens.Settings()) },
@@ -288,7 +294,12 @@ fun MainScreen(
                     channelGroupListProvider = channelGroupListProvider,
                     onCheckUpdate = { checkUpdate(false) },
                     onReload = { reload() },
-                    onBackPressed = { navController.navigateUp() },
+                    onBackPressed = {
+                        // At the root, navigateUp() may relaunch the graph's start destination.
+                        // Keep this page in place while the app handles its exit confirmation.
+                        if (navController.previousBackStackEntry == null) onBackPressed()
+                        else navController.popBackStack()
+                    },
                 )
             }
 

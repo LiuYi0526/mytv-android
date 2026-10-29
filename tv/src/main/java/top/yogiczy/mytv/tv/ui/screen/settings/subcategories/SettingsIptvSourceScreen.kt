@@ -48,7 +48,6 @@ fun SettingsIptvSourceScreen(
     onBackPressed: () -> Unit = {},
 ) {
     val sources = iptvSourceListProvider()
-    // The built-in fallback is an invalid placeholder, not an editable user subscription.
     var selectedUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedName by rememberSaveable { mutableStateOf<String?>(null) }
     var adding by rememberSaveable { mutableStateOf(false) }
@@ -57,7 +56,7 @@ fun SettingsIptvSourceScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val selected = sources.firstOrNull { it.url == selectedUrl && it.name == selectedName }
-    if (adding || selected != null) {
+    if (sources.isEmpty() || adding || selected != null) {
         key(adding, selectedUrl, selectedName) {
             SettingsIptvSourceDetailScreen(
                 original = selected,
@@ -74,7 +73,10 @@ fun SettingsIptvSourceScreen(
                 onSetCurrent = { selected?.let(onSetCurrent) },
                 onClearCache = { selected?.let(onClearCache) },
                 onDelete = { selected?.let(onDelete); selectedUrl = null; selectedName = null },
-                onBackPressed = { adding = false; selectedUrl = null; selectedName = null },
+                onBackPressed = {
+                    if (sources.isEmpty()) onBackPressed()
+                    else { adding = false; selectedUrl = null; selectedName = null }
+                },
             )
         }
         return
