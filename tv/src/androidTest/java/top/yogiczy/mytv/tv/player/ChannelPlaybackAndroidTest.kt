@@ -24,10 +24,10 @@ class ChannelPlaybackAndroidTest {
             catchupSource = "https://archive.test/{b:10}?end=\${(e)10}")
         assertEquals("https://archive.test/1767225600?end=1767227400",
             ChannelPlayback.playbackUrl(line, start, end))
-        assertEquals("https://example.test/tvod/1?token=a%2Bb==&playseek=20260101080000-20260101083000",
+        assertEquals("https://example.test/TVOD/1?token=a%2Bb==&playseek=20260101080000-20260101083000",
             ChannelPlayback.playbackUrl(line.copy(catchup = null, catchupSource = null), start, end,
                 timeZone = TimeZone.getTimeZone("Asia/Shanghai")))
-        assertEquals("https://example.test/tvod/1?token=a%2Bb==&b=1767225600&e=1767227400",
+        assertEquals("https://example.test/TVOD/1?token=a%2Bb==&b=1767225600&e=1767227400",
             ChannelPlayback.playbackUrl(line.copy(catchup = "append", catchupSource = "?b={b:10}&e=\${(e)10}"), start, end))
     }
 }

@@ -34,15 +34,27 @@ class ChannelPlaybackTest {
     @Test fun automaticPltvReplayKeepsLineNameOutOfUrl() {
         val line = ChannelLine("http://example.test/PLTV/1.m3u8?token=one\$线路1")
         assertTrue(ChannelPlayback.isSupported(line))
-        assertEquals("http://example.test/tvod/1.m3u8?token=one&playseek=20260101080000-20260101083000", url(line))
+        assertEquals("http://example.test/TVOD/1.m3u8?token=one&playseek=20260101080000-20260101083000", url(line))
         assertTrue(ChannelPlayback.isSupported(line.copy(url = "http://example.test/TVOD/1")))
         assertTrue(url(line.copy(pltv2tvod = false))!!.contains("/PLTV/"))
+    }
+
+    @Test fun pltvReplacementUsesUppercaseAndKeepsExistingTvodSpelling() {
+        for (path in listOf("PLTV", "pltv", "PlTv")) {
+            val line = ChannelLine("http://example.test/$path/1")
+            assertTrue(url(line)!!.startsWith("http://example.test/TVOD/1?"))
+            assertTrue(url(line.copy(pltv2tvod = false))!!.startsWith("http://example.test/$path/1?"))
+        }
+        for (path in listOf("TVOD", "tvod")) {
+            assertTrue(url(ChannelLine("http://example.test/$path/1"))!!
+                .startsWith("http://example.test/$path/1?"))
+        }
     }
 
     @Test fun explicitRuleTakesPriorityOverPltvFallback() {
         val line = ChannelLine("https://example.test/PLTV/1", catchup = "default",
             catchupSource = "https://archive.test/PLTV/1/{b:10}")
-        assertEquals("https://archive.test/tvod/1/1767225600", url(line))
+        assertEquals("https://archive.test/TVOD/1/1767225600", url(line))
         assertEquals("https://archive.test/PLTV/1/1767225600", url(line.copy(pltv2tvod = false)))
         assertFalse(ChannelPlayback.isSupported(line.copy(catchup = "none")))
         assertFalse(ChannelPlayback.isSupported(line.copy(catchup = "shift")))

@@ -48,7 +48,7 @@ object ChannelPlayback {
             "append" -> appendQuery(line.playableUrl, source)
             else -> return null
         }
-        if (line.pltv2tvod) result = result.replace("pltv", "tvod", ignoreCase = true)
+        if (line.pltv2tvod) result = result.replace("PLTV", "TVOD", ignoreCase = true)
         require(URI(result).isAbsolute && !placeholder.containsMatchIn(result))
         result
     }.getOrNull()
