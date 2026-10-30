@@ -10,7 +10,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.channel.Channel
@@ -80,10 +79,10 @@ fun SettingsScreen(
         }
     }
 
-    val navController = rememberNavController()
+    SettingsNavigation { navController ->
 
     fun navigateBack() {
-        if (!navController.navigateUp()) onBackPressed()
+        navController.popSettingsOrExit(onBackPressed)
     }
 
     AppScreen(modifier = modifier, onBackPressed = onBackPressed) {
@@ -294,7 +293,7 @@ fun SettingsScreen(
                         cacheTimeProvider = { settingsViewModel.iptvSourceCacheTime },
                         onCacheTimeChanged = {
                             settingsViewModel.iptvSourceCacheTime = it
-                            navController.navigateUp()
+                            navigateBack()
                         },
                         onBackPressed = { navigateBack() },
                     )
@@ -311,7 +310,7 @@ fun SettingsScreen(
                         },
                         onBackPressed = {
                             if (hasChanged) onReload()
-                            else navController.navigateUp()
+                            else navigateBack()
                         },
                     )
                 }
@@ -321,7 +320,7 @@ fun SettingsScreen(
                         hybridModeProvider = { settingsViewModel.iptvHybridMode },
                         onHybridModeChanged = {
                             settingsViewModel.iptvHybridMode = it
-                            navController.navigateUp()
+                            navigateBack()
                         },
                         onBackPressed = { navigateBack() },
                     )
@@ -378,7 +377,7 @@ fun SettingsScreen(
                         timeShowModeProvider = { settingsViewModel.uiTimeShowMode },
                         onTimeShowModeChanged = {
                             settingsViewModel.uiTimeShowMode = it
-                            navController.navigateUp()
+                            navigateBack()
                         },
                         onBackPressed = { navigateBack() },
                     )
@@ -389,7 +388,7 @@ fun SettingsScreen(
                         delayProvider = { settingsViewModel.uiScreenAutoCloseDelay },
                         onDelayChanged = {
                             settingsViewModel.uiScreenAutoCloseDelay = it
-                            navController.navigateUp()
+                            navigateBack()
                         },
                         onBackPressed = { navigateBack() },
                     )
@@ -416,7 +415,7 @@ fun SettingsScreen(
                         coreProvider = { settingsViewModel.videoPlayerCore },
                         onCoreChanged = {
                             settingsViewModel.videoPlayerCore = it
-                            navController.navigateUp()
+                            navigateBack()
                         },
                         onBackPressed = { navigateBack() },
                     )
@@ -427,7 +426,7 @@ fun SettingsScreen(
                         renderModeProvider = { settingsViewModel.videoPlayerRenderMode },
                         onRenderModeChanged = {
                             settingsViewModel.videoPlayerRenderMode = it
-                            navController.navigateUp()
+                            navigateBack()
                         },
                         onBackPressed = { navigateBack() },
                     )
@@ -438,7 +437,7 @@ fun SettingsScreen(
                         displayModeProvider = { settingsViewModel.videoPlayerDisplayMode },
                         onDisplayModeChanged = {
                             settingsViewModel.videoPlayerDisplayMode = it
-                            navController.navigateUp()
+                            navigateBack()
                         },
                         onBackPressed = { navigateBack() },
                     )
@@ -449,7 +448,7 @@ fun SettingsScreen(
                         timeoutProvider = { settingsViewModel.videoPlayerLoadTimeout },
                         onTimeoutChanged = {
                             settingsViewModel.videoPlayerLoadTimeout = it
-                            navController.navigateUp()
+                            navigateBack()
                         },
                         onBackPressed = { navigateBack() },
                     )
@@ -460,7 +459,7 @@ fun SettingsScreen(
                         updateChannelProvider = { settingsViewModel.updateChannel },
                         onUpdateChannelChanged = {
                             settingsViewModel.updateChannel = it
-                            navController.navigateUp()
+                            navigateBack()
                             onCheckUpdate()
                         },
                         onBackPressed = { navigateBack() },
@@ -472,12 +471,13 @@ fun SettingsScreen(
                         providerProvider = { settingsViewModel.cloudSyncProvider },
                         onProviderChanged = {
                             settingsViewModel.cloudSyncProvider = it
-                            navController.navigateUp()
+                            navigateBack()
                         },
                         onBackPressed = { navigateBack() },
                     )
                 }
             }
         )
+    }
     }
 }
