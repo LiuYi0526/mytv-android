@@ -10,7 +10,9 @@ internal object EpgCachePolicy {
         refreshHour: Int,
         now: Long = System.currentTimeMillis(),
         timeZone: TimeZone = TimeZone.getDefault(),
+        forceRefresh: Boolean = false,
     ): Boolean {
+        if (forceRefresh) return true
         val boundary = Calendar.getInstance(timeZone).apply {
             timeInMillis = now
             set(Calendar.HOUR_OF_DAY, refreshHour.coerceIn(0, 23))

@@ -21,6 +21,7 @@ import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCacheInfo
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceList
 import top.yogiczy.mytv.core.data.repositories.epg.EpgRepository
+import top.yogiczy.mytv.core.data.repositories.epg.EpgUpdateProgress
 import top.yogiczy.mytv.core.util.utils.humanizeBytes
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -40,6 +41,7 @@ fun SettingsEpgSourceScreen(
     onSetCurrent: (EpgSource) -> Unit = {},
     onDelete: (EpgSource) -> Unit = {},
     onClearCache: (EpgSource) -> Unit = {},
+    onUpdate: suspend (EpgSource, (EpgUpdateProgress) -> Unit) -> Unit = { _, _ -> },
     onBackPressed: () -> Unit = {},
 ) {
     val sources = epgSourceListProvider()
@@ -56,6 +58,7 @@ fun SettingsEpgSourceScreen(
                 onSetDefault = { selected?.let(onSetCurrent) },
                 onDelete = { selected?.let(onDelete); selectedUrl = null },
                 onClearCache = { selected?.let(onClearCache) },
+                onUpdate = { progress -> selected?.let { onUpdate(it, progress) } },
                 onBackPressed = { adding = false; selectedUrl = null },
             )
         }

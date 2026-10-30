@@ -7,6 +7,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import top.yogiczy.mytv.core.data.repositories.epg.EpgUpdateProgress
+import top.yogiczy.mytv.core.util.utils.humanizeBytes
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
 import top.yogiczy.mytv.tv.ui.material.*
@@ -19,10 +24,15 @@ internal fun SettingsEpgSourceDetailScreen(
     original: EpgSource?, sources: List<EpgSource>, isDefault: Boolean,
     onSave: (EpgSource) -> Unit, onSetDefault: () -> Unit, onClearCache: () -> Unit,
     onDelete: () -> Unit, onBackPressed: () -> Unit,
+    onUpdate: suspend ((EpgUpdateProgress) -> Unit) -> Unit,
 ) {
     var name by rememberSaveable { mutableStateOf(original?.name.orEmpty()) }
     var url by rememberSaveable { mutableStateOf(original?.url.orEmpty()) }
     var deleting by remember { mutableStateOf(false) }
+    var updating by remember { mutableStateOf(false) }
+    val updateProgress = remember { MutableStateFlow(EpgUpdateProgress()) }
+    val progress by updateProgress.collectAsState()
+    val scope = rememberCoroutineScope()
     SourceDetailLayout(
         adding = original == null, headerExtra = null, onBackPressed = onBackPressed,
         addTitle = "添加节目单", editTitle = "节目单", qrUrl = "${HttpServer.serverUrl}/#epg",
@@ -45,6 +55,40 @@ internal fun SettingsEpgSourceDetailScreen(
             })
         }
         if (original != null) {
+            item {
+                SettingsListItem(
+                    headlineContent = if (updating) "更新中…" else "更新节目单",
+                    supportingContent = if (!updating) "重新获取已保存链接的节目单数据" else when (progress.stage) {
+                        EpgUpdateProgress.Stage.PREPARING -> "正在连接…"
+                        EpgUpdateProgress.Stage.DOWNLOADING -> progress.totalBytes?.let { total ->
+                            val percent = (progress.bytesRead.toDouble() / total * 100).toInt().coerceIn(0, 100)
+                            "下载 $percent%（${progress.bytesRead.humanizeBytes()} / ${total.humanizeBytes()}）"
+                        } ?: "已下载 ${progress.bytesRead.humanizeBytes()}"
+                        EpgUpdateProgress.Stage.PARSING -> "下载完成，正在解析节目单…"
+                        EpgUpdateProgress.Stage.SAVING -> "正在保存节目单…"
+                        EpgUpdateProgress.Stage.LOADING -> "正在加载节目单…"
+                        EpgUpdateProgress.Stage.COMPLETE -> "更新完成"
+                    },
+                    onSelect = {
+                        if (!updating) {
+                            updating = true
+                            updateProgress.value = EpgUpdateProgress()
+                            scope.launch {
+                                try {
+                                    onUpdate { updateProgress.value = it }
+                                    Snackbar.show("节目单已更新")
+                                } catch (ex: CancellationException) {
+                                    throw ex
+                                } catch (ex: Exception) {
+                                    Snackbar.show("更新失败：${ex.message ?: "请稍后重试"}", type = SnackbarType.ERROR)
+                                } finally {
+                                    updating = false
+                                }
+                            }
+                        }
+                    },
+                )
+            }
             item { SettingsListItem(headlineContent = if (isDefault) "默认节目单" else "设为默认节目单",
                 supportingContent = if (isDefault) "未单独指定节目单的订阅源使用此节目单" else null,
                 onSelect = { if (!isDefault) onSetDefault() }) }

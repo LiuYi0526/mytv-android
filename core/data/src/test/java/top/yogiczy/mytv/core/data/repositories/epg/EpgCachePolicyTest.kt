@@ -26,8 +26,11 @@ class EpgCachePolicyTest {
 
     private inner class TestCache(file: File, private val now: Long) : FileCacheRepository(file.path, true) {
         var downloads = 0
-        suspend fun load() = getOrRefresh({ modified, _ -> EpgCachePolicy.isExpired(modified, 2, now, zone) }) {
+        suspend fun load(forceRefresh: Boolean = false, fail: Boolean = false) = getOrRefresh({ modified, _ ->
+            EpgCachePolicy.isExpired(modified, 2, now, zone, forceRefresh = forceRefresh)
+        }) {
             downloads++
+            if (fail) throw java.io.IOException("download failed")
             "fresh guide"
         }
     }
@@ -100,5 +103,31 @@ class EpgCachePolicyTest {
         assertEquals("fresh guide", cache.load())
         assertEquals("fresh guide", file.readText())
         assertEquals(1, cache.downloads)
+    }
+
+    @Test
+    fun manualUpdateReplacesUnexpiredCacheBeforeRefreshHour() = runBlocking {
+        val file = temporary.newFile("manual.json").apply {
+            writeText("cached guide")
+            assertTrue(setLastModified(time("2026-10-21 09:05:00.000")))
+        }
+        val cache = TestCache(file, time("2026-10-22 00:30:00.000"))
+        assertEquals("fresh guide", cache.load(forceRefresh = true))
+        assertEquals(1, cache.downloads)
+        assertEquals("fresh guide", file.readText())
+    }
+
+    @Test
+    fun failedManualUpdateKeepsPreviousCacheAndTimestamp() = runBlocking {
+        val file = temporary.newFile("failed.json").apply { writeText("usable guide") }
+        val modified = file.lastModified()
+        val cache = TestCache(file, time("2026-10-22 00:30:00.000"))
+        try {
+            cache.load(forceRefresh = true, fail = true)
+            org.junit.Assert.fail("Expected download failure")
+        } catch (_: java.io.IOException) {
+            assertEquals("usable guide", file.readText())
+            assertEquals(modified, file.lastModified())
+        }
     }
 }

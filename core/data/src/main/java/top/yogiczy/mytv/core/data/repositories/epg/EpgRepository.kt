@@ -32,25 +32,33 @@ class EpgRepository(private val source: EpgSource) :
         )
     }
 
-    private suspend fun refresh(): String {
-        val xml = epgXmlRepository.getXml()
-        val epgList = EpgParser.fromXml(xml)
+    private suspend fun refresh(onProgress: (EpgUpdateProgress) -> Unit): String {
+        onProgress(EpgUpdateProgress())
+        val xml = epgXmlRepository.getXml(onProgress)
+        onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.PARSING))
+        val epgList = xml.use { EpgParser.fromXml(it) }
         if (epgList.isEmpty()) throw Exception("获取节目单为空")
 
+        onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.SAVING))
         return Globals.json.encodeToString(epgList)
     }
 
     /**
      * 获取节目单列表
      */
-    suspend fun getEpgList(refreshHour: Int = 0): EpgList = withContext(Dispatchers.Default) {
+    suspend fun getEpgList(
+        refreshHour: Int = 0, forceRefresh: Boolean = false,
+        onProgress: (EpgUpdateProgress) -> Unit = {},
+    ): EpgList = withContext(Dispatchers.Default) {
         try {
             val xmlJson = getOrRefresh({ lastModified, _ ->
-                EpgCachePolicy.isExpired(lastModified, refreshHour)
-            }) { refresh() }
+                EpgCachePolicy.isExpired(lastModified, refreshHour, forceRefresh = forceRefresh)
+            }) { refresh(onProgress) }
 
+            onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.LOADING))
             return@withContext Globals.json.decodeFromString<EpgList>(xmlJson).also { epgList ->
                 log.i("加载节目单（${source.name}）：${epgList.size}个频道，${epgList.sumOf { it.programmeList.size }}个节目")
+                onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.COMPLETE))
             }
         } catch (ex: Exception) {
             log.e("加载节目单（${source.name}）失败", ex)
@@ -79,7 +87,7 @@ private class EpgXmlRepository(private val source: EpgSource) :
 
     private val log = Logger.create("EpgXmlRepository")
 
-    suspend fun getXml(): InputStream {
+    suspend fun getXml(onProgress: (EpgUpdateProgress) -> Unit): InputStream {
         return getOrRefreshInputStream(0) {
             log.i("开始获取节目单（${source.name}）xml: ${source.url}")
 
@@ -88,7 +96,7 @@ private class EpgXmlRepository(private val source: EpgSource) :
                     source.url.request { response, request ->
                         val fetcher =
                             EpgFetcher.instances.first { it.isSupport(request.url.toString()) }
-                        fetcher.fetch(response.body!!)
+                        fetcher.fetch(EpgProgressResponseBody(response.body!!, onProgress))
                     }
                 }
                 log.i("获取节目单（${source.name}）xml成功", null, t.duration)

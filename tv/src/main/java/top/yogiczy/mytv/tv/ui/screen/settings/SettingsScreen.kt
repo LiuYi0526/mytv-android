@@ -18,6 +18,7 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelFavoriteList
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceList
+import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceList
 import top.yogiczy.mytv.core.data.repositories.epg.EpgRepository
 import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
@@ -330,6 +331,15 @@ fun SettingsScreen(
                     SettingsEpgSourceScreen(
                         currentEpgSourceProvider = { settingsViewModel.epgSourceCurrent },
                         epgSourceListProvider = { settingsViewModel.epgSourceList },
+                        onUpdate = { source, progress ->
+                            EpgRepository(source).getEpgList(forceRefresh = true, onProgress = progress)
+                            val activeSources = EpgSourceCatalog.resolve(
+                                settingsViewModel.iptvSourceCurrent,
+                                settingsViewModel.epgSourceList,
+                                settingsViewModel.epgSourceCurrent,
+                            )
+                            if (Configs.epgEnable && activeSources.any { it.url == source.url }) onReload()
+                        },
                         onSave = { old, updated ->
                             settingsViewModel.saveEpgSource(old, updated)
                             Snackbar.show("节目单已保存")
