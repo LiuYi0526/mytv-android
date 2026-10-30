@@ -1,5 +1,6 @@
 package top.yogiczy.mytv.core.data.repositories.iptv
 
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
@@ -9,6 +10,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
+import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceCacheInfo
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceUrl
 import top.yogiczy.mytv.core.data.network.HttpException
 import top.yogiczy.mytv.core.data.network.request
@@ -24,11 +26,18 @@ import kotlin.time.measureTimedValue
  */
 class IptvRepository(private val source: IptvSource) :
     // Reparse the raw playlist so existing subscriptions also acquire catchup metadata.
-    FileCacheRepository(source.cacheFileName("v4.json")) {
+    FileCacheRepository(source.cacheFileName(PARSED_CACHE_EXTENSION)) {
 
     private val log = Logger.create("IptvRepository")
     private val sourceUrl = IptvSourceUrl.parse(source.url)
     private val rawRepository = IptvRawRepository(source.copy(url = sourceUrl.requestUrl))
+
+    suspend fun getCachedInfo(): IptvSourceCacheInfo? = withContext(Dispatchers.IO) {
+        IptvSourceCacheInfo.read(
+            File(Globals.cacheDir, source.cacheFileName(PARSED_CACHE_EXTENSION)),
+            if (source.isLocal) null else File(Globals.cacheDir, source.copy(url = sourceUrl.requestUrl).cacheFileName("txt")),
+        )
+    }
 
     private fun isExpired(lastModified: Long, cacheTime: Long): Boolean {
         val timeout =
@@ -134,6 +143,7 @@ class IptvRepository(private val source: IptvSource) :
     }
 
     companion object {
+        private const val PARSED_CACHE_EXTENSION = "v4.json"
         suspend fun clearAllCache() = withContext(Dispatchers.IO) {
             IptvSource.cacheDir.deleteRecursively()
         }

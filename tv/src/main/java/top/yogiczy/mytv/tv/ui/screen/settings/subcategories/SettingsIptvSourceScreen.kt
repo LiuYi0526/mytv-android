@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -17,17 +19,27 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.ListItem
+import androidx.tv.material3.LocalContentColor
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
+import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceCacheInfo
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceList
 import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
 import top.yogiczy.mytv.tv.ui.material.Snackbar
+import top.yogiczy.mytv.tv.ui.material.Tag
+import top.yogiczy.mytv.tv.ui.material.TagDefaults
+import top.yogiczy.mytv.core.util.utils.humanizeBytes
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScaffoldHeaderBtn
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
@@ -82,6 +94,12 @@ fun SettingsIptvSourceScreen(
         return
     }
     val padding = rememberChildPadding()
+    var cacheInfo by remember { mutableStateOf<Map<IptvSource, IptvSourceCacheInfo?>>(emptyMap()) }
+    LaunchedEffect(sources) {
+        for (source in sources) {
+            cacheInfo = cacheInfo + (source to IptvRepository(source).getCachedInfo())
+        }
+    }
     AppScreen(
         modifier = modifier,
         header = { Text("订阅源") },
@@ -93,7 +111,11 @@ fun SettingsIptvSourceScreen(
                         var failures = 0
                         try {
                             for (source in sources.toList()) {
-                                try { IptvRepository(source).getChannelGroupList(0) }
+                                try {
+                                    val repository = IptvRepository(source)
+                                    repository.getChannelGroupList(0)
+                                    cacheInfo = cacheInfo + (source to repository.getCachedInfo())
+                                }
                                 catch (ex: CancellationException) { throw ex }
                                 catch (_: Exception) { failures++ }
                             }
@@ -125,8 +147,32 @@ fun SettingsIptvSourceScreen(
                     selected = false,
                     onClick = {},
                     leadingContent = { Text("#${index + 1}") },
-                    headlineContent = { Text(source.name) },
-                    supportingContent = { Text(source.url, maxLines = 2) },
+                    headlineContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(source.name, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.width(8.dp))
+                            Tag(if (source.isLocal) "本地" else "远程", colors = TagDefaults.colors(
+                                containerColor = LocalContentColor.current.copy(alpha = 0.1f),
+                            ))
+                        }
+                    },
+                    supportingContent = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(source.url, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            val info = cacheInfo[source]
+                            val statistics = remember(info, cacheInfo.containsKey(source)) {
+                                when {
+                                    !cacheInfo.containsKey(source) -> "正在读取缓存…"
+                                    info == null -> "暂无缓存统计，请更新订阅源"
+                                    else -> "分组：${info.groupCount}，频道：${info.channelCount} | 缓存：${info.cacheBytes.humanizeBytes()} | 更新：" +
+                                        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(info.updatedAt))
+                                }
+                            }
+                            Text(statistics, style = MaterialTheme.typography.bodySmall,
+                                color = LocalContentColor.current.copy(alpha = 0.7f),
+                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    },
                     trailingContent = {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (source == currentIptvSourceProvider()) Icon(Icons.Default.CheckCircle, "当前订阅源", Modifier.size(18.dp))
