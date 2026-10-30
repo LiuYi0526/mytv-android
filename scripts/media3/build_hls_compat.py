@@ -1,4 +1,4 @@
-"""Rebuild only HlsSampleStreamWrapper in the official Media3 1.4.1 AAR.
+"""Rebuild only HlsSampleStreamWrapper in the official Media3 1.11.1 AAR.
 
 Requires JDK 17, the original AAR/sources JAR and an Android compile classpath.
 No network access; pinned input hashes prevent applying this patch to another version.
@@ -13,13 +13,13 @@ import tempfile
 import zipfile
 
 CLASS = "androidx/media3/exoplayer/hls/HlsSampleStreamWrapper"
-AAR_SHA256 = "43546b6b2ef0c2816f5d3af181c2179a5c1bddb9df85b7b84b3428cd37c887de"
-SOURCE_SHA256 = "1c8a3923aa4235569c3bad775ad85ad3406e3521933128774c88d585229accca"
+AAR_SHA256 = "bd7aeac8dc60b3ee926eddbe05e29f27dc53c81514cae3271b2edab693f34262"
+SOURCE_SHA256 = "13c0fa1594743e6b2f00d4c0c0a14a6c56a23baa9652e347ebd2dcaca5ad283a"
 
 
 def checked(data, digest):
     if hashlib.sha256(data).hexdigest() != digest:
-        raise ValueError("Unexpected upstream Media3 1.4.1 input")
+        raise ValueError("Unexpected upstream Media3 1.11.1 input")
     return data
 
 
@@ -66,7 +66,7 @@ def archive(entries):
     result = io.BytesIO()
     with zipfile.ZipFile(result, "w", zipfile.ZIP_DEFLATED) as output:
         for name, data in sorted(entries.items()):
-            info = zipfile.ZipInfo(name, (2024, 8, 27, 0, 0, 0))
+            info = zipfile.ZipInfo(name, (2026, 9, 10, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
             output.writestr(info, data)
     return result.getvalue()

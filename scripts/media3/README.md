@@ -1,6 +1,6 @@
-# Media3 1.4.1 AV3A / HLS compatibility
+# Media3 1.11.1 AV3A / HLS compatibility
 
-The app uses the official Media3 1.4.1 APIs, with an AV3A TS payload reader in
+The app uses the official Media3 1.11.1 APIs (Android API 23+), with an AV3A TS payload reader in
 `tv/.../videoplayer/player/av3a` and bounded AATF parsing in `core/data/.../media`.
 Stream type `0xD5` is reported as `audio/av3a`. The existing FFmpeg extension
 decodes this MIME type with `libarcdav3a`.
@@ -10,7 +10,7 @@ decodes this MIME type with `libarcdav3a`.
 Official `HlsSampleStreamWrapper.getMappedTrackOutput` maps audio by type, retaining
 only the first audio ID. A TS containing AAC (`15`) and AV3A (`213`) consequently
 loses AV3A even when the TS reader understands it. The local
-`tv/libs/media3-exoplayer-hls-1.4.1-multi-audio.aar` replaces only this wrapper and
+`tv/libs/media3-exoplayer-hls-1.11.1-multi-audio.aar` replaces only this wrapper and
 its nested classes. All other classes and AAR entries originate from the official
 Google Maven artifact (Apache-2.0).
 Copyright (C) 2016 The Android Open Source Project. The upstream license is
@@ -24,21 +24,21 @@ it does not extend Media3's TS support to multiple tracks of the same stream typ
 HLS chunkless preparation is disabled so tracks are discovered from the segments.
 
 Upstream sources:
-- https://github.com/androidx/media/tree/1.4.1/libraries/exoplayer_hls
-- https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer-hls/1.4.1/media3-exoplayer-hls-1.4.1-sources.jar
+- https://github.com/androidx/media/tree/1.11.1/libraries/exoplayer_hls
+- https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer-hls/1.11.1/media3-exoplayer-hls-1.11.1-sources.jar
 - AV3A header reference: https://github.com/yaoxieyoulei/media/tree/av3a_1.4.1
 
 ## Rebuild
 
 Run `build_hls_compat.py` with Python 3 and JDK 17. Inputs are verified against
-pinned SHA-256 hashes before patching. Supply the official 1.4.1 AAR and sources
+pinned SHA-256 hashes before patching. Supply the official 1.11.1 AAR and sources
 JAR, plus a UTF-8 file containing the platform-separated Java compile classpath
 for the TV app, `android.jar`, and Checker Framework's `checker-qual` JAR.
 The TV classpath can be exported from Gradle's
 `tasks.named("compileOriginalDebugJavaWithJavac").get().classpath.asPath`.
 
 ```text
-python scripts/media3/build_hls_compat.py --aar <official.aar> --sources <sources.jar> --classpath <classpath.txt> --javac <JDK17/bin/javac> --output tv/libs/media3-exoplayer-hls-1.4.1-multi-audio.aar
+python scripts/media3/build_hls_compat.py --aar <official-1.11.1.aar> --sources <sources.jar> --classpath <classpath.txt> --javac <JDK17/bin/javac> --output tv/libs/media3-exoplayer-hls-1.11.1-multi-audio.aar
 ```
 
 The patch itself is readable in the script's `patch` function. A source-retained
@@ -46,6 +46,31 @@ The patch itself is readable in the script's `patch` function. A source-retained
 is omitted from the published AAR. The local `../media` source-tree build path
 continues to use its own HLS module; apply the same mapping patch there if used.
 Do not upgrade other Media3 artifacts without rebuilding and reviewing this patch.
+
+## FFmpeg renderer compatibility
+
+`ffmpeg/FfmpegAudioRenderer.java` is the Apache-2.0 renderer from Media3 1.11.1,
+with the existing AV3A 10-channel fallback retained for Android API < 32.
+The new `DecoderAudioRenderer.getChannelMapping` returns `ImmutableIntArray`;
+the old binary's `int[]` override would no longer be called.
+
+`build_ffmpeg_compat.py` replaces only the renderer class in the pre-upgrade,
+16 KB aligned `lib-decoder-ffmpeg-release.aar` (SHA-256 pinned in the script).
+Obtain that input AAR from the Git revision before this upgrade. Decoder classes,
+JNI interfaces, all four ABI native libraries, and AV3A/binaural decoding remain
+byte-for-byte unchanged. The source is readable and can be compiled again:
+
+```text
+python scripts/media3/build_ffmpeg_compat.py --aar <pre-upgrade-ffmpeg.aar> --classpath <classpath.txt> --javac <JDK17/bin/javac> --output tv/libs/lib-decoder-ffmpeg-release.aar
+```
+
+Upstream renderer:
+https://github.com/androidx/media/blob/1.11.1/libraries/decoder_ffmpeg/src/main/java/androidx/media3/decoder/ffmpeg/FfmpegAudioRenderer.java
+
+The app's Kotlin and Compose compiler plugins use 2.2.10 to read the Kotlin 2.2
+metadata in the new dependencies. AGP and Gradle are unchanged. DRM callbacks
+now return `MediaDrmCallback.Response`; TS readers use `endOfInputReached` and
+the new constructors, and the MMT subtitle probe uses the offset/length cue API.
 
 ## Verification
 

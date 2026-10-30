@@ -111,4 +111,23 @@ class Av3aExtractorsTest {
         assertTrue(FfmpegLibrary.isAvailable())
         assertTrue(FfmpegLibrary.supportsFormat("audio/av3a"))
     }
+
+    @Test fun media3FactoryLoadsBundledFfmpegRenderer() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            val renderers = androidx.media3.exoplayer.DefaultRenderersFactory(instrumentation.targetContext)
+                .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+                .createRenderers(
+                    android.os.Handler(android.os.Looper.getMainLooper()),
+                    object : androidx.media3.exoplayer.video.VideoRendererEventListener {},
+                    object : androidx.media3.exoplayer.audio.AudioRendererEventListener {},
+                    androidx.media3.exoplayer.text.TextOutput {},
+                    androidx.media3.exoplayer.metadata.MetadataOutput {},
+                )
+            try {
+                assertTrue("FFmpeg extension was not loaded by the new Media3 runtime",
+                    renderers.any { it is androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer })
+            } finally { renderers.forEach { it.release() } }
+        }
+    }
 }

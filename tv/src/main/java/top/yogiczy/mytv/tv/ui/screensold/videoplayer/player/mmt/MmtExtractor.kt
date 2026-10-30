@@ -24,6 +24,7 @@ import androidx.media3.extractor.ts.LatmReader
 import androidx.media3.extractor.ts.SeiReader
 import androidx.media3.extractor.ts.TsPayloadReader
 import top.yogiczy.mytv.core.data.media.mmt.MmtTlvParser
+import top.yogiczy.mytv.core.data.media.mmt.MmtTlvParser.Companion.MIME_TYPE
 import top.yogiczy.mytv.core.data.media.mmt.MmtTrack
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.av3a.Av3aExtractorsFactory
 import java.io.EOFException
@@ -62,15 +63,15 @@ class MmtExtractor : Extractor {
                 val id = (context shl 16) or track.id
                 if (id in readers || id in rawAudio || id in subtitles || tracksEnded) continue
                 val reader: ElementaryStreamReader = when (track.assetType) {
-                    "hev1", "hvc1" -> H265Reader(SeiReader(emptyList()))
-                    "avc1", "avc3" -> H264Reader(SeiReader(emptyList()), true, true)
+                    "hev1", "hvc1" -> H265Reader(SeiReader(emptyList(), MIME_TYPE), MIME_TYPE)
+                    "avc1", "avc3" -> H264Reader(SeiReader(emptyList(), MIME_TYPE), true, true, MIME_TYPE)
                     "mp4a" -> {
                         if (track.audioObjectType == 4) continue
                         if (track.audioTransport == 28 && track.audioConfig != null) {
                             rawAudio[id] = output.track(id, C.TRACK_TYPE_AUDIO)
                             continue
                         }
-                        LatmReader(track.language, 0)
+                        LatmReader(track.language, 0, MIME_TYPE)
                     }
                     "stpp" -> {
                         if (!track.isSubtitle) continue
@@ -118,7 +119,7 @@ class MmtExtractor : Extractor {
             readers[id]?.let {
                 it.packetStarted(timeUs, TsPayloadReader.FLAG_DATA_ALIGNMENT_INDICATOR)
                 it.consume(ParsableByteArray(data))
-                it.packetFinished(false)
+                it.packetFinished()
             }
         }
 
@@ -154,7 +155,7 @@ class MmtExtractor : Extractor {
     override fun read(input: ExtractorInput, seekPosition: PositionHolder): Int {
         val count = input.read(buffer, 0, buffer.size)
         if (count == -1) {
-            readers.values.forEach { it.packetFinished(true) }
+            readers.values.forEach { it.endOfInputReached() }
             return Extractor.RESULT_END_OF_INPUT
         }
         parser.consume(buffer, 0, count)

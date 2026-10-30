@@ -29,7 +29,7 @@ class WidevineLicenseCallbackTest {
         val callback = WidevineLicenseCallback.create(url, factory, mapOf("User-Agent" to "PlayerTest/1"))
         val response = callback.executeKeyRequest(C.WIDEVINE_UUID,
             ExoMediaDrm.KeyRequest(challenge, "https://upstream.test/license"))
-        assertArrayEquals(license, response)
+        assertArrayEquals(license, response.data)
         assertEquals(DataSpec.HTTP_METHOD_POST, captured!!.httpMethod)
         assertEquals(url, captured!!.uri.toString())
         assertArrayEquals(challenge, captured!!.httpBody)

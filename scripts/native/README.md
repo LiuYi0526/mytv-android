@@ -1,8 +1,12 @@
 # Android 16 KB 原生库
 
-`tv/libs/lib-decoder-ffmpeg-release.aar` 保留原有 Java 类、资源和两个 32 位 JNI 库。
+`tv/libs/lib-decoder-ffmpeg-release.aar` 保留原有解码器 Java 类、资源和两个 32 位 JNI 库。
 仅重编译 `arm64-v8a`、`x86_64`，继续提供 AV3A（菁彩声）解码及双耳渲染。
 没有通过修改 ELF 头或隐藏系统兼容提示处理对齐。
+
+升级 Media3 1.11.1 后，仅更新 AAR 中的音频渲染器 Java 类，适配新的声道映射接口；
+原生库及其 JNI 接口均未改变。重建顺序为本目录的原生构建，再执行
+`scripts/media3/build_ffmpeg_compat.py`，详见 `scripts/media3/README.md`。
 
 ## 固定源码与工具链
 
@@ -32,8 +36,8 @@ JNI 使用 `-Wl,-z,max-page-size=16384`、`-Wl,-z,common-page-size=16384`，
 - Sentry SDK 固定为 **7.22.6**，其两个 64 位原生库已按 16 KB 对齐；Gradle 插件版本保持不变。
 - GSY 的原生库 AAR 使用 **12.0.0**，修复旧版 x86_64 IJK 对齐；Java 层保持 **10.0.0**。
   该 AAR 的 `classes.jar` 为空，64 位 ELF 标记目标 API 21，四种架构的强导入符号均可由
-  NDK API 21 系统库及同包 IJK 库提供。因此仅对 `com.shuyu.gsyvideoplayer.ex_so` 覆盖其
-  清单的 minSdk 23 声明，保持应用 minSdk 21。不要将此覆盖扩展到 GSY Java 模块。
+  NDK API 21 系统库及同包 IJK 库提供。旧版为支持 minSdk 21，曾仅对该原生模块覆盖其
+  minSdk 23 声明；升级 Media3 1.11.1 后应用最低版本为 23，已移除这项覆盖。
 
 ## 验证
 

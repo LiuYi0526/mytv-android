@@ -246,7 +246,7 @@ class Media3VideoPlayer(
                                     provisionCallback.executeProvisionRequest(uuid, request)
 
                                 override fun executeKeyRequest(uuid: UUID, request: ExoMediaDrm.KeyRequest) =
-                                    fetcher.load(licenseUrl, request.data)
+                                    MediaDrmCallback.Response(fetcher.load(licenseUrl, request.data))
                             }
                         }
                     } catch (_: IllegalArgumentException) {

@@ -38,7 +38,8 @@ class MmtSubtitleDecodeTest {
                 }
                 override fun sampleMetadata(timeUs: Long, flags: Int, size: Int, offset: Int, cryptoData: androidx.media3.extractor.TrackOutput.CryptoData?) {
                     if (type != androidx.media3.common.C.TRACK_TYPE_TEXT) return
-                    cues += androidx.media3.extractor.text.CueDecoder().decode(timeUs,data.toByteArray())
+                    val bytes = data.toByteArray()
+                    cues += androidx.media3.extractor.text.CueDecoder().decode(timeUs, bytes, 0, bytes.size)
                     data.reset()
                 }
             }

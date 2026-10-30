@@ -68,7 +68,7 @@ private class Av3aReader(private val language: String?, private val roleFlags: I
     override fun seek() = parser.seek()
     override fun packetStarted(pesTimeUs: Long, flags: Int) =
         parser.packetStarted(pesTimeUs.takeUnless { it == C.TIME_UNSET })
-    override fun packetFinished(isEndOfInput: Boolean) = Unit
+    override fun endOfInputReached() = Unit
     override fun consume(data: ParsableByteArray) {
         parser.consume(data.data, data.position, data.bytesLeft())
         data.setPosition(data.limit())

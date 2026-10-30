@@ -4,7 +4,7 @@
 
 ![GitHub Repo stars](https://img.shields.io/github/stars/yaoxieyoulei/mytv-android)
 ![GitHub all releases](https://img.shields.io/github/downloads/yaoxieyoulei/mytv-android/total)
-[![Android Sdk Require](https://img.shields.io/badge/Android-5.0%2B-informational?logo=android)](https://apilevels.com/#:~:text=Jetpack%20Compose%20requires%20a%20minSdk%20of%2021%20or%20higher)
+[![Android Sdk Require](https://img.shields.io/badge/Android-6.0%2B-informational?logo=android)](https://apilevels.com/)
 [![GitHub](https://img.shields.io/github/license/yaoxieyoulei/mytv-android)](https://github.com/yaoxieyoulei/mytv-android)
 
 </div>
@@ -39,7 +39,7 @@
 
 ## 说明
 
-- 仅支持Android5及以上
+- 仅支持Android6及以上
 - 网络环境必须支持IPV6（默认订阅源）
 - 只在自家电视上测过，其他电视稳定性未知
 
