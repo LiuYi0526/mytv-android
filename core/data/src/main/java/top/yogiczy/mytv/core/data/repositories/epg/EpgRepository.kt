@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
+import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCacheInfo
 import top.yogiczy.mytv.core.data.network.HttpException
 import top.yogiczy.mytv.core.data.network.request
 import top.yogiczy.mytv.core.data.repositories.FileCacheRepository
@@ -12,16 +13,24 @@ import top.yogiczy.mytv.core.data.repositories.epg.fetcher.EpgFetcher
 import top.yogiczy.mytv.core.data.utils.Globals
 import top.yogiczy.mytv.core.data.utils.Logger
 import java.io.InputStream
+import java.io.File
 import kotlin.time.measureTimedValue
 
 /**
  * 节目单获取
  */
 class EpgRepository(private val source: EpgSource) :
-    FileCacheRepository(source.cacheFileName("v2.json")) {
+    FileCacheRepository(source.cacheFileName(PARSED_CACHE_EXTENSION)) {
 
     private val log = Logger.create("EpgRepository")
     private val epgXmlRepository = EpgXmlRepository(source)
+
+    suspend fun getCachedInfo(): EpgSourceCacheInfo? = withContext(Dispatchers.IO) {
+        EpgSourceCacheInfo.read(
+            File(Globals.cacheDir, source.cacheFileName(PARSED_CACHE_EXTENSION)),
+            File(Globals.cacheDir, source.cacheFileName("xml")),
+        )
+    }
 
     private suspend fun refresh(): String {
         val xml = epgXmlRepository.getXml()
@@ -55,6 +64,7 @@ class EpgRepository(private val source: EpgSource) :
     }
 
     companion object {
+        private const val PARSED_CACHE_EXTENSION = "v2.json"
         suspend fun clearAllCache() = withContext(Dispatchers.IO) {
             EpgSource.cacheDir.deleteRecursively()
         }

@@ -10,12 +10,21 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.ListItem
+import androidx.tv.material3.LocalContentColor
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
+import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCacheInfo
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceList
+import top.yogiczy.mytv.core.data.repositories.epg.EpgRepository
+import top.yogiczy.mytv.core.util.utils.humanizeBytes
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScaffoldHeaderBtn
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
@@ -53,6 +62,12 @@ fun SettingsEpgSourceScreen(
         return
     }
     val padding = rememberChildPadding()
+    var cacheInfo by remember { mutableStateOf<Map<EpgSource, EpgSourceCacheInfo?>>(emptyMap()) }
+    LaunchedEffect(sources) {
+        for (source in sources) {
+            cacheInfo = cacheInfo + (source to EpgRepository(source).getCachedInfo())
+        }
+    }
     AppScreen(modifier = modifier, header = { Text("节目单") }, canBack = true, onBackPressed = onBackPressed,
         headerExtra = { AppScaffoldHeaderBtn(title = "添加节目单", imageVector = Icons.Outlined.Add, onSelect = { adding = true }) }) {
         LazyColumn(contentPadding = padding.copy(top = 10.dp).paddingValues, verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -64,7 +79,23 @@ fun SettingsEpgSourceScreen(
                         .handleKeyEvents(onSelect = { lastIndex = index; selectedUrl = source.url }),
                     selected = false, onClick = {},
                     leadingContent = { Text("#${index + 1}") }, headlineContent = { Text(source.name) },
-                    supportingContent = { Text(source.url, maxLines = 2) },
+                    supportingContent = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(source.url, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            val info = cacheInfo[source]
+                            val statistics = remember(info, cacheInfo.containsKey(source)) {
+                                when {
+                                    !cacheInfo.containsKey(source) -> "正在读取缓存…"
+                                    info == null -> "暂无缓存统计，请先加载节目单"
+                                    else -> "频道：${info.channelCount} | 缓存：${info.cacheBytes.humanizeBytes()} | 更新：" +
+                                        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(info.updatedAt))
+                                }
+                            }
+                            Text(statistics, style = MaterialTheme.typography.bodySmall,
+                                color = LocalContentColor.current.copy(alpha = 0.7f),
+                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    },
                     trailingContent = {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (isDefault) { Text("默认"); Icon(Icons.Default.CheckCircle, "默认节目单", Modifier.size(18.dp)) }
