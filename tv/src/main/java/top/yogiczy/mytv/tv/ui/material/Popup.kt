@@ -11,7 +11,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.focus.FocusRequester
@@ -93,7 +92,6 @@ fun PopupContent(
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun SimplePopup(
     modifier: Modifier = Modifier,
@@ -116,7 +114,7 @@ fun SimplePopup(
                 composableReference = {
                     PopupContent(
                         modifier = modifier
-                            .focusProperties { exit = { FocusRequester.Cancel } },
+                            .focusProperties { onExit = { cancelFocusChange() } },
                         visibleProvider = visibleProvider,
                         onDismissRequest = onDismissRequest,
                         withBackground = true,

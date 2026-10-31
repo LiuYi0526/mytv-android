@@ -13,7 +13,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
@@ -308,19 +307,12 @@ fun NavHostController.navigateSingleTop(route: String) {
 }
 
 @Composable
-@OptIn(ExperimentalComposeUiApi::class)
 fun Modifier.saveFocusRestorer(onRestoreFailed: (() -> FocusRequester)? = null): Modifier {
     if (!Configs.uiFocusOptimize) return this
 
-    return focusRestorer {
-        if (onRestoreFailed == null) return@focusRestorer FocusRequester.Default
-
-        val result = onRestoreFailed()
-        runCatching {
-            result.requestFocus()
-            result
-        }.getOrElse { FocusRequester.Default }
-    }
+    // New Compose evaluates the old lambda overload during composition. Let the
+    // restorer request fallback focus only when the group is actually re-entered.
+    return focusRestorer(fallback = onRestoreFailed?.invoke() ?: FocusRequester.Default)
 }
 
 fun FocusRequester.saveRequestFocus() = runCatching { requestFocus() }

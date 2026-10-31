@@ -22,11 +22,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
@@ -61,7 +59,6 @@ import top.yogiczy.mytv.tv.ui.tooling.PreviewWithLayoutGrids
 import top.yogiczy.mytv.tv.ui.utils.gridColumns
 import kotlin.math.max
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun ClassicChannelScreen(
     modifier: Modifier = Modifier,
@@ -143,15 +140,13 @@ fun ClassicChannelScreen(
                 modifier = Modifier
                     .onSizeChanged { channelListWidth = it.width }
                     .focusProperties {
-                        exit = {
-                            if (epgListVisible && it == FocusDirection.Left) {
+                        onExit = {
+                            if (epgListVisible && requestedFocusDirection == FocusDirection.Left) {
                                 epgListVisible = false
-                                FocusRequester.Cancel
-                            } else if (!epgListVisible && it == FocusDirection.Right) {
+                                cancelFocusChange()
+                            } else if (!epgListVisible && requestedFocusDirection == FocusDirection.Right) {
                                 epgListVisible = true
-                                FocusRequester.Cancel
-                            } else {
-                                FocusRequester.Default
+                                cancelFocusChange()
                             }
                         }
                     },
