@@ -6,6 +6,7 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -50,6 +52,7 @@ import androidx.tv.material3.LocalTextStyle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroup
@@ -67,7 +70,6 @@ import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
 import top.yogiczy.mytv.tv.ui.utils.ifElse
 import top.yogiczy.mytv.tv.ui.utils.saveFocusRestorer
 import top.yogiczy.mytv.tv.ui.utils.saveRequestFocus
-import kotlin.math.max
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -105,8 +107,29 @@ fun ClassicChannelItemList(
     val listState = remember(channelGroup) {
         LazyListState(
             if (hasFocused) 0
-            else max(0, channelList.indexOf(initialChannel) - 2)
+            else channelList.indexOf(initialChannel).coerceAtLeast(0)
         )
+    }
+    var initiallyPositioned by remember(listState) { mutableStateOf(hasFocused) }
+    LaunchedEffect(listState) {
+        if (!initiallyPositioned) {
+            val initialIndex = channelList.indexOf(initialChannel)
+            if (initialIndex >= 0) {
+                // Measure the actual row before revealing it. Focusing a row placed at
+                // index - 2 used to start a second, visible animation toward the center.
+                val layout = snapshotFlow { listState.layoutInfo }.first { info ->
+                    info.viewportEndOffset > info.viewportStartOffset &&
+                        info.visibleItemsInfo.any { it.index == initialIndex }
+                }
+                val item = layout.visibleItemsInfo.first { it.index == initialIndex }
+                val centeredOffset =
+                    (layout.viewportStartOffset + layout.viewportEndOffset - item.size) / 2f
+                listState.scrollBy(item.offset - centeredOffset)
+                hasFocused = true
+                itemFocusRequesterList[initialIndex].saveRequestFocus()
+            }
+            initiallyPositioned = true
+        }
     }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
@@ -140,6 +163,7 @@ fun ClassicChannelItemList(
                 .fillMaxHeight()
                 .width(if (showChannelLogoProvider()) 280.dp else 220.dp)
                 .background(MaterialTheme.colorScheme.surface.copy(0.8f))
+                .drawWithContent { if (initiallyPositioned) drawContent() }
                 .ifElse(
                     settingsVM.uiFocusOptimize,
                     Modifier.saveFocusRestorer {
@@ -154,9 +178,6 @@ fun ClassicChannelItemList(
         ) {
             itemsIndexed(channelList, key = { _, channel -> channel.hashCode() }) { index, channel ->
                 val isSelected by remember { derivedStateOf { channel == focusedChannel } }
-                val initialFocused by remember {
-                    derivedStateOf { !hasFocused && channel == initialChannel }
-                }
 
                 ClassicChannelItem(
                     modifier = Modifier
@@ -195,8 +216,6 @@ fun ClassicChannelItemList(
                     recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
                     showEpgProgrammeProgressProvider = showEpgProgrammeProgressProvider,
                     focusRequesterProvider = { itemFocusRequesterList[index] },
-                    initialFocusedProvider = { initialFocused },
-                    onInitialFocused = { hasFocused = true },
                     isSelectedProvider = { isSelected },
                     showChannelLogoProvider = showChannelLogoProvider,
                 )
@@ -224,8 +243,6 @@ private fun ClassicChannelItem(
     recentEpgProgrammeProvider: () -> EpgProgrammeRecent? = { null },
     showEpgProgrammeProgressProvider: () -> Boolean = { false },
     focusRequesterProvider: () -> FocusRequester = { FocusRequester() },
-    initialFocusedProvider: () -> Boolean = { false },
-    onInitialFocused: () -> Unit = {},
     isSelectedProvider: () -> Boolean = { false },
 ) {
     val channel = channelProvider()
@@ -247,13 +264,6 @@ private fun ClassicChannelItem(
         if (isFocused) colorScheme.surface
         else if (isSelected) colorScheme.onSurface
         else localContentColor
-    }
-
-    LaunchedEffect(Unit) {
-        if (initialFocusedProvider()) {
-            onInitialFocused()
-            focusRequester.saveRequestFocus()
-        }
     }
 
     Row(
