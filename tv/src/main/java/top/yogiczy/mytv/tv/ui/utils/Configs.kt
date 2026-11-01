@@ -185,6 +185,8 @@ object Configs {
         /** 播放器 加载超时 */
         VIDEO_PLAYER_LOAD_TIMEOUT,
 
+        VIDEO_PLAYER_RTSP_TCP,
+
         /** 播放器 显示模式 */
         VIDEO_PLAYER_DISPLAY_MODE,
 
@@ -585,6 +587,11 @@ object Configs {
         get() = SP.getLong(KEY.VIDEO_PLAYER_LOAD_TIMEOUT.name, Constants.VIDEO_PLAYER_LOAD_TIMEOUT)
         set(value) = SP.putLong(KEY.VIDEO_PLAYER_LOAD_TIMEOUT.name, value)
 
+    /** False preserves Media3's UDP-first, TCP-fallback behavior. */
+    var videoPlayerRtspTcp: Boolean
+        get() = SP.getBoolean(KEY.VIDEO_PLAYER_RTSP_TCP.name, false)
+        set(value) = SP.putBoolean(KEY.VIDEO_PLAYER_RTSP_TCP.name, value)
+
     /** 播放器 显示模式 */
     var videoPlayerDisplayMode: VideoPlayerDisplayMode
         get() = VideoPlayerDisplayMode.fromValue(
@@ -794,6 +801,7 @@ object Configs {
             videoPlayerUserAgent = videoPlayerUserAgent,
             videoPlayerHeaders = videoPlayerHeaders,
             videoPlayerLoadTimeout = videoPlayerLoadTimeout,
+            videoPlayerRtspTcp = videoPlayerRtspTcp,
             videoPlayerDisplayMode = videoPlayerDisplayMode,
             videoPlayerForceAudioSoftDecode = videoPlayerForceAudioSoftDecode,
             videoPlayerStopPreviousMediaItem = videoPlayerStopPreviousMediaItem,
@@ -866,6 +874,7 @@ object Configs {
         configs.videoPlayerUserAgent?.let { videoPlayerUserAgent = it }
         configs.videoPlayerHeaders?.let { videoPlayerHeaders = it }
         configs.videoPlayerLoadTimeout?.let { videoPlayerLoadTimeout = it }
+        configs.videoPlayerRtspTcp?.let { videoPlayerRtspTcp = it }
         configs.videoPlayerDisplayMode?.let { videoPlayerDisplayMode = it }
         configs.videoPlayerForceAudioSoftDecode?.let { videoPlayerForceAudioSoftDecode = it }
         configs.videoPlayerStopPreviousMediaItem?.let { videoPlayerStopPreviousMediaItem = it }
@@ -936,6 +945,7 @@ object Configs {
         val videoPlayerUserAgent: String? = null,
         val videoPlayerHeaders: String? = null,
         val videoPlayerLoadTimeout: Long? = null,
+        val videoPlayerRtspTcp: Boolean? = null,
         val videoPlayerDisplayMode: VideoPlayerDisplayMode? = null,
         val videoPlayerForceAudioSoftDecode: Boolean? = null,
         val videoPlayerStopPreviousMediaItem: Boolean? = null,

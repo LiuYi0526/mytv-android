@@ -117,6 +117,15 @@ fun SettingsVideoPlayerScreen(
         }
 
         item {
+            SettingsListItem(
+                headlineContent = "RTSP 强制 TCP",
+                supportingContent = "Media3 内核：关闭时优先使用 UDP，无数据时尝试 TCP；下次播放生效。",
+                trailingContent = { Switch(settingsViewModel.videoPlayerRtspTcp, null) },
+                onSelect = { settingsViewModel.videoPlayerRtspTcp = !settingsViewModel.videoPlayerRtspTcp },
+            )
+        }
+
+        item {
             val isValid = settingsViewModel.videoPlayerHeaders.headersValid()
 
             SettingsListItem(

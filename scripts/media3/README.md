@@ -85,6 +85,55 @@ the new constructors, and the MMT subtitle probe uses the offset/length cue API.
   instrumentation runner. Checks decoded PCM size, sample rate, channels and
   nonzero amplitude. Real stream samples, URLs and credentials stay outside Git.
 
+## RTSP MPEG-TS compatibility
+
+`tv/libs/media3-exoplayer-rtsp-1.11.1-mp2t.aar` preserves the official RTSP
+artifact except for the classes rebuilt by `build_rtsp_compat.py`. Both input
+archives are SHA-256 pinned; the script performs no downloads. The original
+license/notice entries are retained. Rebuild with JDK 17:
+
+```text
+python scripts/media3/build_rtsp_compat.py --aar <official-1.11.1-rtsp.aar> --sources <official-1.11.1-rtsp-sources.jar> --classpath <classpath.txt> --javac <JDK17/bin/javac> --output tv/libs/media3-exoplayer-rtsp-1.11.1-mp2t.aar
+```
+
+The compile classpath needs Android SDK `android.jar`, Media3 1.11.1 ExoPlayer,
+extractor/common/container/datasource JARs, Guava, AndroidX annotations,
+`checker-qual` and `error_prone_annotations`. The script prepends the official
+RTSP classes to that classpath. The source checkout path (`../media`) must apply
+the same RTSP changes, including `Factory.setTsPayloadReaderFactory`, before use.
+
+Changes are scoped to RTSP:
+
+- Interpret static payload type 33 as MP2T/90000, recognize dynamic MP2T and
+  resolve missing media `control` against the session's Content-Base/URL.
+- `rtsp/RtpMp2tReader.java` unwraps 188-byte TS or 192-byte M2TS, retaining partial
+  packets across RTP boundaries and discarding unfinished bytes after RTP loss.
+  TS PTS/PCR control sample timestamps. The app supplies `Av3aPayloadReaderFactory`.
+  Feed complete TS packets without signaling extractor EOF at RTP boundaries:
+  EOF flushes an incomplete unbounded PES/video access unit in Media3 1.11.1.
+- Start SETUP/PLAY for MP2T before track selection, because PAT/PMT are transmitted
+  in-band. Wait for TS endTracks/formats rather than prematurely finishing preparation.
+- Keep separate sample queues by elementary track ID, deduplicate transport SETUP
+  when multiple extracted tracks share one RTP stream, and resolve sample streams
+  against current loaders after UDP-to-TCP fallback. Release replaced loaders,
+  discard unread data for unselected tracks, and switch TS audio without a new SETUP.
+- If PLAY receives no UDP RTP packets, probe for at most 1.5 seconds before trying
+  TCP. Keep the user's full packet timeout after UDP reception starts and for TCP.
+- Reconnect the control socket after 301/302, including a different host or port,
+  and limit redirect loops. Reset session/challenge state; only retain implicit
+  credentials for the same server. Retain the upstream ordinary RTP readers.
+
+`RtspMp2tTest` covers SDP compatibility, fragmented TS/M2TS, sequence wrap/loss,
+seek reset, multi-audio preparation over UDP/TCP, same/cross-server 302, TCP fallback,
+ordinary PCMU RTSP and disabled tracks. Synthetic AAC/AV3A is never decoded. Its optional
+`optionalDeviceSourceRendersAFrame` test accepts `-e rtspUrl <url>` and
+`-e rtspTcp true|false`, mutes audio and requires an actually decoded video frame.
+`-e rtspSustain true` also requires over 100 additional scheduled frames in eight
+seconds; `-e rtspTimeout <milliseconds>` overrides the normal 15-second timeout.
+Regression tests also ensure an RTP boundary never sends elementary-stream EOF,
+and silent UDP falls back before the full configured packet timeout expires.
+Private sample URLs are passed at invocation time, never committed as fixtures.
+
 After installation, verify the actual channel exposes both tracks and switching
 to AV3A initializes `ffmpeg…-libarcdav3a`. Run `scripts/check_native_alignment.py`
 against the final APK to retain the 16 KB alignment regression check.

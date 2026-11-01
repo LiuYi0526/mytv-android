@@ -119,11 +119,11 @@ dependencies {
         implementation(project(":media3:lib-datasource-okhttp"))
     } else {
         check(libs.versions.media3.get() == "1.11.1") {
-            "Rebuild scripts/media3 HLS compatibility AAR before upgrading Media3"
+            "Rebuild scripts/media3 HLS and RTSP compatibility AARs before upgrading Media3"
         }
         implementation(libs.androidx.media3.exoplayer)
         // Local 1.11.1 HLS compatibility AAR keeps AAC + AV3A queues (scripts/media3).
-        implementation(libs.androidx.media3.exoplayer.rtsp)
+        // RTSP MP2T/TS compatibility is built from the pinned official 1.11.1 AAR.
         implementation(libs.androidx.media3.exoplayer.dash)
         implementation(libs.androidx.media3.ui)
         implementation(libs.androidx.media3.datasource.okhttp)
@@ -150,9 +150,10 @@ dependencies {
     // implementation(project(":tbsx5"))
 
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"),
-        "exclude" to listOf("media3-exoplayer-hls-*.aar"))))
+        "exclude" to listOf("media3-exoplayer-hls-*.aar", "media3-exoplayer-rtsp-*.aar"))))
     if (!mediaSettingsFile.exists()) {
         implementation(files("libs/media3-exoplayer-hls-1.11.1-multi-audio.aar"))
+        implementation(files("libs/media3-exoplayer-rtsp-1.11.1-mp2t.aar"))
     }
 
     androidTestImplementation(platform(libs.androidx.compose.bom))

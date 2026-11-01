@@ -479,6 +479,15 @@ class SettingsViewModel : ViewModel() {
             afterSetWhenCloudSyncAutoPull()
         }
 
+    private var _videoPlayerRtspTcp by mutableStateOf(false)
+    var videoPlayerRtspTcp: Boolean
+        get() = _videoPlayerRtspTcp
+        set(value) {
+            _videoPlayerRtspTcp = value
+            Configs.videoPlayerRtspTcp = value
+            afterSetWhenCloudSyncAutoPull()
+        }
+
     private var _videoPlayerLoadTimeout by mutableLongStateOf(0)
     var videoPlayerLoadTimeout: Long
         get() = _videoPlayerLoadTimeout
@@ -688,6 +697,7 @@ class SettingsViewModel : ViewModel() {
         _videoPlayerUserAgent = Configs.videoPlayerUserAgent
         _videoPlayerHeaders = Configs.videoPlayerHeaders
         _videoPlayerLoadTimeout = Configs.videoPlayerLoadTimeout
+        _videoPlayerRtspTcp = Configs.videoPlayerRtspTcp
         _videoPlayerDisplayMode = Configs.videoPlayerDisplayMode
         _videoPlayerForceAudioSoftDecode = Configs.videoPlayerForceAudioSoftDecode
         _videoPlayerStopPreviousMediaItem = Configs.videoPlayerStopPreviousMediaItem

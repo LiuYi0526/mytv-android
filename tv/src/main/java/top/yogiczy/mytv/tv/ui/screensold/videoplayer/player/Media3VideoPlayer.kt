@@ -36,7 +36,6 @@ import androidx.media3.exoplayer.drm.ExoMediaDrm
 import java.util.UUID
 import androidx.media3.exoplayer.drm.LocalMediaDrmCallback
 import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.rtsp.RtspMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
@@ -61,6 +60,7 @@ import top.yogiczy.mytv.core.util.utils.toHeaders
 import top.yogiczy.mytv.tv.ui.utils.Configs
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.mmt.MmtExtractorsFactory
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.av3a.Av3aHlsExtractorFactory
+import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.rtsp.RtspSourceFactory
 import java.util.concurrent.TimeUnit
 
 @OptIn(UnstableApi::class)
@@ -195,6 +195,9 @@ class Media3VideoPlayer(
         if (uri.toString().startsWith("rtp://")) {
             contentTypeForce = C.CONTENT_TYPE_RTSP
         }
+        if (uri.scheme.equals("rtsp", true)) {
+            contentTypeForce = C.CONTENT_TYPE_RTSP
+        }
 
         val manifestType = currentChannelLine.manifestType?.trim()?.removeSurrounding("\"")?.lowercase()
         val forceMmt = manifestType == "mmt" || manifestType == "custom"
@@ -289,7 +292,9 @@ class Media3VideoPlayer(
             }
 
             C.CONTENT_TYPE_RTSP -> {
-                RtspMediaSource.Factory().createMediaSource(mediaItem)
+                RtspSourceFactory.create(uri,
+                    currentChannelLine.httpUserAgent ?: Configs.videoPlayerUserAgent,
+                    Configs.videoPlayerLoadTimeout, Configs.videoPlayerRtspTcp)
             }
 
             C.CONTENT_TYPE_OTHER -> {
