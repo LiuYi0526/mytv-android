@@ -19,6 +19,7 @@ import kotlinx.collections.immutable.toPersistentList
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.epg.Epg
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
+import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme.Companion.isLive
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeList
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
 import top.yogiczy.mytv.tv.ui.screensold.epg.components.EpgDayItemList
@@ -41,10 +42,21 @@ fun ClassicEpgItemList(
     onEpgProgrammeReserve: (EpgProgramme) -> Unit = {},
     onUserAction: () -> Unit = {},
 ) {
-    val epg = epgProvider() ?: return
+    val epg = epgProvider()
+    val programmes = epg?.programmeList ?: EpgProgrammeList()
     val dateFormat = SimpleDateFormat("E MM-dd", Locale.getDefault())
-    val programDayGroup = epg.programmeList.groupBy { dateFormat.format(it.startAt) }
-    var currentDay by remember { mutableStateOf(dateFormat.format(System.currentTimeMillis())) }
+    val programDayGroup = programmes.groupBy { dateFormat.format(it.startAt) }
+    val initialProgramme = currentPlaybackEpgProgrammeProvider()
+        ?.takeIf { it in programmes } ?: programmes.firstOrNull { it.isLive() }
+    val today = dateFormat.format(System.currentTimeMillis())
+    val initialDay = initialProgramme?.let { dateFormat.format(it.startAt) }
+        ?: today.takeIf { it in programDayGroup }
+        ?: programDayGroup.keys.firstOrNull().orEmpty()
+    var currentDay by remember(epg?.channelList, epg?.channelId) {
+        mutableStateOf(initialDay)
+    }
+    // Loading/refresh can replace an empty guide or remove the selected day.
+    val displayedDay = currentDay.takeIf { it in programDayGroup } ?: initialDay
 
     Row(
         modifier = modifier
@@ -56,14 +68,13 @@ fun ClassicEpgItemList(
         EpgProgrammeItemList(
             modifier = programmeListModifier,
             epgProgrammeListProvider = {
-                EpgProgrammeList(programDayGroup.getOrElse(currentDay) { listOf(EpgProgramme.EMPTY) })
+                EpgProgrammeList(programDayGroup[displayedDay].orEmpty())
             },
             epgProgrammeReserveListProvider = epgProgrammeReserveListProvider,
             supportPlaybackProvider = supportPlaybackProvider,
             currentPlaybackProvider = currentPlaybackEpgProgrammeProvider,
             onPlayback = onEpgProgrammePlayback,
             onReserve = onEpgProgrammeReserve,
-            focusOnLive = false,
             onUserAction = onUserAction,
         )
 
@@ -71,7 +82,7 @@ fun ClassicEpgItemList(
             EpgDayItemList(
                 modifier = Modifier.width(80.dp),
                 dayListProvider = { programDayGroup.keys.toPersistentList() },
-                currentDayProvider = { currentDay },
+                currentDayProvider = { displayedDay },
                 onDaySelected = { currentDay = it },
                 onUserAction = onUserAction,
             )

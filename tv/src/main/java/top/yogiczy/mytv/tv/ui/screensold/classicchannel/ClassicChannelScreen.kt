@@ -3,7 +3,7 @@ package top.yogiczy.mytv.tv.ui.screensold.classicchannel
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -24,12 +25,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
@@ -42,22 +47,23 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.ch
 import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.match
-import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
 import top.yogiczy.mytv.tv.ui.material.Visibility
-import top.yogiczy.mytv.tv.ui.screen.live.channels.components.LiveChannelsChannelInfo
 import top.yogiczy.mytv.tv.ui.screensold.channel.ChannelScreenTopRight
 import top.yogiczy.mytv.tv.ui.screensold.classicchannel.components.ClassicChannelGroupItemList
 import top.yogiczy.mytv.tv.ui.screensold.classicchannel.components.ClassicChannelItemList
 import top.yogiczy.mytv.tv.ui.screensold.classicchannel.components.ClassicEpgItemList
+import top.yogiczy.mytv.tv.ui.screensold.classicchannel.components.classicPanelDirections
+import top.yogiczy.mytv.tv.ui.screensold.classicchannel.components.classicPanelSwipes
 import top.yogiczy.mytv.tv.ui.screensold.components.rememberScreenAutoCloseState
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.VideoPlayer
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.theme.SAFE_AREA_VERTICAL_PADDING
+import top.yogiczy.mytv.tv.ui.theme.SAFE_AREA_HORIZONTAL_PADDING
 import top.yogiczy.mytv.tv.ui.tooling.PreviewWithLayoutGrids
 import top.yogiczy.mytv.tv.ui.utils.gridColumns
-import kotlin.math.max
+import top.yogiczy.mytv.tv.ui.utils.saveRequestFocus
 
 @Composable
 fun ClassicChannelScreen(
@@ -87,22 +93,68 @@ fun ClassicChannelScreen(
     val channelGroupList = channelGroupListProvider()
     val channelFavoriteListVisible = remember { channelFavoriteListVisibleProvider() }
 
-    var focusedChannelGroup by remember {
-        mutableStateOf(
-            if (channelFavoriteListVisible)
-                ClassicPanelScreenFavoriteChannelGroup
-            else
-                channelGroupList[max(0, channelGroupList.channelGroupIdx(currentChannelProvider()))]
-        )
+    val initialGroup = remember {
+        if (channelFavoriteListVisible) ClassicPanelScreenFavoriteChannelGroup
+        else channelGroupList.getOrNull(channelGroupList.channelGroupIdx(currentChannelProvider()))
+            ?: channelGroupList.firstOrNull() ?: ChannelGroup()
     }
+    var focusedChannelGroup by remember { mutableStateOf(initialGroup) }
     var focusedChannel by remember { mutableStateOf(currentChannelProvider()) }
+    var groupListVisible by remember { mutableStateOf(false) }
     var epgListVisible by remember { mutableStateOf(false) }
+    val visibleChannels = if (focusedChannelGroup == ClassicPanelScreenFavoriteChannelGroup)
+        favoriteChannelListProvider() else focusedChannelGroup.channelList
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val channelNameStyle = MaterialTheme.typography.titleSmall
+    val panelWidth = remember(visibleChannels, textMeasurer, density, channelNameStyle) {
+        // YYKM samples the first 10 names, adds room for the logo/padding, then
+        // clamps the list to 360..588dp. The EPG hint occupies another 20dp.
+        val nameWidth = visibleChannels.take(10).maxOfOrNull {
+            textMeasurer.measure(it.name, style = channelNameStyle,
+                softWrap = false, maxLines = 1).size.width
+        } ?: 0
+        (with(density) { nameWidth.toDp() } + 150.dp).coerceIn(360.dp, 588.dp) + 20.dp
+    }
 
-    var groupWidth by remember { mutableIntStateOf(0) }
     var channelListWidth by remember { mutableIntStateOf(0) }
     var epgListIsFocused by remember { mutableStateOf(false) }
+    val groupFocusRequester = remember { FocusRequester() }
+    var channelFocusRequest by remember { mutableIntStateOf(0) }
+    var groupFocusRequest by remember { mutableIntStateOf(0) }
+    LaunchedEffect(groupListVisible, groupFocusRequest) {
+        if (groupListVisible) groupFocusRequester.saveRequestFocus()
+    }
+    fun showGroups() {
+        groupListVisible = true
+        groupFocusRequest++
+        screenAutoCloseState.active()
+    }
+    fun showEpg() {
+        if (visibleChannels.isNotEmpty()) {
+            groupListVisible = false
+            epgListVisible = true
+            screenAutoCloseState.active()
+        }
+    }
+    fun returnToChannels() {
+        groupListVisible = false
+        epgListVisible = false
+        epgListIsFocused = false
+        channelFocusRequest++
+        screenAutoCloseState.active()
+    }
+    fun selectGroup(group: ChannelGroup) {
+        if (focusedChannelGroup != group) {
+            focusedChannelGroup = group
+            focusedChannel = if (group == ClassicPanelScreenFavoriteChannelGroup)
+                favoriteChannelListProvider().firstOrNull() ?: Channel()
+            else group.channelList.firstOrNull() ?: Channel()
+        }
+        onChannelFavoriteListVisibleChange(group == ClassicPanelScreenFavoriteChannelGroup)
+    }
     val offsetXPx by animateIntAsState(
-        targetValue = if (epgListVisible) if (epgListIsFocused) -groupWidth - channelListWidth else -groupWidth else 0,
+        targetValue = if (epgListVisible && epgListIsFocused) -channelListWidth else 0,
         animationSpec = tween(),
         label = "",
     )
@@ -111,69 +163,106 @@ fun ClassicChannelScreen(
         modifier = modifier.offset { IntOffset(x = offsetXPx, y = 0) },
         onClose = onClose,
     ) {
-        Row {
-            ClassicChannelGroupItemList(
-                modifier = Modifier.onSizeChanged { groupWidth = it.width },
-                channelGroupListProvider = {
-                    if (channelFavoriteEnabledProvider())
-                        ChannelGroupList(listOf(ClassicPanelScreenFavoriteChannelGroup) + channelGroupList)
-                    else
-                        channelGroupList
-                },
-                initialChannelGroupProvider = {
-                    if (channelFavoriteListVisible)
-                        ClassicPanelScreenFavoriteChannelGroup
-                    else
-                        channelGroupList[max(
-                            0,
-                            channelGroupList.channelGroupIdx(currentChannelProvider())
-                        )]
-                },
-                onChannelGroupFocused = {
-                    focusedChannelGroup = it
-                    onChannelFavoriteListVisibleChange(it == ClassicPanelScreenFavoriteChannelGroup)
-                },
-                onUserAction = { screenAutoCloseState.active() },
-            )
+        Row(Modifier.background(Color.Black.copy(alpha = 0.92f))) {
+            if (groupListVisible) {
+                Column(Modifier.width(170.dp).fillMaxHeight()
+                    .classicPanelSwipes(onSwipeLeft = { returnToChannels() })) {
+                    Text(
+                        "频道分组",
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    ClassicChannelGroupItemList(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .focusRequester(groupFocusRequester)
+                            .classicPanelDirections(onLeft = { returnToChannels() }),
+                        channelGroupListProvider = {
+                            if (channelFavoriteEnabledProvider())
+                                ChannelGroupList(listOf(ClassicPanelScreenFavoriteChannelGroup) + channelGroupList)
+                            else
+                                channelGroupList
+                        },
+                        initialChannelGroupProvider = {
+                            focusedChannelGroup
+                        },
+                        onChannelGroupFocused = {
+                            selectGroup(it)
+                        },
+                        onChannelGroupSelected = {
+                            selectGroup(it)
+                            returnToChannels()
+                        },
+                        onUserAction = { screenAutoCloseState.active() },
+                    )
+                }
+            }
 
-            ClassicChannelItemList(
-                modifier = Modifier
+            // YYKM 3.8.4: a group title above a channel panel of at least 380dp.
+            Column(
+                Modifier.width(panelWidth).fillMaxHeight()
                     .onSizeChanged { channelListWidth = it.width }
-                    .focusProperties {
-                        onExit = {
-                            if (epgListVisible && requestedFocusDirection == FocusDirection.Left) {
-                                epgListVisible = false
-                                cancelFocusChange()
-                            } else if (!epgListVisible && requestedFocusDirection == FocusDirection.Right) {
-                                epgListVisible = true
-                                cancelFocusChange()
-                            }
+                    .classicPanelSwipes(
+                        onSwipeRight = { if (epgListVisible) returnToChannels() else showGroups() },
+                        onSwipeLeft = { if (groupListVisible) returnToChannels() else showEpg() },
+                    )
+            ) {
+                Text(
+                    focusedChannelGroup.name,
+                    modifier = Modifier.fillMaxWidth()
+                        .pointerInput(groupListVisible) {
+                            detectTapGestures(onTap = {
+                                if (groupListVisible) returnToChannels()
+                                else showGroups()
+                            })
                         }
-                    },
-                channelGroupProvider = { focusedChannelGroup },
-                channelListProvider = {
-                    if (focusedChannelGroup == ClassicPanelScreenFavoriteChannelGroup)
-                        favoriteChannelListProvider()
-                    else
-                        focusedChannelGroup.channelList
-                },
-                epgListProvider = epgListProvider,
-                initialChannelProvider = currentChannelProvider,
-                onChannelSelected = onChannelSelected,
-                onChannelFavoriteToggle = onChannelFavoriteToggle,
-                onChannelFocused = { channel -> focusedChannel = channel },
-                showEpgProgrammeProgressProvider = showEpgProgrammeProgressProvider,
-                onUserAction = { screenAutoCloseState.active() },
-                inFavoriteModeProvider = { focusedChannelGroup == ClassicPanelScreenFavoriteChannelGroup },
-                showChannelLogoProvider = showChannelLogoProvider,
-            )
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(Modifier.weight(1f)) {
+                    ClassicChannelItemList(
+                        modifier = Modifier
+                            .weight(1f)
+                            .classicPanelDirections(
+                                onLeft = { if (epgListVisible) returnToChannels() else showGroups() },
+                                onRight = { showEpg() },
+                            ),
+                        channelGroupProvider = { focusedChannelGroup },
+                        channelListProvider = { visibleChannels },
+                        epgListProvider = epgListProvider,
+                        initialChannelProvider = currentChannelProvider,
+                        onChannelSelected = onChannelSelected,
+                        onChannelFavoriteToggle = onChannelFavoriteToggle,
+                        isChannelFavoriteProvider = { channelFavoriteEnabledProvider() && it in favoriteChannelListProvider() },
+                        focusEmptyList = !groupListVisible,
+                        focusRequestKey = channelFocusRequest,
+                        onChannelFocused = { channel -> focusedChannel = channel },
+                        showEpgProgrammeProgressProvider = showEpgProgrammeProgressProvider,
+                        onUserAction = { screenAutoCloseState.active() },
+                        inFavoriteModeProvider = { focusedChannelGroup == ClassicPanelScreenFavoriteChannelGroup },
+                        showChannelLogoProvider = showChannelLogoProvider,
+                    )
+                    if (!epgListVisible && visibleChannels.isNotEmpty()) {
+                        ClassicPanelScreenShowEpgTip(
+                            modifier = Modifier.width(20.dp),
+                            onTap = { showEpg() },
+                        )
+                    }
+                }
+            }
 
             Visibility({ epgListVisible }) {
                 ClassicEpgItemList(
                     modifier = Modifier
-                        .onFocusChanged { epgListIsFocused = it.hasFocus || it.hasFocus },
+                        .onFocusChanged { epgListIsFocused = it.hasFocus }
+                        .classicPanelSwipes(onSwipeRight = { returnToChannels() })
+                        .focusGroup(),
                     programmeListModifier = Modifier
-                        .width(if (epgListIsFocused) 5.gridColumns() else 4.gridColumns()),
+                        .width(if (epgListIsFocused) 5.gridColumns() else 4.gridColumns())
+                        .classicPanelDirections(onLeft = { returnToChannels() }),
                     epgProvider = { epgListProvider().match(focusedChannel) },
                     epgProgrammeReserveListProvider = {
                         EpgProgrammeReserveList(
@@ -187,45 +276,11 @@ fun ClassicChannelScreen(
                     onUserAction = { screenAutoCloseState.active() },
                 )
             }
-            Visibility({ !epgListVisible }) {
-                ClassicPanelScreenShowEpgTip(
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surface.copy(0.7f))
-                        .padding(horizontal = 4.dp)
-                        .focusable(),
-                    onTap = { epgListVisible = true },
-                )
-            }
         }
     }
 
     ChannelScreenTopRight(channelNumberProvider = { currentChannelProvider().no })
 
-    Visibility({ !epgListVisible }) {
-        Box(Modifier.fillMaxSize()) {
-            LiveChannelsChannelInfo(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .fillMaxWidth(0.5f)
-                    .padding(SAFE_AREA_VERTICAL_PADDING.dp)
-                    .background(
-                        MaterialTheme.colorScheme.surface.copy(0.8f),
-                        MaterialTheme.shapes.medium,
-                    )
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
-                channelProvider = currentChannelProvider,
-                channelLineIdxProvider = currentChannelLineIdxProvider,
-                recentEpgProgrammeProvider = {
-                    epgListProvider().recentProgramme(currentChannelProvider())
-                },
-                isInTimeShiftProvider = isInTimeShiftProvider,
-                currentPlaybackEpgProgrammeProvider = currentPlaybackEpgProgrammeProvider,
-                playerMetadataProvider = videoPlayerMetadataProvider,
-                dense = true,
-                showChannelLogo = false,
-            )
-        }
-    }
 }
 
 @Composable
@@ -242,7 +297,7 @@ private fun ClassicChannelScreenWrapper(
         Box(
             modifier = modifier
                 .pointerInput(Unit) { detectTapGestures(onTap = { }) }
-                .padding(24.dp)
+                .padding(horizontal = SAFE_AREA_HORIZONTAL_PADDING.dp, vertical = SAFE_AREA_VERTICAL_PADDING.dp)
                 .clip(MaterialTheme.shapes.medium),
         ) {
             content()

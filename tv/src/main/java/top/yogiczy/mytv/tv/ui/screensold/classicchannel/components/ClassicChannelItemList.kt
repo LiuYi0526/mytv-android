@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -34,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,9 +47,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ListItemDefaults
+import androidx.tv.material3.Icon
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.LocalTextStyle
 import androidx.tv.material3.MaterialTheme
@@ -61,12 +66,12 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme.Companion.progress
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeRecent
-import top.yogiczy.mytv.tv.ui.material.rememberDebounceState
 import top.yogiczy.mytv.tv.ui.screen.channels.components.ChannelsChannelItemLogo
 import top.yogiczy.mytv.tv.ui.screen.channels.components.rememberEpgProgrammeRecent
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
+import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
 import top.yogiczy.mytv.tv.ui.utils.ifElse
 import top.yogiczy.mytv.tv.ui.utils.saveFocusRestorer
 import top.yogiczy.mytv.tv.ui.utils.saveRequestFocus
@@ -81,6 +86,9 @@ fun ClassicChannelItemList(
     showChannelLogoProvider: () -> Boolean = { false },
     onChannelSelected: (Channel) -> Unit = {},
     onChannelFavoriteToggle: (Channel) -> Unit = {},
+    isChannelFavoriteProvider: (Channel) -> Boolean = { false },
+    focusEmptyList: Boolean = true,
+    focusRequestKey: Int = 0,
     onChannelFocused: (Channel) -> Unit = { },
     epgListProvider: () -> EpgList = { EpgList() },
     showEpgProgrammeProgressProvider: () -> Boolean = { false },
@@ -93,27 +101,28 @@ fun ClassicChannelItemList(
     val initialChannel = initialChannelProvider()
     val itemFocusRequesterList =
         remember(channelList) { List(channelList.size) { FocusRequester() } }
+    val emptyFocusRequester = remember { FocusRequester() }
 
-    var hasFocused by rememberSaveable { mutableStateOf(!channelList.contains(initialChannel)) }
+    val initialFocusChannel = remember {
+        initialChannel.takeIf { it in channelList } ?: channelList.firstOrNull()
+    }
+    var hasFocused by rememberSaveable { mutableStateOf(channelList.isEmpty()) }
     var focusedChannel by remember(channelList) {
         mutableStateOf(
-            if (hasFocused) channelList.firstOrNull() ?: Channel() else initialChannel
+            if (hasFocused) channelList.firstOrNull() ?: Channel() else initialFocusChannel ?: Channel()
         )
-    }
-    val onChannelFocusedDebounce = rememberDebounceState(wait = 100L) {
-        onChannelFocused(focusedChannel)
     }
 
     val listState = remember(channelGroup) {
         LazyListState(
             if (hasFocused) 0
-            else channelList.indexOf(initialChannel).coerceAtLeast(0)
+            else channelList.indexOf(initialFocusChannel).coerceAtLeast(0)
         )
     }
     var initiallyPositioned by remember(listState) { mutableStateOf(hasFocused) }
     LaunchedEffect(listState) {
         if (!initiallyPositioned) {
-            val initialIndex = channelList.indexOf(initialChannel)
+            val initialIndex = channelList.indexOf(initialFocusChannel)
             if (initialIndex >= 0) {
                 // Measure the actual row before revealing it. Focusing a row placed at
                 // index - 2 used to start a second, visible animation toward the center.
@@ -125,18 +134,33 @@ fun ClassicChannelItemList(
                 val centeredOffset =
                     (layout.viewportStartOffset + layout.viewportEndOffset - item.size) / 2f
                 listState.scrollBy(item.offset - centeredOffset)
+                // Let the popup finish attaching/restoring its own focus before
+                // requesting the row, including a one-item list that cannot scroll.
+                withFrameNanos { }
                 hasFocused = true
                 itemFocusRequesterList[initialIndex].saveRequestFocus()
             }
             initiallyPositioned = true
         }
     }
+    LaunchedEffect(listState, focusRequestKey, focusEmptyList) {
+        if (focusRequestKey <= 0 || !focusEmptyList) return@LaunchedEffect
+        // A panel container may have several focusable descendants. Restore the
+        // exact channel after a group/EPG transition, once its lazy item is attached.
+        val index = channelList.indexOf(focusedChannel).coerceAtLeast(0)
+        if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
+            listState.scrollToItem(index)
+        }
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo }
+            .first { items -> items.any { it.index == index } }
+        if (channelList.isEmpty()) emptyFocusRequester.saveRequestFocus()
+        else itemFocusRequesterList[index].saveRequestFocus()
+    }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
             .collect { _ ->
                 onUserAction()
-                onChannelFocusedDebounce.send()
             }
     }
 
@@ -162,7 +186,6 @@ fun ClassicChannelItemList(
             modifier = modifier
                 .fillMaxHeight()
                 .width(if (showChannelLogoProvider()) 280.dp else 220.dp)
-                .background(MaterialTheme.colorScheme.surface.copy(0.8f))
                 .drawWithContent { if (initiallyPositioned) drawContent() }
                 .ifElse(
                     settingsVM.uiFocusOptimize,
@@ -173,9 +196,21 @@ fun ClassicChannelItemList(
                     },
                 ),
             state = listState,
-            contentPadding = PaddingValues(8.dp),
+            contentPadding = PaddingValues(start = 24.dp, end = 0.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            if (channelList.isEmpty()) {
+                item {
+                    Text(
+                        "暂无频道",
+                        modifier = Modifier.fillMaxWidth()
+                            .focusRequester(emptyFocusRequester)
+                            .ifElse(focusEmptyList, Modifier.focusOnLaunchedSaveable())
+                            .focusable()
+                            .padding(12.dp),
+                    )
+                }
+            }
             itemsIndexed(channelList, key = { _, channel -> channel.hashCode() }) { index, channel ->
                 val isSelected by remember { derivedStateOf { channel == focusedChannel } }
 
@@ -209,9 +244,10 @@ fun ClassicChannelItemList(
                         }
                         onChannelFavoriteToggle(channel)
                     },
+                    isFavoriteProvider = { isChannelFavoriteProvider(channel) },
                     onChannelFocused = {
                         focusedChannel = channel
-                        onChannelFocusedDebounce.send()
+                        onChannelFocused(channel)
                     },
                     recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
                     showEpgProgrammeProgressProvider = showEpgProgrammeProgressProvider,
@@ -239,6 +275,7 @@ private fun ClassicChannelItem(
     showChannelLogoProvider: () -> Boolean = { false },
     onChannelSelected: () -> Unit = {},
     onChannelFavoriteToggle: () -> Unit = {},
+    isFavoriteProvider: () -> Boolean = { false },
     onChannelFocused: () -> Unit = {},
     recentEpgProgrammeProvider: () -> EpgProgrammeRecent? = { null },
     showEpgProgrammeProgressProvider: () -> Boolean = { false },
@@ -247,6 +284,8 @@ private fun ClassicChannelItem(
 ) {
     val channel = channelProvider()
     val recentEpgProgramme = rememberEpgProgrammeRecent(recentEpgProgrammeProvider)
+    val currentProgramme = recentEpgProgramme?.now
+    val hasCurrentProgramme = currentProgramme != null
     val showEpgProgrammeProgress = showEpgProgrammeProgressProvider()
     val focusRequester = focusRequesterProvider()
     val isSelected = isSelectedProvider()
@@ -273,7 +312,7 @@ private fun ClassicChannelItem(
         if (showChannelLogoProvider()) {
             Box(
                 modifier = Modifier
-                    .width(60.dp)
+                    .width(56.dp)
                     .fillMaxHeight()
             ) {
                 CompositionLocalProvider(
@@ -318,7 +357,7 @@ private fun ClassicChannelItem(
                     .focusable()
                     .fillMaxWidth()
                     .background(containerColor, MaterialTheme.shapes.small)
-                    .defaultMinSize(minHeight = 56.dp)
+                    .defaultMinSize(minHeight = 48.dp)
                     .padding(horizontal = 12.dp, vertical = 4.dp)
                     .handleKeyEvents(
                         onSelect = onChannelSelected,
@@ -327,16 +366,17 @@ private fun ClassicChannelItem(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 CompositionLocalProvider(LocalContentColor provides contentColor) {
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Text(
                             channel.name,
-                            maxLines = 1,
-                            modifier = Modifier.ifElse(isFocused, Modifier.basicMarquee()),
+                            maxLines = if (hasCurrentProgramme) 1 else 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.ifElse(isFocused && hasCurrentProgramme, Modifier.basicMarquee()),
                             style = MaterialTheme.typography.titleSmall,
                         )
 
-                        Text(
-                            text = recentEpgProgramme?.now?.title ?: "",
+                        if (currentProgramme != null) Text(
+                            text = currentProgramme.title,
                             maxLines = 1,
                             modifier = Modifier.ifElse(isFocused, Modifier.basicMarquee()),
                             style = MaterialTheme.typography.bodySmall.copy(
@@ -344,6 +384,14 @@ private fun ClassicChannelItem(
                                     0.8f
                                 )
                             ),
+                        )
+                    }
+                    if (isFavoriteProvider()) {
+                        Icon(
+                            Icons.Default.Star,
+                            contentDescription = "已收藏",
+                            tint = Color(0xFFFFB300),
+                            modifier = Modifier.width(18.dp).height(18.dp),
                         )
                     }
                 }
@@ -355,7 +403,7 @@ private fun ClassicChannelItem(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .fillMaxWidth(nnNowEpgProgramme.progress())
-                            .height(3.dp)
+                            .height(2.dp)
                             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)),
                     )
                 }

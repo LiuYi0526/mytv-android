@@ -53,11 +53,14 @@ fun ClassicChannelGroupItemList(
     channelGroupListProvider: () -> ChannelGroupList = { ChannelGroupList() },
     initialChannelGroupProvider: () -> ChannelGroup = { ChannelGroup() },
     onChannelGroupFocused: (ChannelGroup) -> Unit = {},
+    onChannelGroupSelected: (ChannelGroup) -> Unit = {},
     onUserAction: () -> Unit = {},
 ) {
     val channelGroupList = channelGroupListProvider()
-    val initialChannelGroup = initialChannelGroupProvider()
-    val itemFocusRequesterList = List(channelGroupList.size) { FocusRequester() }
+    val initialChannelGroup = remember { initialChannelGroupProvider() }
+    val itemFocusRequesterList = remember(channelGroupList) {
+        List(channelGroupList.size) { FocusRequester() }
+    }
 
     var focusedChannelGroup by remember { mutableStateOf(initialChannelGroup) }
     val onChannelGroupFocusedDebounce = rememberDebounceState(wait = 100L) {
@@ -95,7 +98,6 @@ fun ClassicChannelGroupItemList(
         modifier = modifier
             .width(140.dp)
             .fillMaxHeight()
-            .background(MaterialTheme.colorScheme.surface.copy(0.9f))
             .ifElse(
                 settingsVM.uiFocusOptimize,
                 Modifier.saveFocusRestorer {
@@ -131,6 +133,7 @@ fun ClassicChannelGroupItemList(
                     focusedChannelGroup = channelGroup
                     onChannelGroupFocusedDebounce.send()
                 },
+                onSelected = { onChannelGroupSelected(channelGroup) },
             )
         }
     }
@@ -142,11 +145,11 @@ private fun ClassicChannelGroupItem(
     channelGroupProvider: () -> ChannelGroup = { ChannelGroup() },
     isSelectedProvider: () -> Boolean = { false },
     onFocused: () -> Unit = {},
+    onSelected: () -> Unit = {},
 ) {
     val channelGroup = channelGroupProvider()
     val isSelected = isSelectedProvider()
 
-    val focusRequester = remember { FocusRequester() }
     var isFocused by remember { mutableStateOf(false) }
 
     val colorScheme = MaterialTheme.colorScheme
@@ -164,7 +167,6 @@ private fun ClassicChannelGroupItem(
 
     Box(
         modifier = modifier
-            .focusRequester(focusRequester)
             .onFocusChanged {
                 isFocused = it.isFocused || it.hasFocus
                 if (isFocused) onFocused()
@@ -172,10 +174,9 @@ private fun ClassicChannelGroupItem(
             .focusable()
             .background(containerColor, MaterialTheme.shapes.small)
             .padding(horizontal = 12.dp, vertical = 10.dp)
+            .classicPanelDirections(onRight = onSelected)
             .handleKeyEvents(
-                isFocused = { isFocused },
-                focusRequester = focusRequester,
-                onSelect = {},
+                onSelect = onSelected,
             ),
     ) {
         Text(
