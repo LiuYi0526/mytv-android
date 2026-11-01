@@ -1,12 +1,11 @@
 package top.yogiczy.mytv.tv.ui.screen.settings.subcategories
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.Icons
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,6 +17,7 @@ import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import top.yogiczy.mytv.tv.sync.CloudSyncProvider
+import top.yogiczy.mytv.tv.ui.material.PaddedLazyColumn
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
@@ -40,7 +40,7 @@ fun SettingsCloudSyncProviderScreen(
         canBack = true,
         onBackPressed = onBackPressed,
     ) {
-        LazyColumn(
+        PaddedLazyColumn(
             contentPadding = childPadding.copy(top = 10.dp).paddingValues,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {

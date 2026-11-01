@@ -8,22 +8,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SyncAlt
+import androidx.compose.material.icons.Icons
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -35,13 +34,14 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
 import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
+import top.yogiczy.mytv.tv.ui.material.PaddedLazyColumn
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardFavoriteList
-import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardModuleList
-import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardTime
 import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardHistoryList
+import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardModuleList
 import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardSettingsList
+import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardTime
 import top.yogiczy.mytv.tv.ui.screen.settings.SettingsCategories
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.Configs
@@ -91,7 +91,7 @@ fun DashboardScreen(
         headerExtra = { DashboardTime() },
         onBackPressed = onBackPressed,
     ) {
-        LazyColumn(
+        PaddedLazyColumn(
             contentPadding = PaddingValues(top = 10.dp, bottom = childPadding.bottom),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {

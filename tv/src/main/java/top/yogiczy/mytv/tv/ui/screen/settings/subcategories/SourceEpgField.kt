@@ -1,13 +1,12 @@
 package top.yogiczy.mytv.tv.ui.screen.settings.subcategories
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Checkbox
@@ -16,6 +15,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.tv.ui.material.*
+import top.yogiczy.mytv.tv.ui.material.PaddedLazyColumn
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsListItem
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunched
 
@@ -58,7 +58,7 @@ internal fun SourceEpgField(
         Drawer(modifier = Modifier.width(660.dp), position = DrawerPosition.Center,
             header = { Text("选择节目单") }, onDismissRequest = { visible = false }) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                LazyColumn(Modifier.heightIn(max = 270.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                PaddedLazyColumn(Modifier.heightIn(max = 270.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     item {
                         SettingsListItem(modifier = Modifier.focusOnLaunched(), headlineContent = "使用默认节目单",
                             supportingContent = defaultSource.name.ifBlank { "尚未设置默认节目单" },

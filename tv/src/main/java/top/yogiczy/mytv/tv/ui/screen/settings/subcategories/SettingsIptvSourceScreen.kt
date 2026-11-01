@@ -2,17 +2,16 @@ package top.yogiczy.mytv.tv.ui.screen.settings.subcategories
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.runtime.*
@@ -26,20 +25,21 @@ import androidx.tv.material3.ListItem
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
-import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
-import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceCacheInfo
-import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
-import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceList
-import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
-import top.yogiczy.mytv.tv.ui.material.Snackbar
-import top.yogiczy.mytv.tv.ui.material.Tag
-import top.yogiczy.mytv.tv.ui.material.TagDefaults
-import top.yogiczy.mytv.core.util.utils.humanizeBytes
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
+import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
+import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceCacheInfo
+import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceList
+import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
+import top.yogiczy.mytv.core.util.utils.humanizeBytes
+import top.yogiczy.mytv.tv.ui.material.PaddedLazyColumn
+import top.yogiczy.mytv.tv.ui.material.Snackbar
+import top.yogiczy.mytv.tv.ui.material.Tag
+import top.yogiczy.mytv.tv.ui.material.TagDefaults
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScaffoldHeaderBtn
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
@@ -129,7 +129,7 @@ fun SettingsIptvSourceScreen(
         canBack = true,
         onBackPressed = onBackPressed,
     ) {
-        LazyColumn(
+        PaddedLazyColumn(
             state = listState,
             contentPadding = padding.copy(top = 10.dp).paddingValues,
             verticalArrangement = Arrangement.spacedBy(10.dp),

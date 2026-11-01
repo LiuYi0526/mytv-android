@@ -3,10 +3,9 @@ package top.yogiczy.mytv.tv.ui.screen.settings.subcategories
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.Icons
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -16,6 +15,7 @@ import androidx.tv.material3.ListItem
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import top.yogiczy.mytv.tv.ui.material.PaddedLazyVerticalGrid
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
@@ -37,7 +37,7 @@ fun SettingsVideoPlayerRenderModeScreen(
         canBack = true,
         onBackPressed = onBackPressed,
     ) {
-        LazyVerticalGrid(
+        PaddedLazyVerticalGrid(
             columns = GridCells.Fixed(4),
             contentPadding = childPadding.copy(top = 10.dp).paddingValues,
             horizontalArrangement = Arrangement.spacedBy(12.dp),

@@ -2,16 +2,16 @@ package top.yogiczy.mytv.tv.ui.screen.settings.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import top.yogiczy.mytv.tv.ui.material.PaddedLazyColumn
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
@@ -43,7 +43,7 @@ fun SettingsCategoryScreen(
         val firstItemFocusRequester = remember { FocusRequester() }
         val listState = rememberLazyListState()
 
-        LazyColumn(
+        PaddedLazyColumn(
             modifier = Modifier.ifElse(
                 settingsVM.uiFocusOptimize,
                 Modifier.saveFocusRestorer {

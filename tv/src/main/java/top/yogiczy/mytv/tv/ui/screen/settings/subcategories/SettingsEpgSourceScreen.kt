@@ -1,11 +1,10 @@
 package top.yogiczy.mytv.tv.ui.screen.settings.subcategories
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -17,15 +16,16 @@ import androidx.tv.material3.ListItem
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCacheInfo
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceList
 import top.yogiczy.mytv.core.data.repositories.epg.EpgRepository
 import top.yogiczy.mytv.core.data.repositories.epg.EpgUpdateProgress
 import top.yogiczy.mytv.core.util.utils.humanizeBytes
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import top.yogiczy.mytv.tv.ui.material.PaddedLazyColumn
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScaffoldHeaderBtn
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
@@ -73,7 +73,7 @@ fun SettingsEpgSourceScreen(
     }
     AppScreen(modifier = modifier, header = { Text("节目单") }, canBack = true, onBackPressed = onBackPressed,
         headerExtra = { AppScaffoldHeaderBtn(title = "添加节目单", imageVector = Icons.Outlined.Add, onSelect = { adding = true }) }) {
-        LazyColumn(contentPadding = padding.copy(top = 10.dp).paddingValues, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        PaddedLazyColumn(contentPadding = padding.copy(top = 10.dp).paddingValues, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (sources.isEmpty()) item { Text("暂无节目单，请选择右上角“添加节目单”", Modifier.padding(16.dp)) }
             itemsIndexed(sources, key = { _, source -> source.url }) { index, source ->
                 val isDefault = source.url == currentEpgSourceProvider().url
