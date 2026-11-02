@@ -117,6 +117,9 @@ dependencies {
         implementation(project(":media3:lib-exoplayer-dash"))
         implementation(project(":media3:lib-ui"))
         implementation(project(":media3:lib-datasource-okhttp"))
+        implementation(project(":media3:lib-datasource-rtmp")) {
+            exclude(group = "io.antmedia", module = "rtmp-client")
+        }
     } else {
         check(libs.versions.media3.get() == "1.11.1") {
             "Rebuild scripts/media3 HLS and RTSP compatibility AARs before upgrading Media3"
@@ -127,6 +130,10 @@ dependencies {
         implementation(libs.androidx.media3.exoplayer.dash)
         implementation(libs.androidx.media3.ui)
         implementation(libs.androidx.media3.datasource.okhttp)
+        implementation(libs.androidx.media3.datasource.rtmp) {
+            // Published client has 4 KB native alignment; use the rebuilt local AAR.
+            exclude(group = "io.antmedia", module = "rtmp-client")
+        }
     }
 
     implementation("com.github.CarGuo.GSYVideoPlayer:gsyvideoplayer-java:v10.0.0")

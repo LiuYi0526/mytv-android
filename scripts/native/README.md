@@ -41,6 +41,32 @@ JNI 使用 `-Wl,-z,max-page-size=16384`、`-Wl,-z,common-page-size=16384`，
 
 ## 验证
 
+### RTMP 客户端
+
+Media3 使用官方 `media3-datasource-rtmp:1.11.1`。其传递依赖
+`io.antmedia:rtmp-client:3.2.0` 的 64 位 JNI 只有 4 KB 对齐，因此排除该 Maven
+客户端并使用 `tv/libs/rtmp-client-3.2.0-16k.aar`。官方 Media3 扩展保持原样。
+
+本地客户端保留发布版的 Java、清单、32 位库和其它条目；仅从官方源码重建
+`arm64-v8a` 与 `x86_64` 的 `librtmp-jni.so`，额外包含原 Apache 及 librtmp LGPL 许可。
+JNI 方法签名与发布版一致。使用原 `NO_CRYPTO` 配置，支持普通 `rtmp://`，不增加 RTMPS。
+
+- [官方源码](https://github.com/ant-media/LibRtmp-Client-for-Android/tree/3af67842f517f9c6bbd22b961878624d0c44b713)，
+  固定提交 `3af67842f517f9c6bbd22b961878624d0c44b713`。
+- 发布版输入：`https://repo.maven.apache.org/maven2/io/antmedia/rtmp-client/3.2.0/rtmp-client-3.2.0.aar`。
+- 源码 ZIP：`https://codeload.github.com/ant-media/LibRtmp-Client-for-Android/zip/3af67842f517f9c6bbd22b961878624d0c44b713`。
+- `build_rtmp_16k.py` 固定两个输入 SHA-256；使用 Linux NDK r27d、API 21、16 KB 链接参数。
+
+```sh
+python3 scripts/native/build_rtmp_16k.py --aar /path/to/rtmp-client-3.2.0.aar --source-zip /path/to/client-source.zip --ndk /path/to/android-ndk-r27d --output tv/libs/rtmp-client-3.2.0-16k.aar
+```
+
+`DefaultDataSource` 自动选择官方 RTMP 扩展，沿用现有 progressive/FLV 解析链路。
+`RtmpPlaybackTest` 通过运行时 `-e rtmpUrl <url>` 检查默认 DataSource 读出 FLV 头，
+以及 Media3 音视频轨道发现、真实视频解码和持续出帧；不修改订阅、历史或设置。
+
+### 通用检查
+
 ```sh
 python3 scripts/check_native_alignment.py tv/libs/lib-decoder-ffmpeg-release.aar
 ./gradlew :tv:assembleOriginalDebug
