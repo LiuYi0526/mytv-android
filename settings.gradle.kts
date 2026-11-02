@@ -21,7 +21,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "天光云影v3.3"
+rootProject.name = "流光TV"
 
 include(":core:data")
 include(":core:util")
@@ -35,6 +35,3 @@ if (mediaSettingsFile.exists()) {
     (gradle as ExtensionAware).extra["androidxMediaModulePrefix"] = "media3:"
     apply(from = mediaSettingsFile)
 }
-
-include(":tbsx5")
-project(":tbsx5").projectDir = file("../YYKM/tbsx5")

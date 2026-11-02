@@ -1,67 +1,47 @@
-<div align="center">
-    <h1>天光云影</h1>
-<div align="center">
+# 流光 TV
 
-![GitHub Repo stars](https://img.shields.io/github/stars/yaoxieyoulei/mytv-android)
-![GitHub all releases](https://img.shields.io/github/downloads/yaoxieyoulei/mytv-android/total)
-[![Android Sdk Require](https://img.shields.io/badge/Android-6.0%2B-informational?logo=android)](https://apilevels.com/)
-[![GitHub](https://img.shields.io/github/license/yaoxieyoulei/mytv-android)](https://github.com/yaoxieyoulei/mytv-android)
+面向 Android TV、电视盒子及横屏触摸设备的直播播放器，基于 [天光云影](https://github.com/yaoxieyoulei/mytv-android) 3.3.10 继续开发。
 
-</div>
-    <p>使用Android原生开发的视频播放软件</p>
-</div>
-
-## 使用
-
-### 操作方式
-
-> 遥控器操作方式与主流视频播放软件类似；
-
-- 频道切换：使用上下方向键，或者数字键切换频道；屏幕上下滑动；
-- 频道选择：OK键；单击屏幕；
-- 线路切换：使用左右方向键；屏幕左右滑动；
-- 设置页面：按下菜单、帮助键，长按OK键；双击、长按屏幕；
-
-### 触摸键位对应
-
-- 方向键：屏幕上下左右滑动
-- OK键：点击屏幕
-- 长按OK键：长按屏幕
-- 菜单、帮助键：双击屏幕
-
-### 自定义设置
-
-- 访问以下网址：`http://<设备IP>:10481`
+- 支持 Android **6.0 / API 23** 及以上。
+- 不内置个人直播源，首次使用可扫码或手动添加订阅。
+- 支持遥控器和触摸操作、首页最近观看、收藏及设置分类入口。
+- 支持独立节目单管理、订阅关联及 M3U 节目单地址识别。
+- 提供 Media3 和 IJK 播放内核；协议和解码能力依内核、设备及直播源而异。
 
 ## 下载
 
-可以通过右侧release进行下载或拉取代码到本地进行编译
+前往 [GitHub Releases](https://github.com/LiuYi0526/mytv-android/releases) 下载正式签名 APK：
 
-## 说明
+| 文件后缀 | 适用设备 |
+| --- | --- |
+| `armeabi-v7a.apk` | 32 位 ARM 系统 |
+| `arm64-v8a.apk` | 64 位 ARM 系统 |
+| `universal.apk` | 包含 ARM32、ARM64、x86、x86_64 的通用包 |
 
-- 仅支持Android6及以上
-- 网络环境必须支持IPV6（默认订阅源）
-- 只在自家电视上测过，其他电视稳定性未知
+按系统支持的 ABI 选择安装包；64 位芯片也可能运行 32 位 Android。无法确定时可使用 universal 包。
+正式版包名为 `io.github.liuyi0526.mytv`，调试版为 `io.github.liuyi0526.mytv.dev`。
+两者与之前的测试应用分别保存数据，更换包名前请先导出配置。
 
-## 更新日志
+## 首次使用
 
-[更新日志](./CHANGELOG.md)
+1. 在首页打开“设置 → 订阅源”，扫码或手动添加订阅链接。
+2. M3U 中的 `url-tvg` / `x-tvg-url` 可自动识别为节目单；也可单独管理默认节目单并关联订阅。
+3. 在“设置 → 播放器”选择内核。Media3 提供本项目扩展的 RTSP MP2T、RTMP、DASH DRM 及 MMT/TLV 支持。
+4. 遥控器确认键打开频道列表，左右方向键切换相关面板；触摸操作及按键映射可在“控制”中调整。
+5. 手机或电脑与设备处于同一局域网时，可访问 `http://<设备IP>:10481` 配置。
 
-## 声明
+已知限制：RTSP、RTMP 等非 HTTP 线路暂不进行线路测速，界面会显示“暂不支持测速”。
 
-此项目（天光云影）是个人为了兴趣而开发, 仅用于学习和测试。 所用API皆从官方网站收集, 不提供任何破解内容。
+## 反馈与版本
 
-## 技术交流
+- 问题反馈：[GitHub Issues](https://github.com/LiuYi0526/mytv-android/issues)。请说明设备、系统、内核、操作步骤及可公开的日志。
+- 更新日志：[CHANGELOG.md](CHANGELOG.md)。应用首版仅提供稳定更新通道。
+- 正式构建、签名、备份及 GitHub Actions 使用方法：[发布指南](docs/RELEASING.md)。
 
-Telegram: https://t.me/mytv_android
+## 开源来源
 
-## 赞赏
+保留原项目的 [MIT 许可证](LICENSE) 与作者版权声明。
+播放器及原生依赖的来源、许可证和重建说明见 [THIRD_PARTY.md](docs/THIRD_PARTY.md)。
 
-<img src="./screenshots/mm_reward_qrcode.png" width="48%"/>
-
-## 致谢
-
-- [my-tv](https://github.com/lizongying/my-tv)
-- [参考设计稿](https://github.com/lizongying/my-tv/issues/594)
-- [live](https://github.com/fanmingming/live)
-- 等等
+感谢 [天光云影](https://github.com/yaoxieyoulei/mytv-android)、[my-tv](https://github.com/lizongying/my-tv)、
+[AndroidX Media](https://github.com/androidx/media)、[fanmingming/live](https://github.com/fanmingming/live) 等上游项目。

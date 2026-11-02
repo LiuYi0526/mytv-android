@@ -553,7 +553,9 @@ object Configs {
     /** 更新通道 */
     var updateChannel: String
         get() = SP.getString(KEY.UPDATE_CHANNEL.name, "stable")
-        set(value) = SP.putString(KEY.UPDATE_CHANNEL.name, value)
+            .takeIf { it in Constants.GIT_RELEASE_LATEST_URL } ?: "stable"
+        set(value) = SP.putString(KEY.UPDATE_CHANNEL.name,
+            value.takeIf { it in Constants.GIT_RELEASE_LATEST_URL } ?: "stable")
 
     /** ==================== 播放器 ==================== */
     /** 播放器 内核 */

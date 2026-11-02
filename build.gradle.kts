@@ -14,7 +14,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization) apply false
 }
 
-val keystorePropertiesFile = rootProject.file("key.properties")
+val localSigningProperties = rootProject.file("key.properties")
+val keystorePropertiesFile = file(
+    System.getenv("LIUGUANG_SIGNING_PROPERTIES")
+        ?: localSigningProperties.takeIf { it.exists() }?.path
+        ?: "${System.getProperty("user.home")}/.android/keystores/liuguang-tv/key.properties"
+)
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
@@ -23,14 +28,14 @@ if (keystorePropertiesFile.exists()) {
 allprojects {
     val appConfig: BaseAppModuleExtension.() -> Unit = {
         signingConfigs {
-            val localKeystore = rootProject.file("keystore.jks")
-            val userKeystore = file(
-                System.getenv("KEYSTORE") ?: keystoreProperties.getProperty("storeFile")
-                ?: "keystore.jks"
-            )
+            val userKeystore = System.getenv("KEYSTORE")?.let { file(it) }
+                ?: keystoreProperties.getProperty("storeFile")?.let {
+                    java.io.File(keystorePropertiesFile.parentFile, it)
+                }
+                ?: rootProject.file("keystore.jks")
 
             create("release") {
-                storeFile = if (userKeystore.exists()) userKeystore else localKeystore
+                storeFile = userKeystore
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
                     ?: keystoreProperties.getProperty("storePassword")
                 keyAlias = System.getenv("KEY_ALIAS") ?: keystoreProperties.getProperty("keyAlias")
@@ -46,8 +51,10 @@ allprojects {
                 val abi = filters.find { it.filterType == "ABI" }?.identifier ?: "all"
                 val flavor = productFlavors.joinToString("-") { it.name }
 
-                (this as BaseVariantOutputImpl).outputFileName =
-                    "mytv-android-${project.name}-$ver-${abi}-sdk$minSdk-${flavor}.apk"
+                (this as BaseVariantOutputImpl).outputFileName = if (project.name == "tv") {
+                    val suffix = if (buildType.name == "debug") "-debug" else ""
+                    "liuguang-tv-$ver-${if (abi == "all") "universal" else abi}$suffix.apk"
+                } else "mytv-android-${project.name}-$ver-${abi}-sdk$minSdk-${flavor}.apk"
             }
         }
     }

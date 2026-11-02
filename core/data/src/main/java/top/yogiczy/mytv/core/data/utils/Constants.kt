@@ -11,17 +11,17 @@ object Constants {
     /**
      * 应用 标题
      */
-    const val APP_TITLE = "天光云影"
+    const val APP_TITLE = "流光 TV"
 
     /**
      * 应用 代码仓库
      */
-    const val APP_REPO = "https://github.com/yaoxieyoulei/mytv-android"
+    const val APP_REPO = "https://github.com/LiuYi0526/mytv-android"
 
     /**
-     * 交流群 telegram
+     * 问题反馈
      */
-    const val GROUP_TELEGRAM = "https://t.me/mytv_android"
+    const val APP_ISSUES = "$APP_REPO/issues"
 
     /**
      * 直播源
@@ -65,15 +65,13 @@ object Constants {
     /**
      * GitHub加速代理地址
      */
-    const val GITHUB_PROXY = "https://ghp.ci/"
+    const val GITHUB_PROXY = ""
 
     /**
      * Git最新版本信息
      */
     val GIT_RELEASE_LATEST_URL = mapOf(
-        "stable" to "${GITHUB_PROXY}https://raw.githubusercontent.com/yaoxieyoulei/mytv-android-update/main/tv-stable.json",
-        "beta" to "${GITHUB_PROXY}https://raw.githubusercontent.com/yaoxieyoulei/mytv-android-update/main/tv-beta.json",
-        "dev" to "${GITHUB_PROXY}https://raw.githubusercontent.com/yaoxieyoulei/mytv-android-update/main/tv-dev.json",
+        "stable" to "https://raw.githubusercontent.com/LiuYi0526/mytv-android/main/updates/stable.json",
     )
 
     /**

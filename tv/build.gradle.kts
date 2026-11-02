@@ -1,5 +1,4 @@
 import com.android.build.gradle.internal.dsl.BaseAppModuleExtension
-import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
@@ -10,6 +9,11 @@ plugins {
     alias(libs.plugins.sentry.android.gradle)
 }
 
+val releaseVersion = Properties().apply {
+    rootProject.file("version.properties").inputStream().use { load(it) }
+}
+val splitApks = providers.gradleProperty("splitApks").map(String::toBoolean).getOrElse(false)
+
 android {
     @Suppress("UNCHECKED_CAST")
     apply(extra["appConfig"] as BaseAppModuleExtension.() -> Unit)
@@ -18,20 +22,23 @@ android {
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "top.yogiczy.slcs.tv"
+        applicationId = "io.github.liuyi0526.mytv"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 2
-        versionName = "3.3.10"
+        versionCode = releaseVersion.getProperty("versionCode").toInt()
+        versionName = releaseVersion.getProperty("versionName")
         vectorDrawables {
             useSupportLibrary = true
         }
 
-        buildConfigField("String", "SENTRY_DSN", "\"${getProperty("sentry.dsn") ?: ""}\"")
+        buildConfigField("String", "SENTRY_DSN", "\"\"")
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".dev"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -41,8 +48,8 @@ android {
             )
             signingConfig = signingConfigs.getByName("release")
 
-            ndk {
-                abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
+            if (!splitApks) ndk {
+                abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
             }
         }
     }
@@ -69,6 +76,7 @@ android {
     }
 
     packaging {
+        jniLibs.excludes += "**/armeabi/**"
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
@@ -81,15 +89,14 @@ android {
         }
     }
 
-    // splits {
-    //     abi {
-    //         isEnable = true
-    //         isUniversalApk = false
-    //         reset()
-    //         // noinspection ChromeOsAbiSupport
-    //         include("arm64-v8a")
-    //     }
-    // }
+    splits {
+        abi {
+            isEnable = splitApks
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = true
+        }
+    }
 }
 
 dependencies {
@@ -156,8 +163,10 @@ dependencies {
     implementation(project(":core:util"))
     // implementation(project(":tbsx5"))
 
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar", "*.jar"),
-        "exclude" to listOf("media3-exoplayer-hls-*.aar", "media3-exoplayer-rtsp-*.aar"))))
+    implementation(fileTree("libs") {
+        include("*.aar", "*.jar")
+        exclude("media3-exoplayer-hls-*.aar", "media3-exoplayer-rtsp-*.aar")
+    })
     if (!mediaSettingsFile.exists()) {
         implementation(files("libs/media3-exoplayer-hls-1.11.1-multi-audio.aar"))
         implementation(files("libs/media3-exoplayer-rtsp-1.11.1-mp2t.aar"))
@@ -174,21 +183,6 @@ dependencies {
 sentry {
     // Keep the Gradle plugin while using the 16 KB compatible native SDK.
     autoInstallation.sentryVersion.set("7.22.6")
-    org.set("yogiczy")
-    projectName.set("mytv-android")
-    authToken.set(getProperty("sentry.auth_token") ?: System.getenv("SENTRY_AUTH_TOKEN"))
     ignoredBuildTypes.set(setOf("debug"))
     autoUploadProguardMapping = false
-}
-
-fun getProperty(key: String): String? {
-    val propertiesFile = rootProject.file("local.properties")
-    if (propertiesFile.exists()) {
-        val properties = Properties()
-        properties.load(FileInputStream(propertiesFile))
-
-        return properties.getProperty(key)
-    }
-
-    return null
 }

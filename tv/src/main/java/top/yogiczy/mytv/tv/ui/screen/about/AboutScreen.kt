@@ -1,6 +1,5 @@
 package top.yogiczy.mytv.tv.ui.screen.about
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -16,7 +15,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -26,8 +24,6 @@ import top.yogiczy.mytv.core.data.utils.Constants
 import top.yogiczy.mytv.core.data.utils.Globals
 import top.yogiczy.mytv.core.util.utils.compareVersion
 import top.yogiczy.mytv.tv.BuildConfig
-import top.yogiczy.mytv.tv.R
-import top.yogiczy.mytv.tv.ui.material.SimplePopup
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.screen.components.QrcodePopup
@@ -109,13 +105,13 @@ fun AboutScreen(
 
                 ListItem(
                     modifier = Modifier.handleKeyEvents(onSelect = { visible = true }),
-                    headlineContent = { Text("技术交流 Telegram") },
+                    headlineContent = { Text("问题反馈") },
                     trailingContent = {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(Constants.GROUP_TELEGRAM)
+                            Text(Constants.APP_ISSUES)
 
                             Icon(
                                 Icons.AutoMirrored.Default.OpenInNew,
@@ -131,7 +127,7 @@ fun AboutScreen(
                 QrcodePopup(
                     visibleProvider = { visible },
                     onDismissRequest = { visible = false },
-                    text = Constants.GROUP_TELEGRAM,
+                    text = Constants.APP_ISSUES,
                 )
             }
 
@@ -178,37 +174,12 @@ fun AboutScreen(
             }
 
             item {
-                var visible by remember { mutableStateOf(false) }
-
                 ListItem(
-                    modifier = Modifier.handleKeyEvents(onSelect = { visible = true }),
-                    headlineContent = { Text("赞赏") },
-                    supportingContent = { Text("仅支持微信赞赏码") },
-                    trailingContent = {
-                        Icon(
-                            Icons.AutoMirrored.Default.OpenInNew,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    },
+                    headlineContent = { Text("项目来源") },
+                    supportingContent = { Text("基于天光云影 3.3.10 开发，保留原作者及第三方开源许可。") },
                     selected = false,
                     onClick = {},
                 )
-
-                SimplePopup(
-                    visibleProvider = { visible },
-                    onDismissRequest = { visible = false },
-                ) {
-                    val painter = painterResource(R.drawable.mm_reward_qrcode)
-
-                    Image(
-                        painter,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .size(300.dp),
-                    )
-                }
             }
 
             item {
