@@ -12,8 +12,6 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceCacheInfo
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSourceUrl
-import top.yogiczy.mytv.core.data.network.HttpException
-import top.yogiczy.mytv.core.data.network.request
 import top.yogiczy.mytv.core.data.repositories.FileCacheRepository
 import top.yogiczy.mytv.core.data.repositories.iptv.parser.IptvParser
 import top.yogiczy.mytv.core.data.repositories.iptv.parser.IptvParser.ChannelItem.Companion.toChannelGroupList
@@ -35,22 +33,26 @@ class IptvRepository(private val source: IptvSource) :
     suspend fun getCachedInfo(): IptvSourceCacheInfo? = withContext(Dispatchers.IO) {
         IptvSourceCacheInfo.read(
             File(Globals.cacheDir, source.cacheFileName(PARSED_CACHE_EXTENSION)),
-            if (source.isLocal) null else File(Globals.cacheDir, source.copy(url = sourceUrl.requestUrl).cacheFileName("txt")),
+            if (source.isLocal) null else rawRepository.cachedFile,
         )
     }
 
     private fun isExpired(lastModified: Long, cacheTime: Long): Boolean {
-        val timeout =
-            System.currentTimeMillis() - lastModified >= (if (source.isLocal) Long.MAX_VALUE else cacheTime)
-        val rawChanged = lastModified < rawRepository.lastModified()
+        val rawModified = rawRepository.lastModified()
+        // Parsing a prefetched playlist must not extend the freshness of its downloaded data.
+        val downloadedAt = if (rawModified > 0) minOf(lastModified, rawModified) else lastModified
+        val timeout = System.currentTimeMillis() - downloadedAt >=
+            (if (source.isLocal) Long.MAX_VALUE else cacheTime)
+        val rawChanged = lastModified < rawModified
 
         return timeout || rawChanged
     }
 
     private suspend fun refresh(
+        cacheTime: Long,
         transform: suspend ((List<IptvParser.ChannelItem>) -> List<IptvParser.ChannelItem>) = { it -> it },
     ): String {
-        val raw = rawRepository.getRaw()
+        val raw = rawRepository.getRaw(cacheTime)
         val parser = IptvParser.instances.first { it.isSupport(sourceUrl.requestUrl, raw) }
 
         log.d("开始解析直播源（${source.name}）...")
@@ -101,7 +103,7 @@ class IptvRepository(private val source: IptvSource) :
     suspend fun getChannelGroupList(cacheTime: Long): ChannelGroupList {
         try {
             val json = getOrRefresh({ lastModified, _ -> isExpired(lastModified, cacheTime) }) {
-                refresh { transform(it) }
+                refresh(cacheTime) { transform(it) }
             }
 
             val (groupList, duration) = measureTimedValue {
@@ -117,9 +119,9 @@ class IptvRepository(private val source: IptvSource) :
 
     suspend fun getEpgUrl(): String? = getEpgUrls().firstOrNull()
 
-    suspend fun getEpgUrls(): List<String> {
+    suspend fun getEpgUrls(cacheTime: Long = Long.MAX_VALUE): List<String> {
         return try {
-            val sourceData = rawRepository.getRaw(Long.MAX_VALUE)
+            val sourceData = rawRepository.getRaw(cacheTime)
             val parser = IptvParser.instances.first { it.isSupport(sourceUrl.requestUrl, sourceData) }
             parser.getEpgUrls(sourceData)
         } catch (ex: CancellationException) {
@@ -131,9 +133,9 @@ class IptvRepository(private val source: IptvSource) :
     }
 
     /** Guide discovery is optional: an unavailable playlist must not prevent adding a source. */
-    suspend fun withDetectedEpgUrls(): IptvSource {
+    suspend fun withDetectedEpgUrls(cacheTime: Long = Long.MAX_VALUE): IptvSource {
         if (source.epgUrls.isNotEmpty()) return source
-        val detected = withTimeoutOrNull(10_000) { getEpgUrls() }.orEmpty()
+        val detected = withTimeoutOrNull(10_000) { getEpgUrls(cacheTime) }.orEmpty()
         return source.copy(epgUrls = detected)
     }
 
@@ -147,31 +149,5 @@ class IptvRepository(private val source: IptvSource) :
         suspend fun clearAllCache() = withContext(Dispatchers.IO) {
             IptvSource.cacheDir.deleteRecursively()
         }
-    }
-}
-
-private class IptvRawRepository(private val source: IptvSource) : FileCacheRepository(
-    if (source.isLocal) source.url else source.cacheFileName("txt"),
-    source.isLocal,
-) {
-
-    private val log = Logger.create("IptvRawRepository")
-
-    suspend fun getRaw(cacheTime: Long = 0): String {
-        return getOrRefresh(if (source.isLocal) Long.MAX_VALUE else cacheTime) {
-            log.d("获取直播源: $source")
-
-            try {
-                source.url.request { body -> body.string() } ?: ""
-            } catch (ex: Exception) {
-                log.e("获取直播源（${source.name}）失败", ex)
-                throw HttpException("获取直播源失败，请检查网络连接", ex)
-            }
-        }
-    }
-
-    override suspend fun clearCache() {
-        if (source.isLocal) return
-        super.clearCache()
     }
 }

@@ -43,6 +43,7 @@ import top.yogiczy.mytv.tv.ui.screen.components.Qrcode
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsCategoryScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsListItem
 import top.yogiczy.mytv.tv.ui.utils.clickableNoIndication
+import top.yogiczy.mytv.tv.ui.utils.Configs
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunched
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
 import top.yogiczy.mytv.tv.utlis.HttpServer
@@ -83,7 +84,7 @@ fun SettingsIptvSourceDetailScreen(
         detectingEpg = true
         detectionMessage = "正在识别节目单…"
         try {
-            val detected = IptvRepository(source).withDetectedEpgUrls().epgUrls
+            val detected = IptvRepository(source).withDetectedEpgUrls(Configs.iptvSourceCacheTime).epgUrls
             // A response for this URL may finish after the user has supplied their own guides.
             if (!epgManuallyEdited) epg = detected.joinToString("\n")
             detectionMessage = if (detected.isEmpty()) "未识别到节目单，可手动填写或直接添加"

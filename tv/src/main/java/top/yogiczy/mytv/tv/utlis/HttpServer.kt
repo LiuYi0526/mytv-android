@@ -248,7 +248,7 @@ object HttpServer : Loggable("HttpServer") {
         }
         // Keep network discovery off the HTTP event loop so configs and the QR page remain responsive.
         CoroutineScope(Dispatchers.IO).launch {
-            val detected = IptvRepository(source).withDetectedEpgUrls()
+            val detected = IptvRepository(source).withDetectedEpgUrls(Configs.iptvSourceCacheTime)
             AsyncServer.getDefault().post {
                 Configs.registerEpgUrls(detected.epgUrls, "${detected.name} 节目单")
                 Configs.iptvSourceList = IptvSourceList(Configs.iptvSourceList + detected)
