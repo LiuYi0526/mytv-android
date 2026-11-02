@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
+import top.yogiczy.mytv.tv.ui.utils.FocusReturnScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -31,31 +32,33 @@ fun SettingsCategoryScreen(
 ) {
     val childPadding = rememberChildPadding()
 
-    AppScreen(
-        modifier = modifier
-            .padding(top = 10.dp)
-            .focusOnLaunched(),
-        header = header,
-        headerExtra = headerExtra,
-        canBack = true,
-        onBackPressed = onBackPressed,
-    ) {
-        val firstItemFocusRequester = remember { FocusRequester() }
-        val listState = rememberLazyListState()
-
-        PaddedLazyColumn(
-            modifier = Modifier.ifElse(
-                settingsVM.uiFocusOptimize,
-                Modifier.saveFocusRestorer {
-                    if (listState.firstVisibleItemIndex == 0) firstItemFocusRequester
-                    else FocusRequester.Default
-                },
-            ),
-            state = listState,
-            contentPadding = childPadding.copy(top = 10.dp).paddingValues,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+    FocusReturnScope { focus ->
+        AppScreen(
+            modifier = modifier
+                .padding(top = 10.dp)
+                .then(if (focus.target.isEmpty()) Modifier.focusOnLaunched() else Modifier),
+            header = header,
+            headerExtra = headerExtra,
+            canBack = true,
+            onBackPressed = onBackPressed,
         ) {
-            content(firstItemFocusRequester)
+            val firstItemFocusRequester = remember { FocusRequester() }
+            val listState = rememberLazyListState()
+
+            PaddedLazyColumn(
+                modifier = Modifier.ifElse(
+                    settingsVM.uiFocusOptimize && !focus.restoring,
+                    Modifier.saveFocusRestorer {
+                        if (listState.firstVisibleItemIndex == 0) firstItemFocusRequester
+                        else FocusRequester.Default
+                    },
+                ),
+                state = listState,
+                contentPadding = childPadding.copy(top = 10.dp).paddingValues,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                content(firstItemFocusRequester)
+            }
         }
     }
 }

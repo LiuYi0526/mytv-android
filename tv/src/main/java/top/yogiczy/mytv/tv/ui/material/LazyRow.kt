@@ -44,6 +44,7 @@ fun LazyRow(
     backHandler: Boolean = false,
     initialFocusRequester: FocusRequester? = null,
     preservePaddingOnFocus: Boolean = false,
+    restoreFocus: Boolean = true,
     content: LazyListScope.(LazyListRuntime) -> Unit,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -82,8 +83,8 @@ fun LazyRow(
     CompositionLocalProvider(LocalBringIntoViewSpec provides scrollSpec) {
         androidx.compose.foundation.lazy.LazyRow(
             modifier = modifier
+                .then(if (restoreFocus) Modifier.saveFocusRestorer { initialFocusRequester ?: firstItemFocusRequester } else Modifier)
                 .focusGroup()
-                .saveFocusRestorer { initialFocusRequester ?: firstItemFocusRequester }
                 .backHandler({ backHandler && !isFirstItemFocused }) {
                     coroutineScope.launch {
                         scrollToFirst()

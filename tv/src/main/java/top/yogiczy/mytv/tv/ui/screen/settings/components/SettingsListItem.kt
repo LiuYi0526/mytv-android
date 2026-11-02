@@ -9,6 +9,8 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Lock
+import top.yogiczy.mytv.tv.ui.utils.LocalScreenFocus
+import top.yogiczy.mytv.tv.ui.utils.screenFocus
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +45,7 @@ fun SettingsListItem(
     remoteConfig: Boolean = false,
     link: Boolean = false,
 ) {
+    val returnFocus = LocalScreenFocus.current
     val popupManager = LocalPopupManager.current
     val focusRequester = remember { FocusRequester() }
 
@@ -89,10 +92,14 @@ fun SettingsListItem(
         },
         supportingContent = { supportingContent?.let { Text(it) } },
         modifier = modifier
+            .screenFocus(headlineContent)
             .focusRequester(focusRequester)
             .handleKeyEvents(
                 onSelect = {
-                    if (onSelect != null) onSelect()
+                    if (onSelect != null) {
+                        if (link) returnFocus?.selected(headlineContent)
+                        onSelect()
+                    }
                     else if (remoteConfig) {
                         popupManager.push(focusRequester, true)
                         showPush = true

@@ -31,6 +31,8 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SmartDisplay
 import androidx.compose.material.icons.outlined.Update
 import androidx.compose.material.icons.outlined.Wifi
+import top.yogiczy.mytv.tv.ui.utils.FocusReturnScope
+import top.yogiczy.mytv.tv.ui.utils.screenFocus
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,36 +77,37 @@ fun SettingsCategoriesScreen(
 ) {
     val childPadding = rememberChildPadding()
 
-    AppScreen(
-        modifier = modifier
-            .padding(top = 10.dp)
-            .focusOnLaunched(),
-        header = { Text("设置") },
-        canBack = true,
-        onBackPressed = onBackPressed,
-    ) {
-        val firstItemFocusRequester = remember { FocusRequester() }
-
-        PaddedLazyVerticalGrid(
-            modifier = Modifier.ifElse(
-                settingsVM.uiFocusOptimize,
-                Modifier.saveFocusRestorer { firstItemFocusRequester },
-            ),
-            columns = GridCells.Fixed(6),
-            contentPadding = childPadding.copy(top = 10.dp).paddingValues,
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
+    FocusReturnScope(SettingsCategories.entries.first().name, SettingsCategories.entries.map { it.name }) { focus ->
+        AppScreen(
+            modifier = modifier
+                .padding(top = 10.dp),
+            header = { Text("设置") },
+            canBack = true,
+            onBackPressed = onBackPressed,
         ) {
-            items(SettingsCategories.entries) {
-                SettingsCategoryItem(
-                    modifier = Modifier.ifElse(
-                        it == SettingsCategories.entries.first(),
-                        Modifier.focusRequester(firstItemFocusRequester)
-                    ),
-                    title = it.title,
-                    imageVector = it.icon,
-                    onSelected = { toSettingsCategoryScreen(it) },
-                )
+            val firstItemFocusRequester = remember { FocusRequester() }
+
+            PaddedLazyVerticalGrid(
+                modifier = Modifier.ifElse(
+                    settingsVM.uiFocusOptimize && !focus.restoring,
+                    Modifier.saveFocusRestorer { firstItemFocusRequester },
+                ),
+                columns = GridCells.Fixed(6),
+                contentPadding = childPadding.copy(top = 10.dp).paddingValues,
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                items(SettingsCategories.entries) {
+                    SettingsCategoryItem(
+                        modifier = Modifier.screenFocus(it.name).ifElse(
+                            it == SettingsCategories.entries.first(),
+                            Modifier.focusRequester(firstItemFocusRequester)
+                        ),
+                        title = it.title,
+                        imageVector = it.icon,
+                        onSelected = { focus.selected(it.name); toSettingsCategoryScreen(it) },
+                    )
+                }
             }
         }
     }

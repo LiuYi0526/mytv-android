@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.filled.SyncAlt
 import androidx.compose.material.icons.Icons
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -45,7 +47,6 @@ import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardTime
 import top.yogiczy.mytv.tv.ui.screen.settings.SettingsCategories
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.Configs
-import top.yogiczy.mytv.tv.ui.utils.focusOnLaunched
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
 
 @Composable
@@ -73,13 +74,23 @@ fun DashboardScreen(
     val coroutineScope = rememberCoroutineScope()
     val favorites = channelFavoriteListProvider()
     val recentChannels = recentChannelsProvider()
+    val listState = rememberLazyListState()
+    val focus = rememberDashboardFocus(
+        listOf("source", "module/live", "module/channels", "module/favorites", "module/search",
+            "module/multiview", "module/push", "module/about") +
+            SettingsCategories.entries.map { "settings/${it.name}" } +
+            favorites.map { dashboardChannelKey("favorite", it.channel) } +
+            recentChannels.map { dashboardChannelKey("history", it) },
+    )
 
+    CompositionLocalProvider(LocalDashboardFocus provides focus) {
     AppScreen(
         modifier = modifier,
         header = {
             DashboardScreeIptvSource(
+                modifier = Modifier.dashboardFocus("source"),
                 currentIptvSourceProvider = currentIptvSourceProvider,
-                toSettingsIptvSourceScreen = toSettingsIptvSourceScreen,
+                toSettingsIptvSourceScreen = { focus.selected("source"); toSettingsIptvSourceScreen() },
                 clearCurrentIptvSourceCache = {
                     coroutineScope.launch {
                         IptvRepository(Configs.iptvSourceCurrent).clearCache()
@@ -92,12 +103,12 @@ fun DashboardScreen(
         onBackPressed = onBackPressed,
     ) {
         PaddedLazyColumn(
+            state = listState,
             contentPadding = PaddingValues(top = 10.dp, bottom = childPadding.bottom),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            item {
+            item(key = "modules") {
                 DashboardModuleList(
-                    modifier = Modifier.focusOnLaunched(),
                     toLiveScreen = toLiveScreen,
                     toChannelsScreen = toChannelsScreen,
                     toFavoritesScreen = toFavoritesScreen,
@@ -108,7 +119,7 @@ fun DashboardScreen(
                 )
             }
 
-            if (favorites.isNotEmpty()) item {
+            if (favorites.isNotEmpty()) item(key = "favorites") {
                 DashboardFavoriteList(
                     channelFavoriteListProvider = { favorites },
                     onChannelSelected = onChannelSelected,
@@ -116,14 +127,17 @@ fun DashboardScreen(
                     epgListProvider = epgListProvider,
                 )
             }
-            if (recentChannels.isNotEmpty()) item {
+            if (recentChannels.isNotEmpty()) item(key = "history") {
                 DashboardHistoryList(
                     channels = recentChannels, epgListProvider = epgListProvider,
                     onChannelSelected = onChannelSelected, onChannelFavoriteToggle = onChannelFavoriteToggle,
                 )
             }
-            item { DashboardSettingsList(toSettingsCategoryScreen) }
+            item(key = "settings") {
+                DashboardSettingsList(toSettingsCategoryScreen)
+            }
         }
+    }
     }
 }
 

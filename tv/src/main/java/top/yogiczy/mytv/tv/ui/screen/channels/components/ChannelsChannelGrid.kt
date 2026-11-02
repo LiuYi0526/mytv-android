@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import top.yogiczy.mytv.tv.ui.utils.FocusReturnScope
+import top.yogiczy.mytv.tv.ui.utils.screenFocus
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -52,73 +55,82 @@ fun ChannelsChannelGrid(
     updateTopBarVisibility: (Boolean) -> Unit = {},
 ) {
     val channelList = channelListProvider()
+    val focusKeys = channelList.map { "channel/${it.name}/${it.lineList.firstOrNull()?.url.orEmpty()}" }
+    FocusReturnScope(keys = focusKeys) { focus ->
 
-    val coroutineScope = rememberCoroutineScope()
-    val childPadding = rememberChildPadding()
-    val focusManager = LocalFocusManager.current
+        val coroutineScope = rememberCoroutineScope()
+        val childPadding = rememberChildPadding()
+        val focusManager = LocalFocusManager.current
 
-    val gridState = rememberLazyGridState()
-    val firstItemFocusRequester = remember { FocusRequester() }
-    var isFirstItemFocused by remember { mutableStateOf(false) }
+        val gridState = rememberLazyGridState()
+        val firstItemFocusRequester = remember { FocusRequester() }
+        var isFirstItemFocused by remember { mutableStateOf(false) }
 
-    LaunchedEffect(channelList) {
-        gridState.scrollToItem(0)
-    }
-
-    val shouldShowTopBar by remember {
-        derivedStateOf {
-            gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset < 10
+        // Save only a fingerprint; large playlists must not enter the saved-state Bundle.
+        var previousChannels by rememberSaveable { mutableStateOf(focusKeys.hashCode()) }
+        LaunchedEffect(focusKeys) {
+            if (previousChannels != focusKeys.hashCode()) {
+                previousChannels = focusKeys.hashCode()
+                gridState.scrollToItem(0)
+            }
         }
-    }
-    LaunchedEffect(shouldShowTopBar) {
-        updateTopBarVisibility(shouldShowTopBar)
-    }
 
-    BoxWithConstraints(modifier) {
-        val columnCount = resolveChannelGridColumns((maxWidth - childPadding.start - childPadding.end).value)
-        PaddedLazyVerticalGrid(
-            modifier = Modifier
-                .backHandler {
-                    if (!isFirstItemFocused) {
-                        coroutineScope.launch {
-                            gridState.scrollToItem(0)
-                            firstItemFocusRequester.saveRequestFocus()
+        val shouldShowTopBar by remember {
+            derivedStateOf {
+                gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset < 10
+            }
+        }
+        LaunchedEffect(shouldShowTopBar) {
+            updateTopBarVisibility(shouldShowTopBar)
+        }
+
+        BoxWithConstraints(modifier) {
+            val columnCount = resolveChannelGridColumns((maxWidth - childPadding.start - childPadding.end).value)
+            PaddedLazyVerticalGrid(
+                modifier = Modifier
+                    .backHandler {
+                        if (!isFirstItemFocused) {
+                            coroutineScope.launch {
+                                gridState.scrollToItem(0)
+                                firstItemFocusRequester.saveRequestFocus()
+                            }
+                        } else {
+                            focusManager.moveFocus(FocusDirection.Up)
                         }
-                    } else {
-                        focusManager.moveFocus(FocusDirection.Up)
                     }
-                }
-                .ifElse(
-                    settingsVM.uiFocusOptimize && channelList.isNotEmpty(),
-                    Modifier.saveFocusRestorer { firstItemFocusRequester }
-                ),
-            state = gridState,
-            columns = GridCells.Fixed(columnCount),
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = childPadding.copy(top = 10.dp).paddingValues,
-        ) {
-            itemsIndexed(channelList) { index, channel ->
-                ChannelsChannelItem(
-                    modifier = Modifier
-                        .ifElse(
-                            index == 0,
-                            Modifier
-                                .focusRequester(firstItemFocusRequester)
-                                .onFocusChanged { isFirstItemFocused = it.isFocused },
-                        ),
-                    channelProvider = { channel },
-                    onChannelSelected = { onChannelSelected(channel) },
-                    onChannelFavoriteToggle = {
-                        if (inFavoriteMode) {
-                            if (index % columnCount == 0 && index == channelList.size - 1)
-                                focusManager.moveFocus(FocusDirection.Up)
-                        }
+                    .ifElse(
+                        settingsVM.uiFocusOptimize && channelList.isNotEmpty() && !focus.restoring,
+                        Modifier.saveFocusRestorer { firstItemFocusRequester }
+                    ),
+                state = gridState,
+                columns = GridCells.Fixed(columnCount),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = childPadding.copy(top = 10.dp).paddingValues,
+            ) {
+                itemsIndexed(channelList) { index, channel ->
+                    ChannelsChannelItem(
+                        modifier = Modifier
+                            .screenFocus(focusKeys[index])
+                            .ifElse(
+                                index == 0,
+                                Modifier
+                                    .focusRequester(firstItemFocusRequester)
+                                    .onFocusChanged { isFirstItemFocused = it.isFocused },
+                            ),
+                        channelProvider = { channel },
+                        onChannelSelected = { focus.selected(focusKeys[index]); onChannelSelected(channel) },
+                        onChannelFavoriteToggle = {
+                            if (inFavoriteMode) {
+                                if (index % columnCount == 0 && index == channelList.size - 1)
+                                    focusManager.moveFocus(FocusDirection.Up)
+                            }
 
-                        onChannelFavoriteToggle(channel)
-                    },
-                    recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
-                )
+                            onChannelFavoriteToggle(channel)
+                        },
+                        recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
+                    )
+                }
             }
         }
     }

@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import top.yogiczy.mytv.tv.ui.utils.FocusReturnScope
+import top.yogiczy.mytv.tv.ui.utils.screenFocus
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,55 +49,59 @@ fun SearchResult(
     epgListProvider: () -> EpgList = { EpgList() },
 ) {
     val channelList = channelListProvider()
+    val focusKeys = channelList.map { "channel/${it.name}/${it.lineList.firstOrNull()?.url.orEmpty()}" }
+    FocusReturnScope(keys = focusKeys) { focus ->
 
-    val childPadding = rememberChildPadding()
-    val coroutineScope = rememberCoroutineScope()
-    val focusManager = LocalFocusManager.current
+        val childPadding = rememberChildPadding()
+        val coroutineScope = rememberCoroutineScope()
+        val focusManager = LocalFocusManager.current
 
-    val gridState = rememberLazyGridState()
-    val firstItemFocusRequester = remember { FocusRequester() }
-    var isFirstItemFocused by remember { mutableStateOf(false) }
+        val gridState = rememberLazyGridState()
+        val firstItemFocusRequester = remember { FocusRequester() }
+        var isFirstItemFocused by remember { mutableStateOf(false) }
 
-    PaddedLazyVerticalGrid(
-        modifier = modifier
-            .backHandler {
-                if (!isFirstItemFocused) {
-                    coroutineScope.launch {
-                        gridState.scrollToItem(0)
-                        firstItemFocusRequester.saveRequestFocus()
+        PaddedLazyVerticalGrid(
+            modifier = modifier
+                .backHandler {
+                    if (!isFirstItemFocused) {
+                        coroutineScope.launch {
+                            gridState.scrollToItem(0)
+                            firstItemFocusRequester.saveRequestFocus()
+                        }
+                    } else {
+                        focusManager.moveFocus(FocusDirection.Left)
                     }
-                } else {
-                    focusManager.moveFocus(FocusDirection.Left)
                 }
-            }
-            .ifElse(
-                settingsVM.uiFocusOptimize,
-                Modifier.saveFocusRestorer { firstItemFocusRequester },
+                .ifElse(
+                    settingsVM.uiFocusOptimize && !focus.restoring,
+                    Modifier.saveFocusRestorer { firstItemFocusRequester },
+                ),
+            state = gridState,
+            columns = GridCells.Fixed(3),
+            contentPadding = PaddingValues(
+                top = 20.dp,
+                end = childPadding.end,
+                bottom = childPadding.bottom,
             ),
-        state = gridState,
-        columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(
-            top = 20.dp,
-            end = childPadding.end,
-            bottom = childPadding.bottom,
-        ),
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        itemsIndexed(channelList) { index, channel ->
-            ChannelsChannelItem(
-                modifier = Modifier
-                    .ifElse(
-                        index == 0,
-                        Modifier
-                            .focusRequester(firstItemFocusRequester)
-                            .onFocusChanged { isFirstItemFocused = it.isFocused },
-                    ),
-                channelProvider = { channel },
-                onChannelSelected = { onChannelSelected(channel) },
-                onChannelFavoriteToggle = { onChannelFavoriteToggle(channel) },
-                recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
-            )
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            itemsIndexed(channelList) { index, channel ->
+                ChannelsChannelItem(
+                    modifier = Modifier
+                        .screenFocus(focusKeys[index])
+                        .ifElse(
+                            index == 0,
+                            Modifier
+                                .focusRequester(firstItemFocusRequester)
+                                .onFocusChanged { isFirstItemFocused = it.isFocused },
+                        ),
+                    channelProvider = { channel },
+                    onChannelSelected = { focus.selected(focusKeys[index]); onChannelSelected(channel) },
+                    onChannelFavoriteToggle = { onChannelFavoriteToggle(channel) },
+                    recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
+                )
+            }
         }
     }
 }

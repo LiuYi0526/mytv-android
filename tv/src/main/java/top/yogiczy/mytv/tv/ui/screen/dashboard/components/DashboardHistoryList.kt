@@ -14,6 +14,10 @@ import androidx.tv.material3.Text
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
+import top.yogiczy.mytv.tv.ui.screen.dashboard.rememberDashboardRowState
+import top.yogiczy.mytv.tv.ui.screen.dashboard.LocalDashboardFocus
+import top.yogiczy.mytv.tv.ui.screen.dashboard.dashboardFocus
+import top.yogiczy.mytv.tv.ui.screen.dashboard.dashboardChannelKey
 import top.yogiczy.mytv.tv.ui.material.LazyRow
 import top.yogiczy.mytv.tv.ui.material.items
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
@@ -39,15 +43,19 @@ fun DashboardHistoryList(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         DashboardSectionHeader("最近观看", channels.size)
         if (channels.isNotEmpty()) LazyRow(
+            state = rememberDashboardRowState(channels.map { dashboardChannelKey("history", it) }),
             horizontalArrangement = Arrangement.spacedBy(20.dp),
             contentPadding = PaddingValues(start = padding.start, end = padding.end),
             preservePaddingOnFocus = true,
+            restoreFocus = LocalDashboardFocus.current?.restoring != true,
         ) { runtime ->
             items(channels, runtime) { itemModifier, channel ->
+                val focus = LocalDashboardFocus.current
+                val focusKey = dashboardChannelKey("history", channel)
                 ChannelsChannelItem(
-                    modifier = itemModifier,
+                    modifier = itemModifier.dashboardFocus(focusKey),
                     channelProvider = { channel },
-                    onChannelSelected = { onChannelSelected(channel) },
+                    onChannelSelected = { focus?.selected(focusKey); onChannelSelected(channel) },
                     onChannelFavoriteToggle = { onChannelFavoriteToggle(channel) },
                     recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
                 )

@@ -16,6 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import top.yogiczy.mytv.tv.ui.screen.dashboard.rememberDashboardRowState
+import top.yogiczy.mytv.tv.ui.screen.dashboard.LocalDashboardFocus
+import top.yogiczy.mytv.tv.ui.screen.dashboard.dashboardFocus
 import top.yogiczy.mytv.tv.ui.material.LazyRow
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
@@ -34,72 +37,80 @@ fun DashboardModuleList(
     toAboutScreen: () -> Unit = {},
 ) {
     val childPadding = rememberChildPadding()
+    val focus = LocalDashboardFocus.current
 
     LazyRow(
+            state = rememberDashboardRowState(listOf("live", "channels", "favorites", "search", "multiview", "push", "about").map { "module/$it" }),
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         contentPadding = PaddingValues(start = childPadding.start, end = childPadding.end),
         preservePaddingOnFocus = true,
+        restoreFocus = focus?.restoring != true,
     ) { runtime ->
         item {
             DashboardModuleItem(
                 modifier = Modifier
-                    .focusRequester(runtime.firstItemFocusRequester)
+                    .dashboardFocus("module/live").focusRequester(runtime.firstItemFocusRequester)
                     .handleKeyEvents(onLeft = { runtime.scrollToLast() }),
                 imageVector = Icons.Outlined.Tv,
                 title = "直播",
-                onSelected = toLiveScreen,
+                onSelected = { focus?.selected("module/live"); toLiveScreen() },
             )
         }
 
         item {
             DashboardModuleItem(
+                modifier = Modifier.dashboardFocus("module/channels"),
                 imageVector = Icons.Outlined.GridView,
                 title = "全部频道",
-                onSelected = toChannelsScreen,
+                onSelected = { focus?.selected("module/channels"); toChannelsScreen() },
             )
         }
 
         item {
             DashboardModuleItem(
+                modifier = Modifier.dashboardFocus("module/favorites"),
                 imageVector = Icons.Outlined.StarBorder,
                 title = "我的收藏",
-                onSelected = toFavoritesScreen,
+                onSelected = { focus?.selected("module/favorites"); toFavoritesScreen() },
             )
         }
 
         item {
             DashboardModuleItem(
+                modifier = Modifier.dashboardFocus("module/search"),
                 imageVector = Icons.Outlined.Search,
                 title = "搜索",
-                onSelected = toSearchScreen,
+                onSelected = { focus?.selected("module/search"); toSearchScreen() },
             )
         }
 
         item {
             DashboardModuleItem(
+                modifier = Modifier.dashboardFocus("module/multiview"),
                 imageVector = Icons.Outlined.ViewCozy,
                 title = "多屏同播",
-                onSelected = toMultiViewScreen,
+                onSelected = { focus?.selected("module/multiview"); toMultiViewScreen() },
             )
         }
 
         item {
             DashboardModuleItem(
+                modifier = Modifier.dashboardFocus("module/push"),
                 imageVector = Icons.AutoMirrored.Outlined.Send,
                 title = "推送",
-                onSelected = toPushScreen,
+                onSelected = { focus?.selected("module/push"); toPushScreen() },
             )
         }
 
         item {
             DashboardModuleItem(
                 modifier = Modifier
-                    .focusRequester(runtime.lastItemFocusRequester)
+                    .dashboardFocus("module/about").focusRequester(runtime.lastItemFocusRequester)
                     .handleKeyEvents(onRight = { runtime.scrollToFirst() }),
                 imageVector = Icons.Outlined.Info,
                 title = "关于",
-                onSelected = toAboutScreen,
+                onSelected = { focus?.selected("module/about"); toAboutScreen() },
             )
         }
     }
