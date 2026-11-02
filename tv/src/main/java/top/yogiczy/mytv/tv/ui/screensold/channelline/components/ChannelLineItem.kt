@@ -75,6 +75,8 @@ fun ChannelLineItem(
                         } else {
                             Tag("$lineDelay ms")
                         }
+                    } else if (lineDelay == -2L) {
+                        Tag("暂不支持测速")
                     } else if (lineDelay < 0L) {
                         Tag(
                             "超时",
@@ -96,6 +98,11 @@ private fun rememberLineDelay(line: ChannelLine): Long {
     var elapsedTime by remember(line) { mutableLongStateOf(0) }
 
     LaunchedEffect(line) {
+        val url = line.playableUrl
+        if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
+            elapsedTime = -2L
+            return@LaunchedEffect
+        }
         elapsedTime = try {
             ChannelLineProbe.Default.measure(line.playableUrl, line.httpUserAgent)
         } catch (e: CancellationException) {
