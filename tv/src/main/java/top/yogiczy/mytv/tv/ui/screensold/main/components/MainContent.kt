@@ -345,6 +345,10 @@ fun MainContent(
             epgListProvider = epgListProvider,
             currentPlaybackEpgProgrammeProvider = { mainContentState.currentPlaybackEpgProgramme },
             playerDisplayModeProvider = { videoPlayerState.displayMode },
+            preferSoftwareDecodeProvider = { videoPlayerState.preferSoftwareDecode },
+            onToggleDecodePreference = {
+                videoPlayerState.preferSoftwareDecode = !videoPlayerState.preferSoftwareDecode
+            },
             videoPlayerMetadataProvider = { videoPlayerState.metadata },
             onShowEpg = {
                 mainContentState.isQuickOpScreenVisible = false

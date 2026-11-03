@@ -14,6 +14,8 @@ import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.ClearAll
 import androidx.compose.material.icons.outlined.ControlCamera
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Hd
+import androidx.compose.material.icons.outlined.Sd
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SlowMotionVideo
 import androidx.compose.material.icons.outlined.Subtitles
@@ -45,6 +47,8 @@ fun QuickOpBtnList(
     channelProvider: () -> Channel = { Channel.EMPTY },
     channelLineIdxProvider: () -> Int = { 0 },
     playerDisplayModeProvider: () -> VideoPlayerDisplayMode = { VideoPlayerDisplayMode.ORIGINAL },
+    preferSoftwareDecodeProvider: () -> Boolean = { false },
+    onToggleDecodePreference: () -> Unit = {},
     playerMetadataProvider: () -> VideoPlayer.Metadata = { VideoPlayer.Metadata() },
     onShowEpg: () -> Unit = {},
     onShowChannelLine: () -> Unit = {},
@@ -142,6 +146,16 @@ fun QuickOpBtnList(
             )
         }
 
+        item {
+            DecodePreferenceButton(
+                preferred = preferSoftwareDecodeProvider(),
+                onSelect = {
+                    onUserAction()
+                    onToggleDecodePreference()
+                },
+            )
+        }
+
         if (playerMetadata.videoTracks.isNotEmpty()) {
             item {
                 QuickOpBtn(
@@ -204,6 +218,20 @@ fun QuickOpBtnList(
             )
         }
     }
+}
+
+@Composable
+internal fun DecodePreferenceButton(
+    preferred: Boolean,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    QuickOpBtn(
+        modifier = modifier,
+        title = if (preferred) "软解优先" else "硬解优先",
+        imageVector = if (preferred) Icons.Outlined.Sd else Icons.Outlined.Hd,
+        onSelect = onSelect,
+    )
 }
 
 @Preview

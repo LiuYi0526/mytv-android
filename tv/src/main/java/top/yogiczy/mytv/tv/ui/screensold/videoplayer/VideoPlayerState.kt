@@ -5,6 +5,7 @@ import android.view.TextureView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -28,7 +29,15 @@ import top.yogiczy.mytv.tv.ui.utils.Configs
 class VideoPlayerState(
     val instance: VideoPlayer,
     private var defaultDisplayModeProvider: () -> VideoPlayerDisplayMode = { VideoPlayerDisplayMode.ORIGINAL },
+    private val softwareDecodePreference: MutableState<Boolean> = mutableStateOf(false),
 ) {
+    var preferSoftwareDecode: Boolean
+        get() = softwareDecodePreference.value
+        set(value) {
+            if (softwareDecodePreference.value == value) return
+            instance.setSoftwareDecodePreferred(value)
+            softwareDecodePreference.value = value
+        }
     /** 显示模式 */
     var displayMode by mutableStateOf(defaultDisplayModeProvider())
 
@@ -63,6 +72,7 @@ class VideoPlayerState(
     var metadata by mutableStateOf(VideoPlayer.Metadata())
 
     fun prepare(line: ChannelLine, playbackRange: PlaybackRange? = null) {
+        displayMode = defaultDisplayModeProvider()
         error = null
         currentPosition = playbackRange?.startAt ?: 0L
         duration = playbackRange?.durationMs ?: 0L
@@ -140,7 +150,6 @@ class VideoPlayerState(
         instance.onReady {
             onReadyListeners.forEach { it.invoke() }
             error = null
-            displayMode = defaultDisplayModeProvider()
         }
         instance.onBuffering {
             isBuffering = it
@@ -173,13 +182,17 @@ fun rememberVideoPlayerState(
     val coroutineScope = rememberCoroutineScope()
 
     val videoPlayerCore = settingsVM.videoPlayerCore
+    // Keep the session preference when switching playback engines; do not alter global audio settings.
+    val softwareDecodePreference = remember { mutableStateOf(false) }
     val state = remember(videoPlayerCore) {
         val player = when (videoPlayerCore) {
-            Configs.VideoPlayerCore.MEDIA3 -> Media3VideoPlayer(context, coroutineScope)
-            Configs.VideoPlayerCore.IJK -> IjkVideoPlayer(context, coroutineScope)
+            Configs.VideoPlayerCore.MEDIA3 -> Media3VideoPlayer(context, coroutineScope,
+                initialSoftwareDecodePreferred = softwareDecodePreference.value)
+            Configs.VideoPlayerCore.IJK -> IjkVideoPlayer(context, coroutineScope,
+                initialSoftwareDecodePreferred = softwareDecodePreference.value)
         }
 
-        VideoPlayerState(player, defaultDisplayModeProvider)
+        VideoPlayerState(player, defaultDisplayModeProvider, softwareDecodePreference)
     }
 
     DisposableEffect(videoPlayerCore) {

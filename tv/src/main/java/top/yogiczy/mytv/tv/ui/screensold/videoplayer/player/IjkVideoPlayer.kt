@@ -22,6 +22,7 @@ import tv.danmaku.ijk.media.player.IjkMediaPlayer
 class IjkVideoPlayer(
     private val context: Context,
     private val coroutineScope: CoroutineScope,
+    initialSoftwareDecodePreferred: Boolean = false,
 ) : VideoPlayer(coroutineScope),
     IMediaPlayer.OnPreparedListener,
     IMediaPlayer.OnVideoSizeChangedListener,
@@ -47,19 +48,34 @@ class IjkVideoPlayer(
     private var cacheSurfaceView: SurfaceView? = null
     private var cacheSurfaceTexture: Surface? = null
     private var updateJob: Job? = null
+    private var softwareDecodePreferred = initialSoftwareDecodePreferred
+    private var currentLine: ChannelLine? = null
+    private var resumePosition: Long? = null
+    private var shouldPlay = true
 
     private fun setOption() {
-        player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", 1)
-        player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-all-videos", 1)
-        player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-hevc", 1)
+        val mediaCodec = if (softwareDecodePreferred) 0L else 1L
+        player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", mediaCodec)
+        player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-avc", mediaCodec)
+        player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-all-videos", mediaCodec)
+        player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-hevc", mediaCodec)
         player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "opensles", 0)
         player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "framedrop", 5)
-        player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "start-on-prepared", 1)
+        player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "start-on-prepared", if (shouldPlay) 1L else 0L)
         player.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "enable-accurate-seek", 1)
     }
 
     override fun prepare(line: ChannelLine) {
+        shouldPlay = true
+        prepareLine(line)
+    }
+
+    private fun prepareLine(line: ChannelLine, position: Long? = null) {
+        currentLine = line
+        resumePosition = position
         player.reset()
+        cacheSurfaceView?.let { player.setDisplay(it.holder) }
+        cacheSurfaceTexture?.let { player.setSurface(it) }
         val userAgent = line.httpUserAgent ?: Configs.videoPlayerUserAgent
         // FFmpeg's HTTP layer uses this option for its own User-Agent header.
         player.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "user_agent", userAgent)
@@ -75,11 +91,21 @@ class IjkVideoPlayer(
         triggerPrepared()
     }
 
+    override fun setSoftwareDecodePreferred(preferred: Boolean) {
+        if (softwareDecodePreferred == preferred) return
+        softwareDecodePreferred = preferred
+        val line = currentLine ?: return
+        val position = player.currentPosition.takeIf { player.duration > 0 }
+        prepareLine(line, position)
+    }
+
     override fun play() {
+        shouldPlay = true
         player.start()
     }
 
     override fun pause() {
+        shouldPlay = false
         player.pause()
     }
 
@@ -160,6 +186,9 @@ class IjkVideoPlayer(
     override fun onPrepared(player: IMediaPlayer) {
         cacheSurfaceView?.let { player.setDisplay(it.holder) }
         cacheSurfaceTexture?.let { player.setSurface(it) }
+        resumePosition?.let { player.seekTo(it) }
+        resumePosition = null
+        if (!shouldPlay) player.pause()
 
         val info = player.mediaInfo
         metadata = Metadata(

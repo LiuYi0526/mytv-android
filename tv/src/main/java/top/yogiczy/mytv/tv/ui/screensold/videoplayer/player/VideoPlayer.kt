@@ -41,6 +41,8 @@ abstract class VideoPlayer(
 
     abstract fun getVolume(): Float
 
+    open fun setSoftwareDecodePreferred(preferred: Boolean) {}
+
     open fun stop() {
         cancelPlaybackMonitoring()
         currentPosition = 0L

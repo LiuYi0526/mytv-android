@@ -26,6 +26,8 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.ExoPlaybackException
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
@@ -68,11 +70,14 @@ class Media3VideoPlayer(
     private val context: Context,
     private val coroutineScope: CoroutineScope,
     private val mediaSourceFactory: MediaSource.Factory? = null,
+    initialSoftwareDecodePreferred: Boolean = false,
 ) : VideoPlayer(coroutineScope) {
 
+    private var softwareDecodePreferred = initialSoftwareDecodePreferred
+    private var audioDecoderFallback = false
+    private var videoDecoderFallback = false
     private var videoPlayer = getPlayer()
 
-    private var softDecode: Boolean? = null
     private var surfaceView: SurfaceView? = null
     private var textureView: TextureView? = null
 
@@ -107,10 +112,17 @@ class Media3VideoPlayer(
         val renderersFactory =
             DefaultRenderersFactory(context)
                 .setExtensionRendererMode(
-                    if (softDecode ?: Configs.videoPlayerForceAudioSoftDecode)
+                    if (softwareDecodePreferred || audioDecoderFallback || Configs.videoPlayerForceAudioSoftDecode)
                         DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
                     else DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
                 )
+                .setMediaCodecSelector { mimeType, secure, tunneling ->
+                    val preferred = softwareDecodePreferred ||
+                        (MimeTypes.isAudio(mimeType) && audioDecoderFallback) ||
+                        (MimeTypes.isVideo(mimeType) && videoDecoderFallback)
+                    val selector = if (preferred) MediaCodecSelector.PREFER_SOFTWARE else MediaCodecSelector.DEFAULT
+                    selector.getDecoderInfos(mimeType, secure, tunneling)
+                }
                 .setEnableDecoderFallback(true)
 
         val trackSelector = DefaultTrackSelector(context).apply {
@@ -133,6 +145,12 @@ class Media3VideoPlayer(
 
     private fun reInitPlayer() {
         rememberPlaybackPosition()
+        val hadSource = videoPlayer.mediaItemCount > 0
+        val volume = videoPlayer.volume
+        val selection = videoPlayer.trackSelectionParameters
+        val seekPosition = videoPlayer.currentPosition.takeIf {
+            playbackRange == null && videoPlayer.isCurrentMediaItemSeekable && !videoPlayer.isCurrentMediaItemLive
+        }
         triggerCues(ImmutableList.of())
         videoPlayer.removeListener(playerListener)
         videoPlayer.removeAnalyticsListener(metadataListener)
@@ -141,6 +159,8 @@ class Media3VideoPlayer(
         videoPlayer.release()
 
         videoPlayer = getPlayer()
+        videoPlayer.volume = volume
+        videoPlayer.trackSelectionParameters = selection
 
         videoPlayer.addListener(playerListener)
         videoPlayer.addAnalyticsListener(metadataListener)
@@ -148,7 +168,18 @@ class Media3VideoPlayer(
 
         surfaceView?.let { setVideoSurfaceView(it) }
         textureView?.let { setVideoTextureView(it) }
-        prepare()
+        if (hadSource) {
+            prepare()
+            seekPosition?.let { videoPlayer.seekTo(it) }
+        }
+    }
+
+    override fun setSoftwareDecodePreferred(preferred: Boolean) {
+        if (softwareDecodePreferred == preferred && !audioDecoderFallback && !videoDecoderFallback) return
+        softwareDecodePreferred = preferred
+        audioDecoderFallback = false
+        videoDecoderFallback = false
+        reInitPlayer()
     }
 
     private fun getDataSourceFactory(usePlaybackCookies: Boolean = true): DefaultDataSource.Factory {
@@ -320,7 +351,7 @@ class Media3VideoPlayer(
                 videoPlayer.setMediaSource(mediaSource)
             }
             videoPlayer.prepare()
-            if (playbackRange == null) videoPlayer.play()
+            if (playbackRange == null) videoPlayer.playWhenReady = playbackShouldPlay
         }
     }
 
@@ -435,7 +466,11 @@ class Media3VideoPlayer(
                 }
 
                 androidx.media3.common.PlaybackException.ERROR_CODE_DECODER_INIT_FAILED -> {
-                    if (softDecode == true) {
+                    val mimeType = (ex as? ExoPlaybackException)?.rendererFormat?.sampleMimeType
+                    val audio = mimeType != null && MimeTypes.isAudio(mimeType)
+                    val video = mimeType != null && MimeTypes.isVideo(mimeType)
+                    if ((!audio && !video) || softwareDecodePreferred ||
+                        (audio && audioDecoderFallback) || (video && videoDecoderFallback)) {
                         triggerError(
                             PlaybackException(
                                 ex.errorCodeName.replace("ERROR_CODE", "MEDIA3_ERROR"),
@@ -443,7 +478,8 @@ class Media3VideoPlayer(
                             )
                         )
                     } else {
-                        softDecode = true
+                        if (audio) audioDecoderFallback = true
+                        if (video) videoDecoderFallback = true
                         reInitPlayer()
                     }
                 }
