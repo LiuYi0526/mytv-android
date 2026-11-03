@@ -78,19 +78,6 @@ fun SettingsVideoPlayerScreen(
 
         item {
             SettingsListItem(
-                headlineContent = "跳过多帧渲染",
-                trailingContent = {
-                    Switch(settingsViewModel.videoPlayerSkipMultipleFramesOnSameVSync, null)
-                },
-                onSelect = {
-                    settingsViewModel.videoPlayerSkipMultipleFramesOnSameVSync =
-                        !settingsViewModel.videoPlayerSkipMultipleFramesOnSameVSync
-                },
-            )
-        }
-
-        item {
-            SettingsListItem(
                 headlineContent = "全局显示模式",
                 trailingContent = settingsViewModel.videoPlayerDisplayMode.label,
                 onSelect = toVideoPlayerDisplayModeScreen,

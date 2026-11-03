@@ -124,8 +124,6 @@ class Media3VideoPlayer(
                 .build()
         }
 
-        // MediaCodecVideoRenderer.skipMultipleFramesOnSameVsync =
-        //     Configs.videoPlayerSkipMultipleFramesOnSameVSync
         return ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setTrackSelector(trackSelector)
