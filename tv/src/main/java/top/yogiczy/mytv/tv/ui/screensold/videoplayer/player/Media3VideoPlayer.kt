@@ -89,13 +89,17 @@ class Media3VideoPlayer(
     private var playbackRetryCount = 0
 
     private val onCuesListeners = mutableListOf<(ImmutableList<Cue>) -> Unit>()
+    private var currentCues = ImmutableList.of<Cue>()
 
     private fun triggerCues(cues: ImmutableList<Cue>) {
+        currentCues = cues
         onCuesListeners.forEach { it(cues) }
     }
 
-    fun onCues(listener: (ImmutableList<Cue>) -> Unit) {
+    fun onCues(listener: (ImmutableList<Cue>) -> Unit): () -> Unit {
         onCuesListeners.add(listener)
+        listener(currentCues)
+        return { onCuesListeners.remove(listener) }
     }
 
     private fun getPlayer(): ExoPlayer {
@@ -131,7 +135,7 @@ class Media3VideoPlayer(
 
     private fun reInitPlayer() {
         rememberPlaybackPosition()
-        onCuesListeners.clear()
+        triggerCues(ImmutableList.of())
         videoPlayer.removeListener(playerListener)
         videoPlayer.removeAnalyticsListener(metadataListener)
         videoPlayer.removeAnalyticsListener(eventLogger)
@@ -686,6 +690,7 @@ class Media3VideoPlayer(
 
     override fun release() {
         playbackCookies.clear()
+        triggerCues(ImmutableList.of())
         onCuesListeners.clear()
         videoPlayer.removeListener(playerListener)
         videoPlayer.removeAnalyticsListener(metadataListener)
@@ -700,6 +705,7 @@ class Media3VideoPlayer(
     }
 
     override fun prepare(line: ChannelLine, playbackRange: PlaybackRange?) {
+        triggerCues(ImmutableList.of())
         if (Configs.videoPlayerStopPreviousMediaItem)
             videoPlayer.stop()
 
@@ -757,6 +763,7 @@ class Media3VideoPlayer(
     }
 
     override fun stop() {
+        triggerCues(ImmutableList.of())
         videoPlayer.stop()
         updatePositionJob?.cancel()
         super.stop()

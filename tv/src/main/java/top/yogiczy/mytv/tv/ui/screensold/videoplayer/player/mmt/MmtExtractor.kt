@@ -15,7 +15,6 @@ import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.PositionHolder
 import androidx.media3.extractor.SeekMap
 import androidx.media3.extractor.TrackOutput
-import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.extractor.text.SubtitleTranscodingExtractorOutput
 import androidx.media3.extractor.ts.ElementaryStreamReader
 import androidx.media3.extractor.ts.H264Reader
@@ -147,7 +146,7 @@ class MmtExtractor : Extractor {
     }
 
     override fun init(output: ExtractorOutput) {
-        subtitleOutput = SubtitleTranscodingExtractorOutput(output, DefaultSubtitleParserFactory())
+        subtitleOutput = SubtitleTranscodingExtractorOutput(output, MmtSubtitleParserFactory())
         this.output = subtitleOutput
         output.seekMap(SeekMap.Unseekable(C.TIME_UNSET))
     }

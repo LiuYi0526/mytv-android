@@ -11,14 +11,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.text.Cue
 import androidx.media3.ui.SubtitleView
+import com.google.common.collect.ImmutableList
 import top.yogiczy.mytv.tv.ui.material.Visibility
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
@@ -84,10 +92,17 @@ fun VideoPlayerScreen(
         }
 
         if (state.instance is Media3VideoPlayer) {
+            var cues by remember(state.instance) { mutableStateOf(ImmutableList.of<Cue>()) }
+            DisposableEffect(state.instance) {
+                val unsubscribe = state.instance.onCues { cues = it }
+                onDispose { unsubscribe() }
+            }
             AndroidView(
+                modifier = Modifier.align(Alignment.Center).then(displayModeModifier).clipToBounds(),
                 factory = { SubtitleView(context) },
                 update = {
-                    state.instance.onCues { cues -> it.setCues(cues) }
+                    it.visibility = if (surfaceVisible) View.VISIBLE else View.INVISIBLE
+                    it.setCues(cues)
                 },
             )
         }

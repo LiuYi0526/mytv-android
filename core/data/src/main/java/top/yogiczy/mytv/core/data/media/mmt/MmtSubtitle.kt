@@ -35,7 +35,7 @@ internal class MmtSubtitle {
 
     companion object {
         private const val MAX_XML_BYTES = 512 * 1024
-        /** ARIB carries its canvas in the descriptor; make inherited container timing explicit. */
+        /** ARIB carries its canvas in the descriptor; Media3 handles child timing inheritance. */
         fun prepareTtml(data: ByteArray, resolution: Int): ByteArray {
             try {
                 val factory = org.xmlpull.v1.XmlPullParserFactory.newInstance().apply { isNamespaceAware = true }
@@ -62,9 +62,10 @@ internal class MmtSubtitle {
                                 val scale = resolution.coerceIn(0,2)
                                 serializer.attribute(styling,"extent","${1920 shl scale}px ${1080 shl scale}px")
                             }
-                            // Media3 otherwise omits a cue start when only an ancestor has begin=.
-                            if (parser.name in listOf("body","div","p","span") && parser.getAttributeValue("","begin") == null) {
-                                serializer.attribute("","begin","0s")
+                            // Media3 1.11.1 inherits child starts, but still needs a known origin
+                            // for documents with only end/dur and no explicit begin anywhere.
+                            if (parser.name == "body" && parser.getAttributeValue("", "begin") == null) {
+                                serializer.attribute("", "begin", "0s")
                             }
                         }
                         org.xmlpull.v1.XmlPullParser.END_TAG -> serializer.endTag(parser.namespace.orEmpty(),parser.name)

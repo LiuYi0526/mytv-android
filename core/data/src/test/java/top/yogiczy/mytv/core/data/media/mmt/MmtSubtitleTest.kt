@@ -69,6 +69,33 @@ class MmtSubtitleTest {
         assertTrue(result.contains("begin=\"00:27:44.667\""))
         assertEquals(result,MmtSubtitle.prepareTtml(result.toByteArray(),0).toString(Charsets.UTF_8))
     }
+    @Test fun onlyBodyGetsAnOriginAndChildrenInheritWithoutRewriting() {
+        val xml = """<tt xmlns="http://www.w3.org/ns/ttml"><body><div begin="2s" end="4s"><p><span>字幕</span></p></div></body></tt>"""
+        val parser = org.xmlpull.v1.XmlPullParserFactory.newInstance().apply { isNamespaceAware = true }.newPullParser()
+        parser.setInput(MmtSubtitle.prepareTtml(xml.toByteArray(), 0).toString(Charsets.UTF_8).reader())
+        val timing = linkedMapOf<String, Pair<String?, String?>>()
+        while (parser.next() != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+            if (parser.eventType == org.xmlpull.v1.XmlPullParser.START_TAG && parser.name in listOf("body", "div", "p", "span")) {
+                timing[parser.name] = parser.getAttributeValue("", "begin") to parser.getAttributeValue("", "end")
+            }
+        }
+        assertEquals(linkedMapOf("body" to ("0s" to null), "div" to ("2s" to "4s"),
+            "p" to (null to null), "span" to (null to null)), timing)
+    }
+
+    @Test fun explicitZeroBeginAndExistingCanvasArePreserved() {
+        val xml = """<tt xmlns="http://www.w3.org/ns/ttml" xmlns:tts="http://www.w3.org/ns/ttml#styling" tts:extent="1280px 720px"><body begin="0s"><div><p begin="1s" end="2s">字幕</p></div></body></tt>"""
+        val result = MmtSubtitle.prepareTtml(xml.toByteArray(), 2).toString(Charsets.UTF_8)
+        val parser = org.xmlpull.v1.XmlPullParserFactory.newInstance().apply { isNamespaceAware = true }.newPullParser()
+        parser.setInput(result.reader())
+        parser.nextTag()
+        assertEquals("1280px 720px", parser.getAttributeValue("http://www.w3.org/ns/ttml#styling", "extent"))
+        parser.nextTag()
+        assertEquals("body", parser.name)
+        assertEquals("0s", parser.getAttributeValue("", "begin"))
+        assertTrue(result.contains("begin=\"1s\""))
+        assertTrue(result.contains("end=\"2s\""))
+    }
     @Test fun combinesOrderedUnits() {
         val p = MmtSubtitle()
         assertNull(p.consume(7,unit(0,1,"<tt>")))
