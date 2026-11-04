@@ -58,14 +58,11 @@ abstract class FileCacheRepository(
         isExpired: (lastModified: Long, cacheData: InputStream?) -> Boolean,
         refreshOp: suspend () -> InputStream,
     ) = withContext(Dispatchers.IO) {
-        var data = getCacheInputStream()
-
-        if (isExpired(getCacheFile().lastModified(), data)) {
-            data = null
+        val expired = getCacheInputStream().use { data ->
+            isExpired(getCacheFile().lastModified(), data) || data == null || getCacheFile().length() == 0L
         }
-
-        if (data == null || data.available() == 0) {
-            setCacheInputStream(refreshOp())
+        if (expired) {
+            refreshOp().use { setCacheInputStream(it) }
         }
 
         getCacheInputStream()!!

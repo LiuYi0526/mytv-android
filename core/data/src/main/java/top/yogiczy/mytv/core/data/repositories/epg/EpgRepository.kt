@@ -2,7 +2,6 @@ package top.yogiczy.mytv.core.data.repositories.epg
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCacheInfo
@@ -24,6 +23,7 @@ class EpgRepository(private val source: EpgSource) :
 
     private val log = Logger.create("EpgRepository")
     private val epgXmlRepository = EpgXmlRepository(source)
+    private val cache = EpgCacheStore(File(Globals.cacheDir, source.cacheFileName(PARSED_CACHE_EXTENSION)))
 
     suspend fun getCachedInfo(): EpgSourceCacheInfo? = withContext(Dispatchers.IO) {
         EpgSourceCacheInfo.read(
@@ -32,15 +32,14 @@ class EpgRepository(private val source: EpgSource) :
         )
     }
 
-    private suspend fun refresh(onProgress: (EpgUpdateProgress) -> Unit): String {
+    private suspend fun refresh(onProgress: (EpgUpdateProgress) -> Unit): EpgList {
         onProgress(EpgUpdateProgress())
         val xml = epgXmlRepository.getXml(onProgress)
         onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.PARSING))
         val epgList = xml.use { EpgParser.fromXml(it) }
         if (epgList.isEmpty()) throw Exception("获取节目单为空")
 
-        onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.SAVING))
-        return Globals.json.encodeToString(epgList)
+        return epgList
     }
 
     /**
@@ -51,12 +50,9 @@ class EpgRepository(private val source: EpgSource) :
         onProgress: (EpgUpdateProgress) -> Unit = {},
     ): EpgList = withContext(Dispatchers.Default) {
         try {
-            val xmlJson = getOrRefresh({ lastModified, _ ->
-                EpgCachePolicy.isExpired(lastModified, refreshHour, forceRefresh = forceRefresh)
-            }) { refresh(onProgress) }
-
-            onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.LOADING))
-            return@withContext Globals.json.decodeFromString<EpgList>(xmlJson).also { epgList ->
+            return@withContext cache.getOrRefresh(refreshHour, forceRefresh, onProgress) {
+                refresh(onProgress)
+            }.also { epgList ->
                 log.i("加载节目单（${source.name}）：${epgList.size}个频道，${epgList.sumOf { it.programmeList.size }}个节目")
                 onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.COMPLETE))
             }
@@ -68,7 +64,7 @@ class EpgRepository(private val source: EpgSource) :
 
     override suspend fun clearCache() {
         epgXmlRepository.clearCache()
-        super.clearCache()
+        cache.clear()
     }
 
     companion object {
