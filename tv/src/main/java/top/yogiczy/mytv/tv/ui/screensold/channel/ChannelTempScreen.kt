@@ -62,6 +62,7 @@ fun ChannelTempScreen(
             isInTimeShiftProvider = isInTimeShiftProvider,
             currentPlaybackEpgProgrammeProvider = currentPlaybackEpgProgrammeProvider,
             playerMetadataProvider = playerMetadataProvider,
+            showProgrammeDescription = true,
         )
     }
 }

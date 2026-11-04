@@ -61,9 +61,9 @@ fun EpgScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             EpgProgrammeItemList(
-                modifier = Modifier.width(5.gridColumns()),
+                modifier = Modifier.width(6.gridColumns()),
                 epgProgrammeListProvider = {
-                    EpgProgrammeList(programDayGroup.getOrElse(currentDay) { listOf(EpgProgramme.EMPTY) })
+                    EpgProgrammeList(programDayGroup[currentDay].orEmpty())
                 },
                 epgProgrammeReserveListProvider = epgProgrammeReserveListProvider,
                 supportPlaybackProvider = supportPlaybackProvider,

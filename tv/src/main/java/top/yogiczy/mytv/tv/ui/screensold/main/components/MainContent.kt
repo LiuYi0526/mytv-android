@@ -192,9 +192,7 @@ fun MainContent(
     ) {
         EpgScreen(
             epgProvider = {
-                epgListProvider().match(mainContentState.currentChannel) ?: Epg.empty(
-                    mainContentState.currentChannel
-                )
+                epgListProvider().match(mainContentState.currentChannel) ?: Epg()
             },
             epgProgrammeReserveListProvider = {
                 EpgProgrammeReserveList(settingsViewModel.epgChannelReserveList.filter {

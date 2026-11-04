@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.focus.FocusRequester
@@ -102,29 +104,30 @@ fun SimplePopup(
     val visible = visibleProvider()
     val key = remember { UUID.randomUUID().toString() }
     val popupState = LocalPopupState.current
+    val currentVisible by rememberUpdatedState(visible)
+    val currentModifier by rememberUpdatedState(modifier)
+    val currentDismiss by rememberUpdatedState(onDismissRequest)
+    val currentContent by rememberUpdatedState(content)
 
-    DisposableEffect(key) {
-        onDispose { popupState.removeAll { it.key == key } }
-    }
-
-    if (visible) {
-        popupState.add(
-            PopupState(
-                key = key,
-                composableReference = {
-                    PopupContent(
-                        modifier = modifier
-                            .focusProperties { onExit = { cancelFocusChange() } },
-                        visibleProvider = visibleProvider,
-                        onDismissRequest = onDismissRequest,
-                        withBackground = true,
-                        content = content,
-                    )
-                },
-            ),
+    val entry = remember(key) {
+        PopupState(
+            key = key,
+            composableReference = {
+                PopupContent(
+                    modifier = currentModifier.focusProperties { onExit = { cancelFocusChange() } },
+                    visibleProvider = { currentVisible },
+                    onDismissRequest = { currentDismiss?.invoke() },
+                    withBackground = true,
+                    content = { currentContent() },
+                )
+            },
         )
-    } else {
-        popupState.remove(popupState.find { it.key == key })
+    }
+    // Register once per visible lifetime. Composition can run repeatedly while
+    // the popup is open; appending here used to stack duplicate focus scopes.
+    DisposableEffect(visible, popupState, key) {
+        if (visible) popupState.add(entry)
+        onDispose { popupState.removeAll { it.key == key } }
     }
 }
 

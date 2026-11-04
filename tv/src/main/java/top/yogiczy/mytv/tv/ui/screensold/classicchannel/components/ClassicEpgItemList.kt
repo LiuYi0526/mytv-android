@@ -3,6 +3,7 @@ package top.yogiczy.mytv.tv.ui.screensold.classicchannel.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -12,9 +13,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
 import kotlinx.collections.immutable.toPersistentList
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.epg.Epg
@@ -35,6 +39,7 @@ fun ClassicEpgItemList(
     modifier: Modifier = Modifier,
     programmeListModifier: Modifier = Modifier,
     epgProvider: () -> Epg? = { null },
+    channelNameProvider: () -> String = { "" },
     epgProgrammeReserveListProvider: () -> EpgProgrammeReserveList = { EpgProgrammeReserveList() },
     supportPlaybackProvider: () -> Boolean = { false },
     currentPlaybackEpgProgrammeProvider: () -> EpgProgramme? = { null },
@@ -58,34 +63,42 @@ fun ClassicEpgItemList(
     // Loading/refresh can replace an empty guide or remove the selected day.
     val displayedDay = currentDay.takeIf { it in programDayGroup } ?: initialDay
 
-    Row(
+    Column(
         modifier = modifier
             .fillMaxHeight()
-            .background(MaterialTheme.colorScheme.surface.copy(0.7f))
+            .background(Color.Black.copy(alpha = 0.9f))
             .padding(start = 12.dp, end = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        EpgProgrammeItemList(
-            modifier = programmeListModifier,
-            epgProgrammeListProvider = {
-                EpgProgrammeList(programDayGroup[displayedDay].orEmpty())
-            },
-            epgProgrammeReserveListProvider = epgProgrammeReserveListProvider,
-            supportPlaybackProvider = supportPlaybackProvider,
-            currentPlaybackProvider = currentPlaybackEpgProgrammeProvider,
-            onPlayback = onEpgProgrammePlayback,
-            onReserve = onEpgProgrammeReserve,
-            onUserAction = onUserAction,
+        Text(
+            channelNameProvider().ifBlank { "节目单" },
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-
-        if (programDayGroup.size > 1) {
-            EpgDayItemList(
-                modifier = Modifier.width(80.dp),
-                dayListProvider = { programDayGroup.keys.toPersistentList() },
-                currentDayProvider = { displayedDay },
-                onDaySelected = { currentDay = it },
+        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            EpgProgrammeItemList(
+                modifier = programmeListModifier,
+                epgProgrammeListProvider = {
+                    EpgProgrammeList(programDayGroup[displayedDay].orEmpty())
+                },
+                epgProgrammeReserveListProvider = epgProgrammeReserveListProvider,
+                supportPlaybackProvider = supportPlaybackProvider,
+                currentPlaybackProvider = currentPlaybackEpgProgrammeProvider,
+                onPlayback = onEpgProgrammePlayback,
+                onReserve = onEpgProgrammeReserve,
                 onUserAction = onUserAction,
             )
+
+            if (programDayGroup.size > 1) {
+                EpgDayItemList(
+                    modifier = Modifier.width(80.dp),
+                    dayListProvider = { programDayGroup.keys.toPersistentList() },
+                    currentDayProvider = { displayedDay },
+                    onDaySelected = { currentDay = it },
+                    onUserAction = onUserAction,
+                )
+            }
         }
     }
 }

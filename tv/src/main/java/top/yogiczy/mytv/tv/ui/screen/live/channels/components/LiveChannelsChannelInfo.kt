@@ -71,8 +71,11 @@ fun LiveChannelsChannelInfo(
     playerMetadataProvider: () -> VideoPlayer.Metadata = { VideoPlayer.Metadata() },
     dense: Boolean = false,
     showChannelLogo: Boolean = settingsVM.uiShowChannelLogo,
+    showProgrammeDescription: Boolean = false,
 ) {
     val currentPlaybackEpgProgramme = currentPlaybackEpgProgrammeProvider()
+    val recentProgramme = recentEpgProgrammeProvider()
+    val hasProgramme = currentPlaybackEpgProgramme != null || recentProgramme?.now != null || recentProgramme?.next != null
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -82,7 +85,7 @@ fun LiveChannelsChannelInfo(
         if (showChannelLogo) {
             ChannelsChannelItemLogo(
                 modifier = Modifier
-                    .height(94.dp)
+                    .height(if (hasProgramme) 94.dp else 52.dp)
                     .aspectRatio(16 / 9f),
                 channelProvider = channelProvider,
             ) {
@@ -90,7 +93,10 @@ fun LiveChannelsChannelInfo(
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             LiveChannelsChannelInfoTitle(
                 channelProvider = channelProvider,
                 channelLineIdxProvider = channelLineIdxProvider,
@@ -104,20 +110,43 @@ fun LiveChannelsChannelInfo(
                 LiveChannelsChannelInfoEpgProgramme(
                     programmeProvider = { currentPlaybackEpgProgramme },
                     showProgress = false,
+                    isCurrent = true,
                 )
+                if (showProgrammeDescription) {
+                    LiveChannelsChannelInfoDescription(currentPlaybackEpgProgramme)
+                }
 
             } else {
                 LiveChannelsChannelInfoEpgProgramme(
-                    programmeProvider = { recentEpgProgrammeProvider()?.now },
+                    programmeProvider = { recentProgramme?.now },
                     showProgress = true,
+                    isCurrent = true,
                 )
+                if (showProgrammeDescription) {
+                    LiveChannelsChannelInfoDescription(recentProgramme?.now)
+                }
                 LiveChannelsChannelInfoEpgProgramme(
-                    programmeProvider = { recentEpgProgrammeProvider()?.next },
+                    programmeProvider = { recentProgramme?.next },
                     showProgress = false,
                 )
             }
         }
     }
+}
+
+@Composable
+private fun LiveChannelsChannelInfoDescription(programme: EpgProgramme?) {
+    val description = programme?.description?.trim()
+        ?.takeIf { it.isNotEmpty() && it != programme.title.trim() } ?: return
+
+    Text(
+        text = description,
+        modifier = Modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.bodyMedium,
+        color = LocalContentColor.current.copy(alpha = 0.75f),
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable
@@ -314,33 +343,11 @@ private fun LiveChannelsChannelInfoEpgProgramme(
     modifier: Modifier = Modifier,
     programmeProvider: () -> EpgProgramme? = { null },
     showProgress: Boolean = false,
+    isCurrent: Boolean = false,
 ) {
     val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-    val programme = programmeProvider()
-
-    if (programme == null) {
-        if (showProgress) {
-            Row(
-                modifier = modifier,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "00:00 — 23:59",
-                    style = MaterialTheme.typography.labelLarge.copy(LocalContentColor.current.copy(0.8f)),
-                    maxLines = 1,
-                )
-
-                Text(
-                    "精彩节目",
-                    style = MaterialTheme.typography.bodyLarge.copy(LocalContentColor.current.copy(0.8f)),
-                    maxLines = 1,
-                )
-            }
-        }
-
-        return
-    }
+    val programme = programmeProvider() ?: return
+    val secondaryColor = LocalContentColor.current.copy(alpha = if (isCurrent) 0.75f else 0.6f)
 
     Row(
         modifier = modifier,
@@ -349,7 +356,8 @@ private fun LiveChannelsChannelInfoEpgProgramme(
     ) {
         Text(
             "${timeFormat.format(programme.startAt)} — ${timeFormat.format(programme.endAt)}",
-            style = MaterialTheme.typography.labelLarge.copy(LocalContentColor.current.copy(0.8f)),
+            style = MaterialTheme.typography.labelLarge,
+            color = secondaryColor,
             maxLines = 1,
         )
 
@@ -359,7 +367,7 @@ private fun LiveChannelsChannelInfoEpgProgramme(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ProgressBar(
-                    process = programme.progress(),
+                    process = programme.progress().takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f,
                     modifier = Modifier.size(60.dp, 5.dp),
                     colors = ProgressBarColors(
                         barColor = MaterialTheme.colorScheme.onSurface.copy(0.2f),
@@ -368,15 +376,19 @@ private fun LiveChannelsChannelInfoEpgProgramme(
                 )
 
                 Text(
-                    "${programme.remainingMinutes()}分钟",
-                    style = MaterialTheme.typography.labelLarge.copy(LocalContentColor.current.copy(0.8f)),
+                    "剩余 ${programme.remainingMinutes().coerceAtLeast(0)} 分钟",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = secondaryColor,
+                    maxLines = 1,
                 )
             }
         }
 
         Text(
             programme.title,
-            style = MaterialTheme.typography.bodyLarge.copy(LocalContentColor.current.copy(0.8f)),
+            style = if (isCurrent) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+            color = LocalContentColor.current.copy(alpha = if (isCurrent) 0.95f else 0.6f),
+            modifier = Modifier.weight(1f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -432,7 +444,8 @@ private fun LiveChannelsChannelInfoPreview() {
                     now = EpgProgrammeRecent.EXAMPLE.now?.copy(
                         title = "2023/2024赛季中国男子篮球职业联赛季后赛12进8第五场".repeat(
                             2
-                        )
+                        ),
+                        description = "两支球队再度交锋，争夺晋级资格。节目简介仅显示两行，超出部分以省略号结束。".repeat(4),
                     )
                 )
             },
@@ -450,6 +463,7 @@ private fun LiveChannelsChannelInfoPreview() {
                 )
             },
             showChannelLogo = true,
+            showProgrammeDescription = true,
         )
     }
 }

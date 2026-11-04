@@ -1,9 +1,13 @@
 package top.yogiczy.mytv.core.data.repositories.epg
 
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Assert.*
 import org.junit.Test
 import org.kxml2.io.KXmlParser
 import org.xmlpull.v1.XmlPullParserException
+import top.yogiczy.mytv.core.data.entities.epg.EpgList
+import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import java.io.ByteArrayInputStream
 import java.util.Locale
 import java.util.TimeZone
@@ -12,6 +16,56 @@ class XmltvParserTest {
     private fun parse(xml: String) = XmltvParser(KXmlParser()).parse(xml.byteInputStream())
     private fun programme(attributes: String = "", title: String = "News") =
         """<programme channel="c1" start="20250101000000 +0000" stop="20250101010000 +0000" $attributes><title>$title</title></programme>"""
+
+    @Test
+    fun keepsDescriptionWithEntitiesAndCdataAcrossCacheRoundTrip() {
+        val guide = parse("""
+            <tv><programme channel="c1" start="20250101000000Z" stop="20250101010000Z">
+              <desc>第一段 &amp; <![CDATA[<第二段>]]>
+第三段</desc><title>节目标题</title>
+            </programme></tv>
+        """.trimIndent())
+        val expected = "第一段 & <第二段>\n第三段"
+        assertEquals(expected, guide.single().programmeList.single().description)
+        val cached = Json.decodeFromString<EpgList>(Json.encodeToString(guide))
+        assertEquals(guide, cached)
+        assertEquals(expected, cached.single().programmeList.single().description)
+    }
+
+    @Test
+    fun skipsBlankDescriptionsAndDoesNotLeakIntoTheNextProgramme() {
+        val guide = parse("""
+            <tv><programme channel="c1" start="20250101000000Z" stop="20250101010000Z">
+              <title>First</title><desc> </desc><desc lang="zh">正文 <b>加粗</b> &amp; 结尾</desc>
+              <desc lang="en">Another language</desc>
+            </programme>
+            <programme channel="c1" start="20250101010000Z" stop="20250101020000Z">
+              <title>Second</title><desc> </desc>
+            </programme></tv>
+        """.trimIndent()).single().programmeList
+        assertEquals("正文 加粗 & 结尾", guide[0].description)
+        assertNull(guide[1].description)
+        assertEquals("Second", guide[1].title)
+    }
+
+    @Test
+    fun omitsDescriptionThatOnlyRepeatsTitle() {
+        val guide = parse("""
+            <tv><programme channel="c1" start="20250101000000Z" stop="20250101010000Z">
+              <desc> News </desc><title>News</title>
+            </programme></tv>
+        """.trimIndent())
+        assertNull(guide.single().programmeList.single().description)
+    }
+
+    @Test
+    fun readsOldProgrammeJsonWithoutDescription() {
+        val old = Json.decodeFromString<EpgProgramme>(
+            """{"startAt":1000,"endAt":2000,"title":"Old programme"}"""
+        )
+        assertEquals(EpgProgramme(1000, 2000, "Old programme"), old)
+        assertNull(old.description)
+    }
 
     @Test
     fun readsTitleByTagAndKeepsChannelMetadataSeparate() {

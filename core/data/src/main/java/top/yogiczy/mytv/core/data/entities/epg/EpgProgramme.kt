@@ -24,6 +24,9 @@ data class EpgProgramme(
      * 节目名称
      */
     val title: String = "",
+
+    /** 节目简介；旧缓存和未提供简介的节目保持为空。 */
+    val description: String? = null,
 ) {
     companion object {
         /**

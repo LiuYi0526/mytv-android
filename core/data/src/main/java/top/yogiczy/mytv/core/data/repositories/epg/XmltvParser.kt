@@ -19,7 +19,10 @@ internal class XmltvParser(
     private val normalizeName: (String) -> String = { it },
 ) {
     private data class ChannelItem(val id: String, val names: List<String>, val icon: String?)
-    private data class ProgrammeItem(val channel: String, val start: Long, val stop: Long?, val title: String)
+    private data class ProgrammeItem(
+        val channel: String, val start: Long, val stop: Long?, val title: String,
+        val description: String?,
+    )
 
     fun parse(input: InputStream): EpgList {
         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, true)
@@ -55,7 +58,7 @@ internal class XmltvParser(
             val schedule = sorted.mapIndexedNotNull { index, programme ->
                 val stop = programme.stop ?: sorted.getOrNull(index + 1)?.start ?: return@mapIndexedNotNull null
                 if (stop <= programme.start) return@mapIndexedNotNull null
-                EpgProgramme(programme.start, stop, programme.title)
+                EpgProgramme(programme.start, stop, programme.title, programme.description)
             }.distinct()
             Epg(
                 channelId = channel.id,
@@ -94,19 +97,27 @@ internal class XmltvParser(
         val rawStop = parser.getAttributeValue(null, "stop")?.trim()?.takeIf { it.isNotEmpty() }
         val stop = parseTime(rawStop)
         var title: String? = null
+        var description: String? = null
         val depth = parser.depth
         while (true) {
             nextInElement()
             if (parser.eventType == XmlPullParser.END_TAG && parser.depth == depth) break
             if (parser.eventType != XmlPullParser.START_TAG) continue
-            if (parser.name == "title") {
-                val text = readText()
-                if (title == null && text.isNotBlank()) title = text
-            } else skipElement()
+            when (parser.name) {
+                "title" -> {
+                    val text = readText()
+                    if (title == null && text.isNotBlank()) title = text
+                }
+                "desc" -> {
+                    val text = readText()
+                    if (description == null && text.isNotBlank()) description = text
+                }
+                else -> skipElement()
+            }
         }
         if (channel.isEmpty() || start == null || title == null) return null
         if (rawStop != null && (stop == null || stop <= start)) return null
-        return ProgrammeItem(channel, start, stop, title)
+        return ProgrammeItem(channel, start, stop, title, description?.takeUnless { it == title })
     }
 
     private fun readText(): String {

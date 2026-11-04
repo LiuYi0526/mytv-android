@@ -1,9 +1,11 @@
 package top.yogiczy.mytv.tv.ui
 
+import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -13,16 +15,23 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -39,11 +48,10 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeList
 import top.yogiczy.mytv.tv.ui.material.PopupContent
+import top.yogiczy.mytv.tv.ui.material.PopupHandleableApplication
 import top.yogiczy.mytv.tv.ui.screensold.classicchannel.ClassicChannelScreen
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Locale
 
 /** Uses the real channel -> EPG transition, including its focus exit handler. */
 @OptIn(ExperimentalTestApi::class)
@@ -68,31 +76,37 @@ class ClassicEpgFocusTest {
     private var playbackCount = 0
     private var reserveCount = 0
 
-    private fun showScreen(programmes: List<EpgProgramme>?, playback: EpgProgramme? = null) {
+    private fun showScreen(
+        programmes: List<EpgProgramme>?, playback: EpgProgramme? = null, withPopupHost: Boolean = false,
+    ) {
         guideProgrammes = programmes
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
                 MyTvTheme {
-                    Box(Modifier.width(960.dp).height(540.dp)) {
-                        PopupContent(visibleProvider = { visible }, onDismissRequest = { visible = false }) {
-                            ClassicChannelScreen(
-                                channelGroupListProvider = { ChannelGroupList(listOf(group)) },
-                                currentChannelProvider = { current },
-                                // Metadata changes recompose the EPG without changing its rows.
-                                epgListProvider = {
-                                    EpgList(guideProgrammes?.let {
-                                        listOf(Epg(listOf(current.epgName), logo = "revision:$revision",
-                                            programmeList = EpgProgrammeList(it)))
-                                    }.orEmpty())
-                                },
-                                currentPlaybackEpgProgrammeProvider = { playback },
-                                supportPlaybackProvider = { true },
-                                onEpgProgrammePlayback = { _, _ -> playbackCount++ },
-                                onEpgProgrammeReserve = { _, _ -> reserveCount++ },
-                                onClose = { visible = false },
-                            )
+                    val panelContent: @Composable () -> Unit = {
+                        Box(Modifier.width(960.dp).height(540.dp)) {
+                            PopupContent(visibleProvider = { visible }, onDismissRequest = { visible = false }) {
+                                ClassicChannelScreen(
+                                    channelGroupListProvider = { ChannelGroupList(listOf(group)) },
+                                    currentChannelProvider = { current },
+                                    // Metadata changes recompose the EPG without changing its rows.
+                                    epgListProvider = {
+                                        EpgList(guideProgrammes?.let {
+                                            listOf(Epg(listOf(current.epgName), logo = "revision:$revision",
+                                                programmeList = EpgProgrammeList(it)))
+                                        }.orEmpty())
+                                    },
+                                    currentPlaybackEpgProgrammeProvider = { playback },
+                                    supportPlaybackProvider = { true },
+                                    onEpgProgrammePlayback = { _, _ -> playbackCount++ },
+                                    onEpgProgrammeReserve = { _, _ -> reserveCount++ },
+                                    onClose = { visible = false },
+                                )
+                            }
                         }
                     }
+                    if (withPopupHost) PopupHandleableApplication { panelContent() }
+                    else panelContent()
                 }
             }
         }
@@ -109,8 +123,7 @@ class ClassicEpgFocusTest {
         awaitFocused(current.name)
     }
 
-    private fun label(programme: EpgProgramme) =
-        "${SimpleDateFormat("HH:mm", Locale.getDefault()).format(programme.startAt)}    ${programme.title}"
+    private fun label(programme: EpgProgramme) = programme.title
 
     private fun isTextFocused(text: String): Boolean {
         // The channel's name is also displayed in the non-focusable info panel.
@@ -214,5 +227,62 @@ class ClassicEpgFocusTest {
         compose.runOnIdle { guideProgrammes = listOf(live, next) }
         awaitFocused(label(live))
         compose.onNodeWithText("00:00    精彩节目").assertDoesNotExist()
+    }
+
+    @Test fun dateColumnRemainsFullyVisibleWhenProgrammeListTakesFocus() {
+        showScreen(listOf(replay, live, next))
+        press(Key.DirectionRight)
+        awaitFocused(label(live))
+        val date = java.text.SimpleDateFormat("MM-dd", java.util.Locale.getDefault()).format(live.startAt)
+        val node = compose.onNodeWithText(date, useUnmergedTree = true)
+        node.assertIsDisplayed()
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        node.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertTrue("Date column must not be clipped after widening the guide",
+            node.fetchSemanticsNode().boundsInRoot.width >= layouts.single().size.width - 1f)
+    }
+
+    @Test fun openingAndClosingDetailsKeepsTheGuidePositionAndWidth() {
+        try {
+            showScreen(listOf(live.copy(description = "Programme synopsis for details."), next), withPopupHost = true)
+            press(Key.DirectionRight)
+            awaitFocused(label(live))
+            fun rowBounds() = compose.onAllNodesWithText(label(live), useUnmergedTree = true)
+                .fetchSemanticsNodes().first { node ->
+                    generateSequence(node) { it.parent }
+                        .any { it.config.contains(SemanticsActions.OnLongClick) }
+                }.boundsInRoot
+            val before = rowBounds()
+            fun assertStable() {
+                val after = rowBounds()
+                assertEquals("Guide must not move sideways", before.left, after.left, 1f)
+                assertEquals("Guide must not change width", before.width, after.width, 1f)
+                assertEquals("Selected programme must not move vertically", before.top, after.top, 1f)
+            }
+
+            compose.onNode(hasText(label(live)) and SemanticsMatcher.keyIsDefined(SemanticsActions.OnLongClick))
+                .performTouchInput { longClick() }
+            compose.onNodeWithText("节目详情").assertIsDisplayed()
+            assertStable()
+            compose.onNodeWithText("关闭详情").performTouchInput { click() }
+            awaitFocused(label(live))
+            assertStable()
+
+            press(Key.L) // Existing long-select key binding.
+            compose.onNodeWithText("节目详情").assertIsDisplayed()
+            assertStable()
+            press(Key.Back)
+            awaitFocused(label(live))
+            assertStable()
+            assertEquals(0, playbackCount)
+            assertEquals(0, reserveCount)
+            press(Key.DirectionLeft)
+            focusChannels()
+        } catch (failure: Throwable) {
+            // Some devices remove the test task before the runner can report
+            // the assertion. Keep the original failure visible in logcat.
+            Log.e("EpgPanelRegression", "Guide/details integration failed", failure)
+            throw failure
+        }
     }
 }

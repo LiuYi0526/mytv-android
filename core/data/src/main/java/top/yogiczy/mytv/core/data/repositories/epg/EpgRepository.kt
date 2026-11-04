@@ -72,7 +72,9 @@ class EpgRepository(private val source: EpgSource) :
     }
 
     companion object {
-        private const val PARSED_CACHE_EXTENSION = "v2.json"
+        // v2 discarded XMLTV descriptions. Reparse once rather than showing a
+        // description-less cache until the next scheduled refresh.
+        private const val PARSED_CACHE_EXTENSION = "v3.json"
         suspend fun clearAllCache() = withContext(Dispatchers.IO) {
             EpgSource.cacheDir.deleteRecursively()
         }

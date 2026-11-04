@@ -118,7 +118,9 @@ fun ClassicChannelScreen(
     }
 
     var channelListWidth by remember { mutableIntStateOf(0) }
-    var epgListIsFocused by remember { mutableStateOf(false) }
+    // Modal details temporarily own focus. Keep the active panel independent
+    // of that focus loss so its width and slide offset do not jump underneath.
+    var epgPanelActive by remember { mutableStateOf(false) }
     val groupFocusRequester = remember { FocusRequester() }
     var channelFocusRequest by remember { mutableIntStateOf(0) }
     var groupFocusRequest by remember { mutableIntStateOf(0) }
@@ -140,7 +142,7 @@ fun ClassicChannelScreen(
     fun returnToChannels() {
         groupListVisible = false
         epgListVisible = false
-        epgListIsFocused = false
+        epgPanelActive = false
         channelFocusRequest++
         screenAutoCloseState.active()
     }
@@ -154,7 +156,7 @@ fun ClassicChannelScreen(
         onChannelFavoriteListVisibleChange(group == ClassicPanelScreenFavoriteChannelGroup)
     }
     val offsetXPx by animateIntAsState(
-        targetValue = if (epgListVisible && epgListIsFocused) -channelListWidth else 0,
+        targetValue = if (epgListVisible && epgPanelActive) -channelListWidth else 0,
         animationSpec = tween(),
         label = "",
     )
@@ -239,7 +241,10 @@ fun ClassicChannelScreen(
                         isChannelFavoriteProvider = { channelFavoriteEnabledProvider() && it in favoriteChannelListProvider() },
                         focusEmptyList = !groupListVisible,
                         focusRequestKey = channelFocusRequest,
-                        onChannelFocused = { channel -> focusedChannel = channel },
+                        onChannelFocused = { channel ->
+                            focusedChannel = channel
+                            epgPanelActive = false
+                        },
                         showEpgProgrammeProgressProvider = showEpgProgrammeProgressProvider,
                         onUserAction = { screenAutoCloseState.active() },
                         inFavoriteModeProvider = { focusedChannelGroup == ClassicPanelScreenFavoriteChannelGroup },
@@ -257,13 +262,14 @@ fun ClassicChannelScreen(
             Visibility({ epgListVisible }) {
                 ClassicEpgItemList(
                     modifier = Modifier
-                        .onFocusChanged { epgListIsFocused = it.hasFocus }
+                        .onFocusChanged { if (it.hasFocus) epgPanelActive = true }
                         .classicPanelSwipes(onSwipeRight = { returnToChannels() })
                         .focusGroup(),
                     programmeListModifier = Modifier
-                        .width(if (epgListIsFocused) 5.gridColumns() else 4.gridColumns())
+                        .width(if (epgPanelActive) 6.gridColumns() else 5.gridColumns())
                         .classicPanelDirections(onLeft = { returnToChannels() }),
                     epgProvider = { epgListProvider().match(focusedChannel) },
+                    channelNameProvider = { focusedChannel.name },
                     epgProgrammeReserveListProvider = {
                         EpgProgrammeReserveList(
                             epgProgrammeReserveListProvider().filter { it.channel == focusedChannel.name }
