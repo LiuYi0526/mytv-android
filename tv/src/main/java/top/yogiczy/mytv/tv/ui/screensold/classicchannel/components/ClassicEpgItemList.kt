@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlinx.collections.immutable.toPersistentList
@@ -38,6 +39,7 @@ import java.util.Locale
 fun ClassicEpgItemList(
     modifier: Modifier = Modifier,
     programmeListModifier: Modifier = Modifier,
+    programmeListWidth: Dp = 6.gridColumns(),
     epgProvider: () -> Epg? = { null },
     channelNameProvider: () -> String = { "" },
     epgProgrammeReserveListProvider: () -> EpgProgrammeReserveList = { EpgProgrammeReserveList() },
@@ -65,6 +67,8 @@ fun ClassicEpgItemList(
 
     Column(
         modifier = modifier
+            // Bound the title as well as the rows, and reserve the date rail.
+            .width(programmeListWidth + 24.dp + if (programDayGroup.size > 1) 90.dp else 0.dp)
             .fillMaxHeight()
             .background(Color.Black.copy(alpha = 0.9f))
             .padding(start = 12.dp, end = 12.dp),
@@ -78,7 +82,7 @@ fun ClassicEpgItemList(
         )
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             EpgProgrammeItemList(
-                modifier = programmeListModifier,
+                modifier = Modifier.width(programmeListWidth).then(programmeListModifier),
                 epgProgrammeListProvider = {
                     EpgProgrammeList(programDayGroup[displayedDay].orEmpty())
                 },
@@ -109,7 +113,6 @@ private fun ClassicEpgItemListPreview() {
     MyTvTheme {
         PreviewWithLayoutGrids {
             ClassicEpgItemList(
-                programmeListModifier = Modifier.width(6.gridColumns()),
                 epgProvider = { Epg.example(Channel.EXAMPLE) },
             )
         }

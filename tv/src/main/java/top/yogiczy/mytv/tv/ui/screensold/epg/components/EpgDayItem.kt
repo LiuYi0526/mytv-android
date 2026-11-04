@@ -84,11 +84,15 @@ fun EpgDayItem(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    softWrap = false,
                 )
                 Text(
                     lines[1],
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         }

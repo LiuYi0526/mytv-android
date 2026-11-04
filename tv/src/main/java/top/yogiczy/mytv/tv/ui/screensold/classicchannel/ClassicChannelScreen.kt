@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -266,8 +267,8 @@ fun ClassicChannelScreen(
                         .classicPanelSwipes(onSwipeRight = { returnToChannels() })
                         .focusGroup(),
                     programmeListModifier = Modifier
-                        .width(if (epgPanelActive) 6.gridColumns() else 5.gridColumns())
                         .classicPanelDirections(onLeft = { returnToChannels() }),
+                    programmeListWidth = if (epgPanelActive) 6.gridColumns() else 5.gridColumns(),
                     epgProvider = { epgListProvider().match(focusedChannel) },
                     channelNameProvider = { focusedChannel.name },
                     epgProgrammeReserveListProvider = {
@@ -302,6 +303,9 @@ private fun ClassicChannelScreenWrapper(
     ) {
         Box(
             modifier = modifier
+                // These panels slide sideways; they do not share one viewport.
+                // Keep their measured widths before clipping and applying the offset.
+                .wrapContentWidth(Alignment.Start, unbounded = true)
                 .pointerInput(Unit) { detectTapGestures(onTap = { }) }
                 .padding(horizontal = SAFE_AREA_HORIZONTAL_PADDING.dp, vertical = SAFE_AREA_VERTICAL_PADDING.dp)
                 .clip(MaterialTheme.shapes.medium),

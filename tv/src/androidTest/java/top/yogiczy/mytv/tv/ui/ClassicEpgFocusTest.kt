@@ -34,6 +34,7 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
@@ -78,13 +79,14 @@ class ClassicEpgFocusTest {
 
     private fun showScreen(
         programmes: List<EpgProgramme>?, playback: EpgProgramme? = null, withPopupHost: Boolean = false,
+        viewportWidth: Dp = 960.dp,
     ) {
         guideProgrammes = programmes
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
                 MyTvTheme {
                     val panelContent: @Composable () -> Unit = {
-                        Box(Modifier.width(960.dp).height(540.dp)) {
+                        Box(Modifier.width(viewportWidth).height(540.dp)) {
                             PopupContent(visibleProvider = { visible }, onDismissRequest = { visible = false }) {
                                 ClassicChannelScreen(
                                     channelGroupListProvider = { ChannelGroupList(listOf(group)) },
@@ -233,11 +235,29 @@ class ClassicEpgFocusTest {
         showScreen(listOf(replay, live, next))
         press(Key.DirectionRight)
         awaitFocused(label(live))
+        assertDateFitsOnOneLine()
+    }
+
+    @Test fun narrowViewportDoesNotSqueezeTheDateColumnAndCanReturnToChannels() {
+        showScreen(listOf(replay, live, next), viewportWidth = 720.dp)
+        press(Key.DirectionRight)
+        awaitFocused(label(live))
+        assertDateFitsOnOneLine()
+        press(Key.DirectionLeft)
+        focusChannels()
+        press(Key.DirectionRight)
+        awaitFocused(label(live))
+        assertDateFitsOnOneLine()
+    }
+
+    private fun assertDateFitsOnOneLine() {
         val date = java.text.SimpleDateFormat("MM-dd", java.util.Locale.getDefault()).format(live.startAt)
         val node = compose.onNodeWithText(date, useUnmergedTree = true)
         node.assertIsDisplayed()
         val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
         node.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertEquals("Date must not wrap into multiple lines", 1, layouts.single().lineCount)
+        assertTrue("Date must fit without overflow", !layouts.single().hasVisualOverflow)
         assertTrue("Date column must not be clipped after widening the guide",
             node.fetchSemanticsNode().boundsInRoot.width >= layouts.single().size.width - 1f)
     }
