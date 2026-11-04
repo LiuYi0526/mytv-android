@@ -29,8 +29,12 @@ data class EpgProgrammeReserve(
     val endAt: Long = 0,
 ) {
     fun test(channel: Channel, programme: EpgProgramme): Boolean {
-        return this.channel == channel.name
-                && this.programme == programme.title
+        return this.channel == channel.name && test(programme)
+    }
+
+    /** Match one airing in a reservation list already filtered to its channel. */
+    fun test(programme: EpgProgramme): Boolean {
+        return this.programme == programme.title
                 && this.startAt == programme.startAt
                 && this.endAt == programme.endAt
     }
