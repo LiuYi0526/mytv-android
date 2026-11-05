@@ -152,15 +152,13 @@ fun EpgProgrammeItemList(
                 }
             }
         }
-        if (epgProgrammeList.any { !it.description.isNullOrBlank() }) {
-            Text(
-                "长按确认 / 触摸长按查看完整简介",
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = LocalContentColor.current.copy(alpha = 0.6f),
-                maxLines = 1,
-            )
-        }
+        Text(
+            "长按确认 / 触摸长按查看节目详情",
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = LocalContentColor.current.copy(alpha = 0.6f),
+            maxLines = 1,
+        )
     }
     EpgProgrammeDetailsPopup(
         programme = detailsProgramme,

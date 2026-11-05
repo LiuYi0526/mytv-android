@@ -1,6 +1,7 @@
 package top.yogiczy.mytv.tv.ui.screensold.epg.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -68,14 +69,19 @@ fun EpgProgrammeItem(
     val contentColor = if (isFocused) colorScheme.surface else LocalContentColor.current
     val titleStyle = MaterialTheme.typography.titleSmall
     val descriptionStyle = MaterialTheme.typography.bodySmall
-    // Reserve the same two text slots for every row, including rows without a
-    // synopsis. Font scaling changes all row heights together, never on focus.
+    val statusStyle = MaterialTheme.typography.labelSmall
+    // Leave room for the longest label (已预约), including font scaling.
+    val statusWidth = with(LocalDensity.current) { statusStyle.fontSize.toDp() * 3 } + 20.dp
+    // Both title-only and title/synopsis rows share a height, even with large fonts.
     val rowHeight = with(LocalDensity.current) {
-        titleStyle.lineHeight.toDp() + descriptionStyle.lineHeight.toDp()
-    } + 24.dp
+        maxOf(
+            titleStyle.lineHeight.toDp() * 2,
+            titleStyle.lineHeight.toDp() + descriptionStyle.lineHeight.toDp() + 4.dp,
+        )
+    } + 20.dp
     val status = when {
-        isPlayback -> "正在回放" to Icons.Default.Replay
-        isLive -> "正在直播" to Icons.Default.PlayArrow
+        isPlayback -> "回放" to Icons.Default.Replay
+        isLive -> "直播" to Icons.Default.PlayArrow
         programme.endAt <= now && supportPlaybackProvider() -> "回放" to Icons.Default.Replay
         programme.startAt > now && hasReservedProvider() -> "已预约" to Icons.Default.CheckCircle
         programme.startAt > now -> "预约" to Icons.Default.Schedule
@@ -90,10 +96,9 @@ fun EpgProgrammeItem(
             .fillMaxWidth()
             .height(rowHeight)
             .background(if (isFocused) colorScheme.onSurface else Color.Transparent, MaterialTheme.shapes.small)
-            .semantics(mergeDescendants = true) { }
-            .ifElse(description != null, Modifier.semantics {
-                onLongClick("查看完整简介") { onDetails(); true }
-            })
+            .semantics(mergeDescendants = true) {
+                onLongClick("查看节目详情") { onDetails(); true }
+            }
             .handleKeyEvents(
                 onSelect = {
                     val selectedAt = System.currentTimeMillis()
@@ -104,7 +109,7 @@ fun EpgProgrammeItem(
                         description != null -> onDetails()
                     }
                 },
-                onLongSelect = if (description != null) onDetails else null,
+                onLongSelect = onDetails,
             )
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -113,21 +118,32 @@ fun EpgProgrammeItem(
         Text(timeFormat.format(programme.startAt), Modifier.width(48.dp),
             style = MaterialTheme.typography.labelLarge, color = contentColor, maxLines = 1)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(programme.title, style = titleStyle, color = contentColor,
-                maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+            Text(
+                programme.title,
+                modifier = Modifier.ifElse(description != null && isFocused, Modifier.basicMarquee(
+                    iterations = Int.MAX_VALUE,
+                    initialDelayMillis = 1_000,
+                    repeatDelayMillis = 1_200,
+                    velocity = 30.dp,
+                )),
+                style = titleStyle, color = contentColor,
+                maxLines = if (description == null) 2 else 1,
+                softWrap = description == null,
+                overflow = TextOverflow.Ellipsis,
+            )
             if (description != null) {
                 Text(description, style = descriptionStyle, color = contentColor.copy(alpha = 0.7f),
                     maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
         }
-        Row(Modifier.width(76.dp), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+        Row(Modifier.width(statusWidth), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.Start),
             verticalAlignment = Alignment.CenterVertically) {
             status?.let { (label, icon) ->
                 val statusColor = if (!isFocused && (isPlayback || (isLive && highlightLive))) {
                     colorScheme.primary
                 } else contentColor
                 Icon(icon, contentDescription = null, Modifier.size(14.dp), tint = statusColor)
-                Text(label, style = MaterialTheme.typography.labelSmall, color = statusColor, maxLines = 1)
+                Text(label, style = statusStyle, color = statusColor, maxLines = 1)
             }
         }
     }

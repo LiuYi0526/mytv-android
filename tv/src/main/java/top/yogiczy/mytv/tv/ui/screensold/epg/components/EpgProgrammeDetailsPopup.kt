@@ -25,7 +25,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
@@ -82,18 +81,15 @@ private fun EpgProgrammeDetailsContent(programme: EpgProgramme, onClose: () -> U
     val closeFocus = remember { FocusRequester() }
     val step = with(LocalDensity.current) { 100.dp.toPx() }
     val formatter = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
+    val description = programme.description?.trim()?.takeIf { it.isNotEmpty() }
 
     Column(
         modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(programme.title, style = MaterialTheme.typography.titleLarge,
-            maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text("${formatter.format(programme.startAt)} — ${formatter.format(programme.endAt)}",
-            style = MaterialTheme.typography.labelLarge)
-        Text(
-            programme.description.orEmpty(),
-            style = MaterialTheme.typography.bodyLarge,
+        // Scroll the complete title as well as the synopsis; a title-only
+        // programme must still be readable in full without a second truncation.
+        Column(
             modifier = Modifier.fillMaxWidth().weight(1f, fill = false)
                 .focusOnLaunched(programme)
                 .onPreviewKeyEvent { event ->
@@ -114,9 +110,17 @@ private fun EpgProgrammeDetailsContent(programme: EpgProgramme, onClose: () -> U
                     }
                 }
                 .verticalScroll(scroll)
-                .semantics { contentDescription = "节目简介" }
+                .semantics { contentDescription = if (description != null) "节目简介" else "节目信息" }
                 .focusable(),
-        )
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(programme.title, style = MaterialTheme.typography.titleLarge)
+            Text("${formatter.format(programme.startAt)} — ${formatter.format(programme.endAt)}",
+                style = MaterialTheme.typography.labelLarge)
+            if (description != null) {
+                Text(description, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
         OutlinedButton(
             onClick = {},
             modifier = Modifier.focusRequester(closeFocus).handleKeyEvents(onSelect = onClose),

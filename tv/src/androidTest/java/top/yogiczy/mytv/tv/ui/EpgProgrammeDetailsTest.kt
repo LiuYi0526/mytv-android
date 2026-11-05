@@ -180,6 +180,61 @@ class EpgProgrammeDetailsTest {
         assertEquals(heightBefore, rowHeight(next.title), 0.1f)
     }
 
+    @Test fun titleOnlyProgrammesUseTwoStaticLinesWithTheSameRowHeight() {
+        val longTitle = "A long programme title without a synopsis ".repeat(20)
+        val blankDescriptionTitle = "Another programme title with a blank synopsis ".repeat(20)
+        showGuide(listOf(past.copy(title = longTitle, description = null), live,
+            next.copy(title = blankDescriptionTitle, description = " \n ")))
+        fun layout(title: String): TextLayoutResult {
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(title, useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            return layouts.single()
+        }
+        fun rowHeight(title: String): Float {
+            val node = compose.onNodeWithText(title, useUnmergedTree = true).fetchSemanticsNode()
+            return generateSequence(node) { it.parent }
+                .first { it.config.contains(SemanticsProperties.Focused) }.boundsInRoot.height
+        }
+        for (title in listOf(longTitle, blankDescriptionTitle)) {
+            assertEquals(2, layout(title).lineCount)
+            assertTrue(layout(title).hasVisualOverflow)
+            assertEquals(rowHeight(live.title), rowHeight(title), .1f)
+        }
+        press(Key.DirectionUp)
+        // A focused title-only row must still wrap and truncate, rather than marquee.
+        assertEquals(2, layout(longTitle).lineCount)
+        assertTrue(layout(longTitle).hasVisualOverflow)
+        assertEquals(rowHeight(live.title), rowHeight(longTitle), .1f)
+    }
+
+    @Test fun titleOnlyProgrammeOpensCompleteScrollableDetailsByTouchAndRemote() {
+        val longTitle = "Full programme title ".repeat(80)
+        showGuide(listOf(live.copy(title = longTitle, description = null)))
+        compose.onNodeWithText("长按确认 / 触摸长按查看节目详情").assertIsDisplayed()
+        compose.onNodeWithText(longTitle).performTouchInput { longClick() }
+        compose.onNodeWithText("节目详情").assertIsDisplayed()
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNode(hasText(longTitle) and hasAnyAncestor(hasContentDescription("节目信息")),
+            useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertTrue(layouts.single().lineCount > 2)
+        assertTrue(!layouts.single().hasVisualOverflow)
+        compose.onNodeWithContentDescription("节目简介").assertDoesNotExist()
+        press(Key.DirectionDown)
+        compose.waitUntil(3_000) {
+            compose.onNodeWithContentDescription("节目信息").fetchSemanticsNode()
+                .config[SemanticsProperties.VerticalScrollAxisRange].value() > 0f
+        }
+        press(Key.Back)
+        compose.onNodeWithText("节目详情").assertDoesNotExist()
+        press(Key.L)
+        compose.onNodeWithText("节目详情").assertIsDisplayed()
+        assertEquals(0, liveCount)
+        assertEquals(0, replayCount)
+        assertEquals(0, reserveCount)
+    }
+
     @Test fun missingGuideOnlyShowsChannelInformation() {
         compose.setContent {
             MyTvTheme {
