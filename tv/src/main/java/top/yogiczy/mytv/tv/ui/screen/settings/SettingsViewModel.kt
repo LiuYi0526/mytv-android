@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -212,8 +213,8 @@ class SettingsViewModel : ViewModel() {
             afterSetWhenCloudSyncAutoPull()
         }
 
-    private var _iptvChannelLastPlay by mutableStateOf(Channel.EMPTY)
-    var iptvChannelHistory by mutableStateOf(ChannelHistoryList())
+    private var _iptvChannelLastPlay by mutableStateOf(Channel.EMPTY, referentialEqualityPolicy())
+    var iptvChannelHistory by mutableStateOf(ChannelHistoryList(), referentialEqualityPolicy())
         private set
 
     fun updateHistorySource(old: IptvSource, updated: IptvSource) {

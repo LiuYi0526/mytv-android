@@ -39,6 +39,9 @@ data class Channel(
 
     /** XMLTV channel id from the playlist's tvg-id, kept separate from display names. */
     val epgId: String = "",
+
+    /** Source group used to restore the selected entry when streams are repeated across groups. */
+    val groupName: String = "",
 ) {
     companion object {
         val EXAMPLE = Channel(

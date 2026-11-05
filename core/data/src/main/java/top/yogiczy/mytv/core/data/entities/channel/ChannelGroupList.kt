@@ -26,13 +26,18 @@ data class ChannelGroupList(
             )
         })
 
-        fun ChannelGroupList.channelGroupIdx(channel: Channel) =
-            this.indexOfFirst { group -> group.channelList.any { it == channel } }
+        fun ChannelGroupList.channelGroupIdx(channel: Channel): Int {
+            val resolved = channelList.resolveChannel(channel) ?: return -1
+            return indexOfFirst { group -> group.channelList.any { it === resolved } }
+        }
 
         fun ChannelGroupList.chanelGroup(channel: Channel) = this[channelGroupIdx(channel)]
 
-        fun ChannelGroupList.channelIdx(channel: Channel) =
-            channelList.indexOfFirst { it == channel }
+        fun ChannelGroupList.channelIdx(channel: Channel): Int {
+            val channels = channelList
+            val resolved = channels.resolveChannel(channel) ?: return -1
+            return channels.indexOfFirst { it === resolved }
+        }
 
         fun ChannelGroupList.channelFirstOrNull() = this.firstOrNull()?.channelList?.firstOrNull()
 
@@ -42,11 +47,12 @@ data class ChannelGroupList(
             get() = ChannelList(this.asSequence().flatMap { it.channelList.asSequence() }.toList())
     }
 
-    fun withMetadata() = ChannelGroupList(map { group ->
-        val channelIndexMap = channelList.withIndex().associate { it.value to it.index }
-
-        group.copy(channelList = ChannelList(group.channelList.map { channel ->
-            channel.copy(index = channelIndexMap[channel] ?: -1)
-        }))
-    })
+    fun withMetadata(): ChannelGroupList {
+        var index = 0
+        return ChannelGroupList(map { group ->
+            group.copy(channelList = ChannelList(group.channelList.map { channel ->
+                channel.copy(index = index++, groupName = group.name)
+            }))
+        })
+    }
 }

@@ -106,6 +106,37 @@ class ClassicPanelNavigationTest {
     private fun programme(channel: Channel) =
         "${SimpleDateFormat("HH:mm", Locale.getDefault()).format(start)}    Live ${channel.name}"
 
+    @Test fun openingDuplicateStreamRestoresTheSelectedSourceGroup() {
+        val sameStream = Channel(name = "中视购物")
+        val duplicateGroups = ChannelGroupList(listOf(
+            ChannelGroup("中国央视", ChannelList(listOf(sameStream.copy()))),
+            ChannelGroup("江西移动PLTV", ChannelList(listOf(sameStream.copy()))),
+        )).withMetadata()
+        val selected = duplicateGroups[1].channelList.single()
+        var picked: Channel? = null
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                MyTvTheme {
+                    Box(Modifier.width(960.dp).height(540.dp)) {
+                        PopupContent(visibleProvider = { true }) {
+                            ClassicChannelScreen(
+                                channelGroupListProvider = { duplicateGroups },
+                                currentChannelProvider = { selected },
+                                onChannelSelected = { picked = it },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        focus(selected.name)
+        compose.onNodeWithText("江西移动PLTV").assertIsDisplayed()
+        compose.onNodeWithText("中国央视").assertDoesNotExist()
+        press(Key.Enter)
+        assertEquals("江西移动PLTV", picked?.groupName)
+        assertEquals(selected.index, picked?.index)
+    }
+
     @Test fun defaultPanelIsCompactAndEpgReturnsToTheLatestFocusedChannel() {
         showScreen()
         compose.onNodeWithText("频道分组").assertDoesNotExist()

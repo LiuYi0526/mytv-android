@@ -5,6 +5,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -48,7 +49,8 @@ class MainContentState(
     private val favoriteChannelListProvider: () -> ChannelList = { ChannelList() },
     private val settingsViewModel: SettingsViewModel,
 ) : Loggable("MainContentState") {
-    private var _currentChannel by mutableStateOf(Channel())
+    // Channel equality describes stream content, while selection also has a group/index.
+    private var _currentChannel by mutableStateOf(Channel(), referentialEqualityPolicy())
     val currentChannel get() = _currentChannel
 
     private var _currentChannelLineIdx by mutableIntStateOf(0)
@@ -135,11 +137,8 @@ class MainContentState(
         val channelGroupList = channelGroupListProvider()
 
         val lastPlayed = settingsViewModel.iptvChannelLastPlay
-        val lastLineUrls = lastPlayed.lineList.map { it.url }
         // Resume with current playlist metadata, including a changed subscription UA.
-        val currentVersion = channelGroupList.channelList.firstOrNull {
-            it.name == lastPlayed.name && it.lineList.map { line -> line.url } == lastLineUrls
-        }
+        val currentVersion = channelGroupList.channelList.resolveChannel(lastPlayed)
         changeCurrentChannel(currentVersion ?: lastPlayed.isEmptyOrElse {
             channelGroupList.channelFirstOrNull() ?: Channel.EMPTY
         })
@@ -286,7 +285,16 @@ class MainContentState(
 
         settingsViewModel.iptvChannelLastPlay = channel
 
-        if (channel == _currentChannel && lineIdx == _currentChannelLineIdx && playbackEpgProgramme == _currentPlaybackEpgProgramme) return
+        val positionChanged = channel.groupName != _currentChannel.groupName || channel.index != _currentChannel.index
+        // Reuse the stream for another occurrence, but retain the existing
+        // explicit reselect/reload behavior when the selected position is unchanged.
+        if (channel == _currentChannel && selectedLineIdx == _currentChannelLineIdx &&
+            playbackEpgProgramme == _currentPlaybackEpgProgramme &&
+            (lineIdx == _currentChannelLineIdx || positionChanged)) {
+            _currentChannel = channel
+            if (positionChanged) settingsViewModel.recordChannelWatch(channel)
+            return
+        }
 
         if (channel == _currentChannel && lineIdx != _currentChannelLineIdx) {
             settingsViewModel.iptvChannelLinePlayableUrlList -= currentChannelLine.url

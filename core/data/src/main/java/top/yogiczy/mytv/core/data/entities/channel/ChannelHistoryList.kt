@@ -30,9 +30,8 @@ data class ChannelHistoryList(val value: List<ChannelHistoryItem> = emptyList())
             .filter { it.sourceName == source.name && it.sourceUrl == url }
             .mapNotNull { entry ->
                 val candidates = byName[entry.channel.name].orEmpty()
-                val watchedUrls = entry.channel.lineList.map { it.url }
                 // Different groups may share a name and EPG id but use different streams/logos.
-                candidates.firstOrNull { channel -> channel.lineList.map { it.url } == watchedUrls }
+                ChannelList(candidates).resolveChannel(entry.channel)
                     ?: candidates.singleOrNull()
             }
             .distinctBy { it.name }
