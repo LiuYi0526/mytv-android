@@ -4,7 +4,8 @@
 
 - `main` 为长期主线，`feature/ui` 保留为历史分支。
 - 在 `version.properties` 中修改 `versionName` 和 `versionCode`，后者每次发布递增。
-- 本次候选构建为 `1.0.0` / `100`；发布前完成正式 APK 真机验证。
+- 本次候选构建为 `1.1.0` / `110`；发布前完成正式 APK 真机验证。
+- 旧上游标签归档为 `legacy/upstream-*`；流光 TV 使用 `v<versionName>`，已发布的标签不移动、不复用。
 - 版本说明放在 `docs/release-notes/<versionName>.md`；发布时给审核过的提交创建 `v<versionName>` 标签。
 - 本地未提交的构建会在 `build-info.json` 中标记 `workingTreeDirty: true`，不能冒充已标记的源码版本。
 
