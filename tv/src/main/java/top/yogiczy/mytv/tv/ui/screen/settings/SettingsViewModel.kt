@@ -372,7 +372,7 @@ class SettingsViewModel : ViewModel() {
             afterSetWhenCloudSyncAutoPull()
         }
 
-    private var _uiUseClassicPanelScreen by mutableStateOf(false)
+    private var _uiUseClassicPanelScreen by mutableStateOf(true)
     var uiUseClassicPanelScreen: Boolean
         get() = _uiUseClassicPanelScreen
         set(value) {

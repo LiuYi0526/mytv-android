@@ -36,10 +36,11 @@ object ControlKeyActions {
             ControlKey.ON_DOWN -> ControlAction.NEXT_CHANNEL
             ControlKey.ON_LEFT -> ControlAction.PREVIOUS_LINE
             ControlKey.ON_RIGHT -> ControlAction.NEXT_LINE
-            ControlKey.ON_SELECT, ControlKey.ON_CENTER_CENTER_START,
+            ControlKey.ON_SELECT, ControlKey.ON_TOP_START,
+            ControlKey.ON_CENTER_START, ControlKey.ON_BOTTOM_START, ControlKey.ON_CENTER_CENTER_START,
             ControlKey.ON_CENTER_CENTER_CENTER, ControlKey.ON_CENTER_CENTER_END -> ControlAction.CHANNELS
             ControlKey.ON_LONG_DOWN, ControlKey.ON_BOTTOM_CENTER -> ControlAction.VIDEO_PLAYER_CONTROLLER
-            ControlKey.ON_LONG_LEFT, ControlKey.ON_CENTER_START -> ControlAction.EPG_PROGRAMME_LIST
+            ControlKey.ON_LONG_LEFT -> ControlAction.EPG_PROGRAMME_LIST
             ControlKey.ON_LONG_RIGHT, ControlKey.ON_CENTER_END -> ControlAction.CHANNEL_LINE_LIST
             ControlKey.ON_NUMBER -> ControlAction.CHANNEL_NO_SELECT
             else -> if (key.name.startsWith("ON_LONG_") && key != ControlKey.ON_LONG_UP) {
