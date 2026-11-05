@@ -77,6 +77,7 @@ class ClassicEpgFocusTest {
     private var guideProgrammes by mutableStateOf<List<EpgProgramme>?>(null)
     private var playbackCount = 0
     private var reserveCount = 0
+    private var selectedLiveChannel: Channel? = null
 
     private fun showScreen(
         programmes: List<EpgProgramme>?, playback: EpgProgramme? = null, withPopupHost: Boolean = false,
@@ -102,6 +103,7 @@ class ClassicEpgFocusTest {
                                     currentPlaybackEpgProgrammeProvider = { playback },
                                     supportPlaybackProvider = { true },
                                     onEpgProgrammePlayback = { _, _ -> playbackCount++ },
+                                    onChannelSelected = { selectedLiveChannel = it },
                                     onEpgProgrammeReserve = { _, _ -> reserveCount++ },
                                     onClose = { visible = false },
                                 )
@@ -176,6 +178,21 @@ class ClassicEpgFocusTest {
         showScreen(listOf(replay, live, next), playback = replay)
         press(Key.DirectionRight)
         awaitFocused(label(replay))
+    }
+
+    @Test fun confirmingLiveProgrammeDuringReplaySelectsTheChannelLive() {
+        val earlier = live.copy(startAt = now - 1_860_000, endAt = live.startAt, title = "Earlier replay")
+        showScreen(listOf(earlier, live.copy(description = "Live synopsis"), next), playback = earlier,
+            withPopupHost = true)
+        press(Key.DirectionRight)
+        awaitFocused(label(earlier))
+        press(Key.DirectionDown)
+        awaitFocused(label(live))
+        press(Key.Enter)
+        assertEquals(current, selectedLiveChannel)
+        assertEquals(0, playbackCount)
+        assertEquals(0, reserveCount)
+        compose.onNodeWithText("节目详情").assertDoesNotExist()
     }
 
     @Test fun unknownReplayFallsBackToTheLiveProgramme() {

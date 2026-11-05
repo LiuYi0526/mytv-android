@@ -51,9 +51,11 @@ fun EpgProgrammeItem(
     isPlaybackProvider: () -> Boolean = { false },
     hasReservedProvider: () -> Boolean = { false },
     onPlayback: () -> Unit = {},
+    onLive: () -> Unit = {},
     onReserve: () -> Unit = {},
     onDetails: () -> Unit = {},
     focusOnLive: Boolean = true,
+    highlightLive: Boolean = true,
 ) {
     val programme = epgProgrammeProvider()
     val description = programme.description?.trim()?.takeIf { it.isNotEmpty() }
@@ -94,9 +96,11 @@ fun EpgProgrammeItem(
             })
             .handleKeyEvents(
                 onSelect = {
+                    val selectedAt = System.currentTimeMillis()
                     when {
-                        programme.endAt <= System.currentTimeMillis() && supportPlaybackProvider() -> onPlayback()
-                        programme.startAt > System.currentTimeMillis() -> onReserve()
+                        programme.startAt <= selectedAt && selectedAt < programme.endAt -> onLive()
+                        programme.endAt <= selectedAt && supportPlaybackProvider() -> onPlayback()
+                        programme.startAt > selectedAt -> onReserve()
                         description != null -> onDetails()
                     }
                 },
@@ -119,7 +123,9 @@ fun EpgProgrammeItem(
         Row(Modifier.width(76.dp), horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
             verticalAlignment = Alignment.CenterVertically) {
             status?.let { (label, icon) ->
-                val statusColor = if (!isFocused && (isLive || isPlayback)) colorScheme.primary else contentColor
+                val statusColor = if (!isFocused && (isPlayback || (isLive && highlightLive))) {
+                    colorScheme.primary
+                } else contentColor
                 Icon(icon, contentDescription = null, Modifier.size(14.dp), tint = statusColor)
                 Text(label, style = MaterialTheme.typography.labelSmall, color = statusColor, maxLines = 1)
             }

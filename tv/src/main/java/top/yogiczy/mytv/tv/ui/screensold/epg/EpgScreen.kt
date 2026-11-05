@@ -39,6 +39,7 @@ fun EpgScreen(
     supportPlaybackProvider: () -> Boolean = { false },
     currentPlaybackEpgProgrammeProvider: () -> EpgProgramme? = { null },
     onEpgProgrammePlayback: (EpgProgramme) -> Unit = {},
+    onLive: () -> Unit = {},
     onEpgProgrammeReserve: (EpgProgramme) -> Unit = {},
     onClose: () -> Unit = {},
 ) {
@@ -71,6 +72,7 @@ fun EpgScreen(
                 currentPlaybackProvider = currentPlaybackEpgProgrammeProvider,
                 focusOnInitialProgramme = focusOnInitialProgramme,
                 onPlayback = onEpgProgrammePlayback,
+                onLive = onLive,
                 onReserve = onEpgProgrammeReserve,
                 onUserAction = { screenAutoCloseState.active() },
             )

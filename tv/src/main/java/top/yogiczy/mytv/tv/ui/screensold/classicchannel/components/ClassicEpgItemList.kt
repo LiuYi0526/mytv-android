@@ -46,6 +46,7 @@ fun ClassicEpgItemList(
     supportPlaybackProvider: () -> Boolean = { false },
     currentPlaybackEpgProgrammeProvider: () -> EpgProgramme? = { null },
     onEpgProgrammePlayback: (EpgProgramme) -> Unit = {},
+    onLive: () -> Unit = {},
     onEpgProgrammeReserve: (EpgProgramme) -> Unit = {},
     onUserAction: () -> Unit = {},
 ) {
@@ -94,6 +95,7 @@ fun ClassicEpgItemList(
                 currentPlaybackProvider = currentPlaybackEpgProgrammeProvider,
                 focusOnInitialProgramme = focusOnInitialProgramme,
                 onPlayback = onEpgProgrammePlayback,
+                onLive = onLive,
                 onReserve = onEpgProgrammeReserve,
                 onUserAction = onUserAction,
             )

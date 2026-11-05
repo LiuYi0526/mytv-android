@@ -57,6 +57,7 @@ fun EpgProgrammeItemList(
     supportPlaybackProvider: () -> Boolean = { false },
     currentPlaybackProvider: () -> EpgProgramme? = { null },
     onPlayback: (EpgProgramme) -> Unit = {},
+    onLive: () -> Unit = {},
     onReserve: (EpgProgramme) -> Unit = {},
     focusOnInitialProgramme: Boolean = true,
     onUserAction: () -> Unit = {},
@@ -136,6 +137,7 @@ fun EpgProgrammeItemList(
                         isPlaybackProvider = { currentPlaybackProvider() == programme },
                         hasReservedProvider = { epgProgrammeReserveListProvider().any { it.test(programme) } },
                         onPlayback = { onPlayback(programme) },
+                        onLive = onLive,
                         onReserve = { onReserve(programme) },
                         onDetails = {
                             onUserAction()
@@ -145,6 +147,7 @@ fun EpgProgrammeItemList(
                         // Only the chosen initial programme may request focus. The live
                         // row must not compete with a programme currently being replayed.
                         focusOnLive = false,
+                        highlightLive = currentPlaybackProvider() == null,
                     )
                 }
             }

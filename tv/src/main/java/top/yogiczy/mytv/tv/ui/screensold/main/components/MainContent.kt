@@ -214,6 +214,13 @@ fun MainContent(
                     mainContentState.currentChannel, programme
                 )
             },
+            onLive = {
+                mainContentState.isEpgScreenVisible = false
+                mainContentState.changeCurrentChannel(
+                    mainContentState.currentChannel,
+                    mainContentState.currentChannelLineIdx,
+                )
+            },
             onClose = { mainContentState.isEpgScreenVisible = false },
         )
     }

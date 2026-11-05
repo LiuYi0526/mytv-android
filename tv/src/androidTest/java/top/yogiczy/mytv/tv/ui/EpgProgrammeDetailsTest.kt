@@ -47,8 +47,15 @@ class EpgProgrammeDetailsTest {
     private val next = EpgProgramme(now + 600_000, now + 1_200_000, "Next programme", description)
     private var replayCount = 0
     private var reserveCount = 0
+    private var liveCount = 0
+    private var currentPlayback by mutableStateOf<EpgProgramme?>(null)
 
-    private fun showGuide(programmes: List<EpgProgramme> = listOf(past, live, next)) {
+    private fun showGuide(
+        programmes: List<EpgProgramme> = listOf(past, live, next),
+        playback: EpgProgramme? = null,
+        supportPlayback: Boolean = true,
+    ) {
+        currentPlayback = playback
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
                 MyTvTheme {
@@ -57,8 +64,10 @@ class EpgProgrammeDetailsTest {
                             Box(Modifier.width(600.dp).height(400.dp)) {
                                 EpgProgrammeItemList(
                                     epgProgrammeListProvider = { EpgProgrammeList(programmes) },
-                                    supportPlaybackProvider = { true },
+                                    supportPlaybackProvider = { supportPlayback },
+                                    currentPlaybackProvider = { currentPlayback },
                                     onPlayback = { replayCount++ },
+                                    onLive = { liveCount++; currentPlayback = null },
                                     onReserve = { reserveCount++ },
                                 )
                             }
@@ -76,6 +85,36 @@ class EpgProgrammeDetailsTest {
     }
 
     private fun label(programme: EpgProgramme) = programme.title
+
+    @Test fun remoteConfirmOnLiveProgrammeLeavesReplayWithoutOpeningDetails() {
+        showGuide(playback = past)
+        press(Key.DirectionDown)
+        press(Key.Enter)
+        assertEquals(1, liveCount)
+        assertEquals(null, currentPlayback)
+        assertEquals(0, replayCount)
+        assertEquals(0, reserveCount)
+        compose.onNodeWithText("节目详情").assertDoesNotExist()
+    }
+
+    @Test fun touchCanSelectLiveWithoutCatchupSupportOrSynopsis() {
+        showGuide(listOf(live.copy(description = null)), supportPlayback = false)
+        compose.onNodeWithText(live.title).performTouchInput { click() }
+        assertEquals(1, liveCount)
+        assertEquals(0, replayCount)
+        assertEquals(0, reserveCount)
+        compose.onNodeWithText("节目详情").assertDoesNotExist()
+    }
+
+    @Test fun longPressOnLiveOnlyShowsDetailsAndKeepsReplay() {
+        showGuide(playback = past)
+        compose.onNodeWithText(live.title).performTouchInput { longClick() }
+        compose.onNodeWithText("节目详情").assertIsDisplayed()
+        assertEquals(past, currentPlayback)
+        assertEquals(0, liveCount)
+        assertEquals(0, replayCount)
+        assertEquals(0, reserveCount)
+    }
 
     @Test fun touchLongPressDoesNotReplayOrReserveAndCanClose() {
         showGuide()

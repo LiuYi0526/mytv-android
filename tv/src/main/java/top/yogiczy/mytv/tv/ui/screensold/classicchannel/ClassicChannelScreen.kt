@@ -279,6 +279,7 @@ fun ClassicChannelScreen(
                     supportPlaybackProvider = { supportPlaybackProvider(focusedChannel) },
                     currentPlaybackEpgProgrammeProvider = currentPlaybackEpgProgrammeProvider,
                     onEpgProgrammePlayback = { onEpgProgrammePlayback(focusedChannel, it) },
+                    onLive = { onChannelSelected(focusedChannel) },
                     onEpgProgrammeReserve = { onEpgProgrammeReserve(focusedChannel, it) },
                     onUserAction = { screenAutoCloseState.active() },
                 )
