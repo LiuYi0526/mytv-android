@@ -1,18 +1,18 @@
 {
-  "tag_name": "v1.0.0",
-  "body": "# 流光 TV 1.0.0\n\n基于天光云影 3.3.10 继续开发的首个流光 TV 正式版本。\n\n- 首页新增最近观看和设置分类入口，优化卡片、屏幕缩放、焦点滚动与返回位置恢复。\n- 支持按键操作映射、定时关闭，改善遥控和触摸操作。\n- 订阅源支持扫码与手动双栏添加、M3U 节目单自动识别、播放器 UA 参数及 HTTP Basic 认证。\n- 节目单支持独立管理、默认项及订阅关联，改善 XML 解析、频道匹配和跨午夜缓存。\n- 完善 DASH ClearKey、Widevine、回看地址模板、动态回看定位和 HLS Cookie 会话传递。\n- 支持 MMT/TLV 直播、TTML 字幕及轨道切换；保留 AV3A 音频相关支持。\n- Media3 支持 RTSP MP2T、多音轨、跨服务器重定向、UDP 无数据自动转 TCP，以及普通 RTMP。\n- 正式 APK 使用独立包名、长期签名和 Android 6.0 最低版本；提供 ARM32、ARM64 及四架构通用包。\n\n## 已知事项\n\n- 不内置个人订阅源；请自行添加订阅。\n- RTSP/RTMP 暂不进行线路测速，界面会显示“暂不支持测速”。\n- 旧测试应用与流光 TV 使用不同包名，数据不自动共享；请先导出再导入配置。\n- 是否可播放仍取决于直播源、网络、服务端鉴权以及设备解码能力。\n",
+  "tag_name": "v1.1.0",
+  "body": "# 流光 TV 1.1.0\n\n本次更新重点改善节目单浏览、回看稳定性与遥控/触摸操作。可覆盖升级流光 TV 1.0.0，保留已有配置和观看记录。\n\n## 新增与优化\n\n- 节目单展示节目简介，长按确认键或触摸长按可查看完整节目名、播出时间和简介。\n- 有简介的节目标题在获得焦点后横向滚动；无简介的标题最多显示两行，超长内容可在详情中查看。\n- 日期焦点移动时即时切换节目单，节目条目上下切换时尽量保持居中；统一节目单与频道列表的背景透明度，优化日期列、标题间距及状态标签布局。\n- 播放快捷栏支持“硬解优先 / 软解优先”切换，支持 Media3 和 IJK，并保留切换时的播放状态。\n- 默认开启“经典选台界面”，短按左上角、左中央和左下角默认打开频道列表；已保存的对应设置继续沿用。\n- 首页与设置相关入口统一使用“订阅源”名称，添加订阅后复用预加载缓存，减少重复下载。\n\n## 问题修复\n\n- 修复大节目单缓存加载时的内存溢出，使用流式读写并减少刷新过程中的重复数据加载。\n- 修复部分 gzip HLS 清单被截断引起的回看起播偏移与短时间后卡顿。\n- 修复回看时选择当前直播节目未切回直播，以及回放与直播状态同时突出显示的问题。\n- 修复同名但不同时段的节目被误标为已预约。\n- 修复多个分组含相同播放链接时，打开频道列表定位到其他分组的问题。\n- 修复最近观看顺序变化后，从直播返回首页丢失焦点的问题。\n- 修复 MMT TTML 字幕字号与区域对齐，精简时间继承兼容处理；Widevine 播放改用 Media3 标准配置路径，移除无效的“跳过多帧渲染”开关。\n\n## 安装与已知事项\n\n- 提供 ARM32、ARM64 和四架构通用包；Android 6.0 及以上可安装。\n- 不内置个人订阅源；请自行添加订阅。旧测试应用与正式版使用不同包名，数据不自动共享。\n- RTSP/RTMP 暂不支持线路测速；通过 MPEG-TS ID3 传输的 ARIB 字幕暂不支持。\n- 未显式识别为 HLS 的无扩展名入口仍可能在解析回退时重复请求，相关优化留待后续版本。\n- 实际播放表现取决于直播源、网络、服务端鉴权和设备解码能力；软解优先可能增加设备负载。\n",
   "assets": [
     {
-      "name": "liuguang-tv-1.0.0-armeabi-v7a.apk",
-      "browser_download_url": "https://github.com/LiuYi0526/mytv-android/releases/download/v1.0.0/liuguang-tv-1.0.0-armeabi-v7a.apk"
+      "name": "liuguang-tv-1.1.0-armeabi-v7a.apk",
+      "browser_download_url": "https://github.com/LiuYi0526/mytv-android/releases/download/v1.1.0/liuguang-tv-1.1.0-armeabi-v7a.apk"
     },
     {
-      "name": "liuguang-tv-1.0.0-arm64-v8a.apk",
-      "browser_download_url": "https://github.com/LiuYi0526/mytv-android/releases/download/v1.0.0/liuguang-tv-1.0.0-arm64-v8a.apk"
+      "name": "liuguang-tv-1.1.0-arm64-v8a.apk",
+      "browser_download_url": "https://github.com/LiuYi0526/mytv-android/releases/download/v1.1.0/liuguang-tv-1.1.0-arm64-v8a.apk"
     },
     {
-      "name": "liuguang-tv-1.0.0-universal.apk",
-      "browser_download_url": "https://github.com/LiuYi0526/mytv-android/releases/download/v1.0.0/liuguang-tv-1.0.0-universal.apk"
+      "name": "liuguang-tv-1.1.0-universal.apk",
+      "browser_download_url": "https://github.com/LiuYi0526/mytv-android/releases/download/v1.1.0/liuguang-tv-1.1.0-universal.apk"
     }
   ]
 }
