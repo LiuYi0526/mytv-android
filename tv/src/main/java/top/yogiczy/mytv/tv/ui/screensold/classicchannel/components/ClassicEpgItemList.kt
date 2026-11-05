@@ -64,6 +64,9 @@ fun ClassicEpgItemList(
     }
     // Loading/refresh can replace an empty guide or remove the selected day.
     val displayedDay = currentDay.takeIf { it in programDayGroup } ?: initialDay
+    // Only initial entry/guide loading may focus a programme automatically.
+    // Browsing dates must keep focus in the date rail across list replacement.
+    var focusOnInitialProgramme by remember { mutableStateOf(true) }
 
     Column(
         modifier = modifier
@@ -89,6 +92,7 @@ fun ClassicEpgItemList(
                 epgProgrammeReserveListProvider = epgProgrammeReserveListProvider,
                 supportPlaybackProvider = supportPlaybackProvider,
                 currentPlaybackProvider = currentPlaybackEpgProgrammeProvider,
+                focusOnInitialProgramme = focusOnInitialProgramme,
                 onPlayback = onEpgProgrammePlayback,
                 onReserve = onEpgProgrammeReserve,
                 onUserAction = onUserAction,
@@ -99,7 +103,10 @@ fun ClassicEpgItemList(
                     modifier = Modifier.width(80.dp),
                     dayListProvider = { programDayGroup.keys.toPersistentList() },
                     currentDayProvider = { displayedDay },
-                    onDaySelected = { currentDay = it },
+                    onDaySelected = {
+                        focusOnInitialProgramme = false
+                        currentDay = it
+                    },
                     onUserAction = onUserAction,
                 )
             }

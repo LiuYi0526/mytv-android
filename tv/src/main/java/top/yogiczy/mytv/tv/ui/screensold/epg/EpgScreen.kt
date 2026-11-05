@@ -48,6 +48,7 @@ fun EpgScreen(
     val epg = epgProvider()
     val programDayGroup = epg.programmeList.groupBy { dateFormat.format(it.startAt) }
     var currentDay by remember { mutableStateOf(dateFormat.format(System.currentTimeMillis())) }
+    var focusOnInitialProgramme by remember { mutableStateOf(true) }
 
     Drawer(
         modifier = modifier
@@ -68,6 +69,7 @@ fun EpgScreen(
                 epgProgrammeReserveListProvider = epgProgrammeReserveListProvider,
                 supportPlaybackProvider = supportPlaybackProvider,
                 currentPlaybackProvider = currentPlaybackEpgProgrammeProvider,
+                focusOnInitialProgramme = focusOnInitialProgramme,
                 onPlayback = onEpgProgrammePlayback,
                 onReserve = onEpgProgrammeReserve,
                 onUserAction = { screenAutoCloseState.active() },
@@ -78,7 +80,10 @@ fun EpgScreen(
                     modifier = Modifier.width(80.dp),
                     dayListProvider = { programDayGroup.keys.toPersistentList() },
                     currentDayProvider = { currentDay },
-                    onDaySelected = { currentDay = it },
+                    onDaySelected = {
+                        focusOnInitialProgramme = false
+                        currentDay = it
+                    },
                     onUserAction = { screenAutoCloseState.active() },
                 )
             }

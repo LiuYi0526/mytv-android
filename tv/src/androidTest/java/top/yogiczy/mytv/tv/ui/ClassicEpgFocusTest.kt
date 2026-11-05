@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasAnyChild
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -236,6 +237,41 @@ class ClassicEpgFocusTest {
         press(Key.DirectionRight)
         awaitFocused(label(live))
         assertDateFitsOnOneLine()
+    }
+
+    @Test fun movingDateFocusChangesGuideWithoutConfirmOrStealingFocus() {
+        val tomorrowAtNoon = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, 1)
+            set(Calendar.HOUR_OF_DAY, 12)
+            set(Calendar.MINUTE, 0)
+        }.timeInMillis
+        val tomorrow = EpgProgramme(tomorrowAtNoon, tomorrowAtNoon + 1_800_000L, "Tomorrow programme")
+        showScreen(listOf(replay, live, next, tomorrow))
+        press(Key.DirectionRight)
+        awaitFocused(label(live))
+        val format = java.text.SimpleDateFormat("MM-dd", java.util.Locale.getDefault())
+        val todayLabel = format.format(live.startAt)
+        val tomorrowLabel = format.format(tomorrow.startAt)
+        compose.onNode(
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.Focused) and hasAnyChild(hasText(todayLabel)),
+            useUnmergedTree = true,
+        ).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        awaitFocused(todayLabel)
+        repeat(2) {
+            press(Key.DirectionDown)
+            awaitFocused(tomorrowLabel)
+            compose.onNodeWithText(label(tomorrow)).assertIsDisplayed()
+            compose.onNodeWithText(label(next)).assertDoesNotExist()
+            press(Key.DirectionUp)
+            awaitFocused(todayLabel)
+            compose.onNodeWithText(label(next)).assertIsDisplayed()
+            compose.onNodeWithText(label(tomorrow)).assertDoesNotExist()
+        }
+        // Touch uses the same selection callback and must still switch dates.
+        compose.onNodeWithText(tomorrowLabel).performTouchInput { click() }
+        compose.onNodeWithText(label(tomorrow)).assertIsDisplayed()
+        assertEquals(0, playbackCount)
+        assertEquals(0, reserveCount)
     }
 
     @Test fun narrowViewportDoesNotSqueezeTheDateColumnAndCanReturnToChannels() {

@@ -45,7 +45,7 @@ fun EpgDayItem(
     val dayAfterTomorrow =
         dateFormat.format(System.currentTimeMillis() + 48 * 3600 * 1000)
 
-    var isFocused by remember { mutableStateOf(false) }
+    var isFocused by remember(day) { mutableStateOf(false) }
 
     val colorScheme = MaterialTheme.colorScheme
     val localContentColor = LocalContentColor.current
@@ -63,7 +63,12 @@ fun EpgDayItem(
     Box(
         modifier = modifier
             .handleKeyEvents(onSelect = onDaySelected)
-            .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
+            .onFocusChanged {
+                val focused = it.isFocused || it.hasFocus
+                val gainedFocus = focused && !isFocused
+                isFocused = focused
+                if (gainedFocus) onDaySelected()
+            }
             .focusable()
             .background(containerColor, MaterialTheme.shapes.small)
             .padding(horizontal = 12.dp, vertical = 10.dp),
