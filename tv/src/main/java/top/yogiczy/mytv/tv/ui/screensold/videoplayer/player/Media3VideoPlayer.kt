@@ -57,6 +57,7 @@ import top.yogiczy.mytv.core.data.network.HttpBasicAuth
 import top.yogiczy.mytv.core.data.network.HttpBasicAuthInterceptor
 import top.yogiczy.mytv.core.data.network.PlaybackCookieJar
 import top.yogiczy.mytv.core.data.network.PlaybackCookieInterceptor
+import top.yogiczy.mytv.core.data.network.TransparentGzipInterceptor
 import top.yogiczy.mytv.core.data.network.TrustAllSSLSocketFactory
 import top.yogiczy.mytv.core.util.utils.toHeaders
 import top.yogiczy.mytv.tv.ui.utils.Configs
@@ -190,6 +191,7 @@ class Media3VideoPlayer(
             // limits inherited playlist credentials to segment/key URLs from the same origin.
             val clientBuilder = OkHttpClient.Builder()
                 .addInterceptor(HttpBasicAuthInterceptor(authentication))
+                .addInterceptor(TransparentGzipInterceptor())
                 .connectTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
                 .readTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
             if (usePlaybackCookies) {

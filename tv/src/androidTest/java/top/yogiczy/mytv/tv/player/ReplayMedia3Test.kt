@@ -4,8 +4,12 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import android.util.Log
 import androidx.media3.datasource.TransferListener
 import androidx.media3.exoplayer.LoadingInfo
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
 import androidx.media3.exoplayer.source.BaseMediaSource
@@ -25,9 +29,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
 import top.yogiczy.mytv.core.data.media.PlaybackRange
+import top.yogiczy.mytv.core.data.utils.ChannelPlayback
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.Media3VideoPlayer
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.VideoPlayer
 import java.util.concurrent.CountDownLatch
@@ -37,13 +43,77 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import java.io.IOException
 
-/** Real ExoPlayer and production adapter, with a deterministic timeline and no network or user data. */
+/** Production player tests: deterministic timelines plus an optional bounded real-source check. */
 @RunWith(AndroidJUnit4::class)
 @OptIn(UnstableApi::class)
 class ReplayMedia3Test {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
 
     private fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
+
+    /** Optional real-source check. URLs and programme times are passed at invocation. */
+    @Test fun optionalReplaySourceStartsAtProgrammeTimeAndKeepsPlaying() {
+        val args = InstrumentationRegistry.getArguments()
+        val source = args.getString("replayLiveUrl")
+        assumeTrue("Pass replayLiveUrl and programme timestamps", !source.isNullOrBlank())
+        val start = requireNotNull(args.getString("replayStartAt")).toLong()
+        val end = requireNotNull(args.getString("replayEndAt")).toLong()
+        val seconds = (args.getString("replayObserveSeconds")?.toInt() ?: 45).coerceIn(15, 90)
+        val line = ChannelLine(requireNotNull(source))
+        val replayLine = line.copy(url = requireNotNull(ChannelPlayback.playbackUrl(line, start, end)))
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val ready = CountDownLatch(1)
+        val error = AtomicReference<VideoPlayer.PlaybackException>()
+        val position = AtomicLong()
+        val firstPosition = AtomicLong(Long.MAX_VALUE)
+        val firstChunk = AtomicLong(Long.MAX_VALUE)
+        val playing = java.util.concurrent.atomic.AtomicBoolean()
+        lateinit var player: Media3VideoPlayer
+        lateinit var engine: androidx.media3.exoplayer.ExoPlayer
+        main {
+            player = Media3VideoPlayer(instrumentation.targetContext, scope)
+            player.initialize()
+            val field = Media3VideoPlayer::class.java.getDeclaredField("videoPlayer").apply { isAccessible = true }
+            engine = field.get(player) as androidx.media3.exoplayer.ExoPlayer
+            engine.addAnalyticsListener(object : AnalyticsListener {
+                override fun onLoadStarted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo,
+                    mediaLoadData: MediaLoadData) {
+                    if (mediaLoadData.dataType == C.DATA_TYPE_MEDIA && mediaLoadData.mediaStartTimeMs != C.TIME_UNSET) {
+                        firstChunk.compareAndSet(Long.MAX_VALUE, mediaLoadData.mediaStartTimeMs)
+                    }
+                }
+            })
+            player.setVolume(0f)
+            player.onReady { ready.countDown() }
+            player.onIsPlayingChanged { playing.set(it) }
+            player.onCurrentPositionChanged { firstPosition.compareAndSet(Long.MAX_VALUE, it); position.set(it) }
+            player.onError { if (it != null) { error.set(it); ready.countDown() } }
+            player.prepare(replayLine, PlaybackRange(start, end))
+        }
+        try {
+            assertTrue("Replay preparation timed out", ready.await(30, TimeUnit.SECONDS))
+            assertNull("Replay failed: ${error.get()}", error.get())
+            var previousPosition = 0L
+            repeat(seconds / 5) { step ->
+                previousPosition = position.get()
+                Thread.sleep(5_000)
+                main {
+                    val manifest = engine.currentManifest as? androidx.media3.exoplayer.hls.HlsManifest
+                    Log.i("ReplaySourceTest", "seconds=${(step + 1) * 5}, offset=${position.get() - start}, " +
+                        "playing=${engine.isPlaying}, duration=${engine.duration}, " +
+                        "segments=${manifest?.mediaPlaylist?.segments?.size}, end=${manifest?.mediaPlaylist?.hasEndTag}")
+                }
+                assertNull("Replay failed after ${(step + 1) * 5}s: ${error.get()}", error.get())
+            }
+            assertTrue("First HLS request skipped the beginning: ${firstChunk.get()}", firstChunk.get() in 0..10_000)
+            assertTrue("Replay started late: ${firstPosition.get() - start}", firstPosition.get() in start..start + 15_000)
+            assertTrue("Replay stopped early", playing.get() && position.get() - previousPosition >= 3_000)
+            assertTrue("Replay did not advance", position.get() - start >= (seconds - 5) * 1_000L)
+            assertTrue("Replay jumped past programme start", position.get() - start <= (seconds + 15) * 1_000L)
+        } finally {
+            main { player.stop(); player.release(); scope.cancel() }
+        }
+    }
 
     private fun withPlayer(failures: Int = 0, block: (Media3VideoPlayer, Long) -> Unit) {
         val windowStart = System.currentTimeMillis() - 7_200_000
