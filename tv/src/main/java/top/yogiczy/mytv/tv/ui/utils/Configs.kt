@@ -702,7 +702,7 @@ object Configs {
         DISABLE(0, "禁用"),
 
         /** 直播源优先 */
-        IPTV_FIRST(1, "直播源优先"),
+        IPTV_FIRST(1, "订阅源优先"),
 
         /** 混合优先 */
         HYBRID_FIRST(2, "混合优先");

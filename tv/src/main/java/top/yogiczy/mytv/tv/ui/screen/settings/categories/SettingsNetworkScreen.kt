@@ -25,7 +25,7 @@ fun SettingsNetworkScreen(
             SettingsListItem(
                 modifier = Modifier.focusRequester(firstItemFocusRequester),
                 headlineContent = "HTTP请求重试次数",
-                supportingContent = "影响直播源、节目单数据获取",
+                supportingContent = "影响订阅源、节目单数据获取",
                 trailingContent = Constants.NETWORK_RETRY_COUNT.toString(),
                 locK = true,
             )
@@ -34,7 +34,7 @@ fun SettingsNetworkScreen(
         item {
             SettingsListItem(
                 headlineContent = "HTTP请求重试间隔时间",
-                supportingContent = "影响直播源、节目单数据获取",
+                supportingContent = "影响订阅源、节目单数据获取",
                 trailingContent = Constants.NETWORK_RETRY_INTERVAL.humanizeMs(),
                 locK = true,
             )

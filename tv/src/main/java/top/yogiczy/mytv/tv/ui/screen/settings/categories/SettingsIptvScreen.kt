@@ -35,7 +35,7 @@ fun SettingsIptvScreen(
 ) {
     SettingsCategoryScreen(
         modifier = modifier,
-        header = { Text("设置 / 直播源") },
+        header = { Text("设置 / 订阅源") },
         onBackPressed = onBackPressed,
     ) { firstItemFocusRequester ->
         item {
@@ -67,7 +67,7 @@ fun SettingsIptvScreen(
             val cacheTime = settingsViewModel.iptvSourceCacheTime
 
             SettingsListItem(
-                headlineContent = "直播源缓存时间",
+                headlineContent = "订阅源缓存时间",
                 trailingContent = when (cacheTime) {
                     0L -> "不缓存"
                     Long.MAX_VALUE -> "永久"
@@ -133,7 +133,7 @@ fun SettingsIptvScreen(
         item {
             SettingsListItem(
                 headlineContent = "频道图标覆盖",
-                supportingContent = "使用频道图标提供覆盖直播源中定义的频道图标",
+                supportingContent = "使用频道图标提供覆盖订阅源中定义的频道图标",
                 trailingContent = {
                     Switch(settingsViewModel.iptvChannelLogoOverride, null)
                 },
