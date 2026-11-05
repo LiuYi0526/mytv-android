@@ -1,6 +1,5 @@
 package top.yogiczy.mytv.tv.ui.screensold.classicchannel.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
@@ -13,7 +12,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -74,7 +72,7 @@ fun ClassicEpgItemList(
             // Bound the title as well as the rows, and reserve the date rail.
             .width(programmeListWidth + 24.dp + if (programDayGroup.size > 1) 90.dp else 0.dp)
             .fillMaxHeight()
-            .background(Color.Black.copy(alpha = 0.9f))
+            // The channel/EPG host owns the background; avoid stacking translucent layers.
             .padding(start = 12.dp, end = 12.dp),
     ) {
         Text(
