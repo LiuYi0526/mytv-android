@@ -78,7 +78,7 @@ fun ClassicEpgItemList(
     ) {
         Text(
             channelNameProvider().ifBlank { "节目单" },
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             style = MaterialTheme.typography.titleMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

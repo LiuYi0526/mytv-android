@@ -1,6 +1,10 @@
 package top.yogiczy.mytv.tv.ui.screensold.epg.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,15 +16,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.tooling.preview.Preview
@@ -29,6 +36,7 @@ import androidx.tv.material3.Text
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.epg.Epg
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
@@ -39,8 +47,8 @@ import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
 import top.yogiczy.mytv.tv.ui.utils.ifElse
 import top.yogiczy.mytv.tv.ui.utils.saveRequestFocus
-import kotlin.math.max
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun EpgProgrammeItemList(
     modifier: Modifier = Modifier,
@@ -85,7 +93,23 @@ fun EpgProgrammeItemList(
         }
     }
 
-    val listState = remember(epgProgrammeList) { LazyListState(max(0, initialIndex - 2)) }
+    val listState = remember(epgProgrammeList) { LazyListState(initialIndex) }
+    var initiallyPositioned by remember(listState) { mutableStateOf(false) }
+    val shouldFocusInitial by rememberUpdatedState(focusOnInitialProgramme)
+    LaunchedEffect(listState) {
+        val layout = snapshotFlow { listState.layoutInfo }.first { info ->
+            info.viewportEndOffset > info.viewportStartOffset &&
+                info.visibleItemsInfo.any { it.index == initialIndex }
+        }
+        val item = layout.visibleItemsInfo.first { it.index == initialIndex }
+        val centeredOffset = (layout.viewportStartOffset + layout.viewportEndOffset - item.size) / 2f
+        listState.scrollBy(item.offset - centeredOffset)
+        // Position before revealing/focusing, so entry does not animate twice.
+        // Date browsing only positions the list; it must keep focus in the date rail.
+        withFrameNanos { }
+        initiallyPositioned = true
+        if (shouldFocusInitial) itemFocusRequesterList[initialIndex].saveRequestFocus()
+    }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
@@ -93,38 +117,36 @@ fun EpgProgrammeItemList(
     }
 
     Column(modifier = modifier.fillMaxHeight()) {
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            state = listState,
-            contentPadding = PaddingValues(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            itemsIndexed(
-                epgProgrammeList,
-                key = { _, programme -> programme.hashCode() },
-            ) { index, programme ->
-                EpgProgrammeItem(
-                    modifier = Modifier
-                        .focusRequester(itemFocusRequesterList[index])
-                        .ifElse(
-                            focusOnInitialProgramme && index == initialIndex,
-                            Modifier.focusOnLaunchedSaveable(),
-                        ),
-                    epgProgrammeProvider = { programme },
-                    supportPlaybackProvider = supportPlaybackProvider,
-                    isPlaybackProvider = { currentPlaybackProvider() == programme },
-                    hasReservedProvider = { epgProgrammeReserveListProvider().any { it.test(programme) } },
-                    onPlayback = { onPlayback(programme) },
-                    onReserve = { onReserve(programme) },
-                    onDetails = {
-                        onUserAction()
-                        detailsOrigin = itemFocusRequesterList[index]
-                        detailsProgramme = programme
-                    },
-                    // Only the chosen initial programme may request focus. The live
-                    // row must not compete with a programme currently being replayed.
-                    focusOnLive = false,
-                )
+        CompositionLocalProvider(LocalBringIntoViewSpec provides CenteredProgrammeScrollSpec) {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth()
+                    .drawWithContent { if (initiallyPositioned) drawContent() },
+                state = listState,
+                contentPadding = PaddingValues(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                itemsIndexed(
+                    epgProgrammeList,
+                    key = { _, programme -> programme.hashCode() },
+                ) { index, programme ->
+                    EpgProgrammeItem(
+                        modifier = Modifier.focusRequester(itemFocusRequesterList[index]),
+                        epgProgrammeProvider = { programme },
+                        supportPlaybackProvider = supportPlaybackProvider,
+                        isPlaybackProvider = { currentPlaybackProvider() == programme },
+                        hasReservedProvider = { epgProgrammeReserveListProvider().any { it.test(programme) } },
+                        onPlayback = { onPlayback(programme) },
+                        onReserve = { onReserve(programme) },
+                        onDetails = {
+                            onUserAction()
+                            detailsOrigin = itemFocusRequesterList[index]
+                            detailsProgramme = programme
+                        },
+                        // Only the chosen initial programme may request focus. The live
+                        // row must not compete with a programme currently being replayed.
+                        focusOnLive = false,
+                    )
+                }
             }
         }
         if (epgProgrammeList.any { !it.description.isNullOrBlank() }) {
@@ -145,6 +167,12 @@ fun EpgProgrammeItemList(
         },
         onUserAction = onUserAction,
     )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+private object CenteredProgrammeScrollSpec : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
+        offset - (containerSize - size.coerceAtMost(containerSize)) / 2f
 }
 
 @Preview
