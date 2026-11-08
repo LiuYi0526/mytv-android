@@ -29,6 +29,7 @@ fun VideoPlayerDisplayModeItemList(
     currentDisplayModeProvider: () -> VideoPlayerDisplayMode = { VideoPlayerDisplayMode.ORIGINAL },
     onSelected: (VideoPlayerDisplayMode) -> Unit = {},
     onApplyToGlobal: (() -> Unit)? = null,
+    onFollowGlobal: (() -> Unit)? = null,
     onUserAction: () -> Unit = {},
 ) {
     val displayModeList = displayModeListProvider()
@@ -52,8 +53,19 @@ fun VideoPlayerDisplayModeItemList(
             VideoPlayerDisplayModeItem(
                 displayModeProvider = { displayMode },
                 isSelectedProvider = { displayMode == currentDisplayModeProvider() },
-                onSelected = { onSelected(displayMode) },
+                onSelected = { onUserAction(); onSelected(displayMode) },
             )
+        }
+
+        if (onFollowGlobal != null) {
+            item {
+                ListItem(
+                    modifier = Modifier.handleKeyEvents(onSelect = { onUserAction(); onFollowGlobal() }),
+                    selected = false,
+                    onClick = {},
+                    headlineContent = { Text("此频道跟随全局") },
+                )
+            }
         }
 
         if (onApplyToGlobal != null) {

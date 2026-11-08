@@ -285,10 +285,15 @@ fun MainContent(
     ) {
         VideoPlayerDisplayModeScreen(
             currentDisplayModeProvider = { videoPlayerState.displayMode },
-            onDisplayModeChanged = { videoPlayerState.displayMode = it },
+            onDisplayModeChanged = mainContentState::changeDisplayMode,
+            onFollowGlobal = {
+                mainContentState.followGlobalDisplayMode()
+                Snackbar.show("此频道已跟随全局显示模式")
+            },
             onApplyToGlobal = {
                 mainContentState.isVideoPlayerDisplayModeScreenVisible = false
                 settingsViewModel.videoPlayerDisplayMode = videoPlayerState.displayMode
+                mainContentState.followGlobalDisplayMode()
                 Snackbar.show("已应用到全局")
             },
             onClose = { mainContentState.isVideoPlayerDisplayModeScreenVisible = false },

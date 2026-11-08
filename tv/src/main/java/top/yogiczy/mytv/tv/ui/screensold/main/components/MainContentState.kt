@@ -36,6 +36,7 @@ import top.yogiczy.mytv.tv.ui.material.Snackbar
 import top.yogiczy.mytv.tv.ui.screen.settings.SettingsViewModel
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.VideoPlayerState
+import top.yogiczy.mytv.tv.ui.screensold.videoplayer.VideoPlayerDisplayMode
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.VideoPlayer
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.rememberVideoPlayerState
 import kotlin.math.max
@@ -292,6 +293,7 @@ class MainContentState(
             playbackEpgProgramme == _currentPlaybackEpgProgramme &&
             (lineIdx == _currentChannelLineIdx || positionChanged)) {
             _currentChannel = channel
+            restoreDisplayMode()
             if (positionChanged) settingsViewModel.recordChannelWatch(channel)
             return
         }
@@ -318,6 +320,22 @@ class MainContentState(
         } else {
             videoPlayerState.prepare(line, playbackEpgProgramme?.let { PlaybackRange(it.startAt, it.endAt) })
         }
+        restoreDisplayMode()
+    }
+
+    private fun restoreDisplayMode() {
+        videoPlayerState.displayMode = settingsViewModel.channelDisplayMode(
+            currentChannel, channelGroupListProvider().channelList)
+    }
+
+    fun changeDisplayMode(mode: VideoPlayerDisplayMode) {
+        settingsViewModel.rememberChannelDisplayMode(currentChannel, channelGroupListProvider().channelList, mode)
+        videoPlayerState.displayMode = mode
+    }
+
+    fun followGlobalDisplayMode() {
+        settingsViewModel.rememberChannelDisplayMode(currentChannel, channelGroupListProvider().channelList, null)
+        restoreDisplayMode()
     }
 
     fun changeCurrentChannelToPrev() {

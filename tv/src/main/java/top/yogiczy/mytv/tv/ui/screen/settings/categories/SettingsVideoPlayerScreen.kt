@@ -79,6 +79,7 @@ fun SettingsVideoPlayerScreen(
         item {
             SettingsListItem(
                 headlineContent = "全局显示模式",
+                supportingContent = "未单独设置显示模式的频道使用此模式；播放时调整的比例会按频道记忆。",
                 trailingContent = settingsViewModel.videoPlayerDisplayMode.label,
                 onSelect = toVideoPlayerDisplayModeScreen,
                 link = true,

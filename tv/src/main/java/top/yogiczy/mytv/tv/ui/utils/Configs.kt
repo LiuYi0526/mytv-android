@@ -3,6 +3,7 @@ package top.yogiczy.mytv.tv.ui.utils
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import top.yogiczy.mytv.core.data.entities.channel.Channel
+import top.yogiczy.mytv.core.data.entities.channel.ChannelDisplayModeList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelFavoriteList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelHistoryList
 import top.yogiczy.mytv.core.data.entities.control.ControlKeyActions
@@ -189,6 +190,8 @@ object Configs {
 
         /** 播放器 显示模式 */
         VIDEO_PLAYER_DISPLAY_MODE,
+
+        VIDEO_PLAYER_CHANNEL_DISPLAY_MODES,
 
         /** 播放器 强制音频软解 */
         VIDEO_PLAYER_FORCE_AUDIO_SOFT_DECODE,
@@ -598,6 +601,13 @@ object Configs {
         )
         set(value) = SP.putInt(KEY.VIDEO_PLAYER_DISPLAY_MODE.name, value.value)
 
+    var videoPlayerChannelDisplayModes: ChannelDisplayModeList
+        get() = runCatching {
+            Globals.json.decodeFromString<ChannelDisplayModeList>(
+                SP.getString(KEY.VIDEO_PLAYER_CHANNEL_DISPLAY_MODES.name, "{}"))
+        }.getOrDefault(ChannelDisplayModeList())
+        set(value) = SP.putString(KEY.VIDEO_PLAYER_CHANNEL_DISPLAY_MODES.name, Globals.json.encodeToString(value))
+
     /** 播放器 强制音频软解 */
     var videoPlayerForceAudioSoftDecode: Boolean
         get() = SP.getBoolean(KEY.VIDEO_PLAYER_FORCE_AUDIO_SOFT_DECODE.name, false)
@@ -797,6 +807,7 @@ object Configs {
             videoPlayerLoadTimeout = videoPlayerLoadTimeout,
             videoPlayerRtspTcp = videoPlayerRtspTcp,
             videoPlayerDisplayMode = videoPlayerDisplayMode,
+            videoPlayerChannelDisplayModes = videoPlayerChannelDisplayModes,
             videoPlayerForceAudioSoftDecode = videoPlayerForceAudioSoftDecode,
             videoPlayerStopPreviousMediaItem = videoPlayerStopPreviousMediaItem,
             themeAppCurrent = themeAppCurrent,
@@ -869,6 +880,7 @@ object Configs {
         configs.videoPlayerLoadTimeout?.let { videoPlayerLoadTimeout = it }
         configs.videoPlayerRtspTcp?.let { videoPlayerRtspTcp = it }
         configs.videoPlayerDisplayMode?.let { videoPlayerDisplayMode = it }
+        configs.videoPlayerChannelDisplayModes?.let { videoPlayerChannelDisplayModes = it }
         configs.videoPlayerForceAudioSoftDecode?.let { videoPlayerForceAudioSoftDecode = it }
         configs.videoPlayerStopPreviousMediaItem?.let { videoPlayerStopPreviousMediaItem = it }
         configs.themeAppCurrent?.let { themeAppCurrent = it }
@@ -940,6 +952,7 @@ object Configs {
         val videoPlayerLoadTimeout: Long? = null,
         val videoPlayerRtspTcp: Boolean? = null,
         val videoPlayerDisplayMode: VideoPlayerDisplayMode? = null,
+        val videoPlayerChannelDisplayModes: ChannelDisplayModeList? = null,
         val videoPlayerForceAudioSoftDecode: Boolean? = null,
         val videoPlayerStopPreviousMediaItem: Boolean? = null,
         val themeAppCurrent: AppThemeDef? = null,
@@ -969,6 +982,7 @@ object Configs {
             cloudSyncWebDavPassword = null,
             iptvChannelLastPlay = null,
             iptvChannelHistory = null,
+            videoPlayerChannelDisplayModes = null,
             iptvChannelLinePlayableHostList = null,
             iptvChannelLinePlayableUrlList = null,
         )

@@ -13,6 +13,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelFavoriteList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelHistoryList
+import top.yogiczy.mytv.core.data.entities.channel.ChannelDisplayModeList
+import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceList
@@ -220,6 +222,8 @@ class SettingsViewModel : ViewModel() {
     fun updateHistorySource(old: IptvSource, updated: IptvSource) {
         iptvChannelHistory = Configs.iptvChannelHistory.updateSource(old, updated)
         Configs.iptvChannelHistory = iptvChannelHistory
+        channelDisplayModes = channelDisplayModes.updateSource(old, updated)
+        Configs.videoPlayerChannelDisplayModes = channelDisplayModes
     }
 
     fun recordChannelWatch(channel: Channel) {
@@ -498,6 +502,18 @@ class SettingsViewModel : ViewModel() {
             afterSetWhenCloudSyncAutoPull()
         }
 
+    private var channelDisplayModes by mutableStateOf(ChannelDisplayModeList())
+
+    fun channelDisplayMode(channel: Channel, available: ChannelList): VideoPlayerDisplayMode {
+        val saved = channelDisplayModes.mode(iptvSourceCurrent, channel, available)
+        return VideoPlayerDisplayMode.entries.firstOrNull { it.value == saved } ?: videoPlayerDisplayMode
+    }
+
+    fun rememberChannelDisplayMode(channel: Channel, available: ChannelList, mode: VideoPlayerDisplayMode?) {
+        channelDisplayModes = channelDisplayModes.remember(iptvSourceCurrent, channel, available, mode?.value)
+        Configs.videoPlayerChannelDisplayModes = channelDisplayModes
+    }
+
     private var _videoPlayerDisplayMode by mutableStateOf(VideoPlayerDisplayMode.ORIGINAL)
     var videoPlayerDisplayMode: VideoPlayerDisplayMode
         get() = _videoPlayerDisplayMode
@@ -691,6 +707,7 @@ class SettingsViewModel : ViewModel() {
         _videoPlayerLoadTimeout = Configs.videoPlayerLoadTimeout
         _videoPlayerRtspTcp = Configs.videoPlayerRtspTcp
         _videoPlayerDisplayMode = Configs.videoPlayerDisplayMode
+        channelDisplayModes = Configs.videoPlayerChannelDisplayModes
         _videoPlayerForceAudioSoftDecode = Configs.videoPlayerForceAudioSoftDecode
         _videoPlayerStopPreviousMediaItem = Configs.videoPlayerStopPreviousMediaItem
         _themeAppCurrent = Configs.themeAppCurrent
