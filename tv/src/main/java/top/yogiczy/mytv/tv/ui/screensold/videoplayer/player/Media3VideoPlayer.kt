@@ -8,6 +8,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Metadata as Media3Metadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
@@ -42,6 +43,7 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.util.EventLogger
+import androidx.media3.extractor.metadata.id3.PrivFrame
 import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -52,6 +54,7 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
 import top.yogiczy.mytv.core.data.media.ClearKeyLicense
 import top.yogiczy.mytv.core.data.media.PlaybackRange
 import top.yogiczy.mytv.core.data.media.Av3aHeader
+import top.yogiczy.mytv.core.data.media.arib.AribCaptionPacket
 import top.yogiczy.mytv.core.data.network.ClearKeyLicenseFetcher
 import top.yogiczy.mytv.core.data.network.HttpBasicAuth
 import top.yogiczy.mytv.core.data.network.HttpBasicAuthInterceptor
@@ -64,6 +67,7 @@ import top.yogiczy.mytv.tv.ui.utils.Configs
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.mmt.MmtExtractorsFactory
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.av3a.Av3aHlsExtractorFactory
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.rtsp.RtspSourceFactory
+import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.arib.AribCaptionController
 import java.util.concurrent.TimeUnit
 
 @OptIn(UnstableApi::class)
@@ -96,6 +100,8 @@ class Media3VideoPlayer(
 
     private val onCuesListeners = mutableListOf<(ImmutableList<Cue>) -> Unit>()
     private var currentCues = ImmutableList.of<Cue>()
+    private var aribCaptions: AribCaptionController? = null
+    private var nativeTextDisabledBeforeArib: Boolean? = null
 
     private fun triggerCues(cues: ImmutableList<Cue>) {
         currentCues = cues
@@ -337,6 +343,7 @@ class Media3VideoPlayer(
     }
 
     private fun prepare(contentType: Int? = null) {
+        aribCaptions?.reset(keepSelection = true)
         updatePositionJob?.cancel()
         updatePositionJob = null
         val uri = Uri.parse(currentChannelLine.playableUrl)
@@ -422,6 +429,25 @@ class Media3VideoPlayer(
     }
 
     private val playerListener = object : Player.Listener {
+        override fun onMetadata(metadata: Media3Metadata) {
+            for (index in 0 until metadata.length()) {
+                val frame = metadata[index] as? PrivFrame ?: continue
+                if (frame.owner != AribCaptionPacket.OWNER) continue
+                val controller = aribCaptions ?: AribCaptionController(
+                    positionMs = { videoPlayer.currentPosition },
+                    onTracksChanged = { updateSubtitleMetadata() },
+                    onCues = { triggerCues(ImmutableList.copyOf(it)) },
+                ).also { aribCaptions = it }
+                controller.consume(frame.owner, frame.privateData)
+            }
+        }
+
+        override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+            if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) {
+                aribCaptions?.reset(keepSelection = true)
+            }
+        }
+
         override fun onTimelineChanged(timeline: Timeline, reason: Int) {
             applyPendingPlaybackPosition()
         }
@@ -584,6 +610,16 @@ class Media3VideoPlayer(
 
             metadata = metadata.copy(audioTracks = audioFormats)
 
+            updateSubtitleMetadata()
+        }
+
+        override fun onCues(cueGroup: CueGroup) {
+            if (aribCaptions?.selectedIndex == null) triggerCues(cueGroup.cues)
+        }
+    }
+
+    private fun updateSubtitleMetadata() {
+            val aribSelection = aribCaptions?.selectedIndex
             val subtitleFormats = videoPlayer.currentTracks.groups
                 .filter { it.mediaTrackGroup.type == C.TRACK_TYPE_TEXT }
                 .flatMap { group ->
@@ -593,24 +629,23 @@ class Media3VideoPlayer(
                             // Text tracks may be subtitles, captions, combined roles, or untagged.
                             // Keep the same flattened list used by fromIndexFindTrack when selecting.
                             .toSubtitleMetadata()
-                            .copy(isSelected = group.isTrackSelected(trackIndex))
+                            .copy(isSelected = aribSelection == null && group.isTrackSelected(trackIndex))
                     }
                 }
                 .mapIndexed { index, metadata ->
                     metadata.copy(index = index)
                 }
 
+            val allSubtitles = subtitleFormats + aribCaptions?.tracks.orEmpty().map { track ->
+                Metadata.Subtitle(index = track.index, isSelected = track.index == aribSelection,
+                    mimeType = AribCaptionPacket.MIME_TYPE, language = track.language, label = track.label)
+            }
             metadata = metadata.copy(
-                subtitleTracks = subtitleFormats,
-                subtitle = subtitleFormats.firstOrNull { it.isSelected == true },
+                subtitleTracks = allSubtitles,
+                subtitle = allSubtitles.firstOrNull { it.isSelected == true },
             )
 
             triggerMetadata(metadata)
-        }
-
-        override fun onCues(cueGroup: CueGroup) {
-            triggerCues(cueGroup.cues)
-        }
     }
 
     private fun Int.fromIndexFindTrack(type: @C.TrackType Int): Pair<TrackGroup, Int> {
@@ -717,6 +752,8 @@ class Media3VideoPlayer(
     }
 
     override fun release() {
+        aribCaptions?.close()
+        aribCaptions = null
         playbackCookies.clear()
         triggerCues(ImmutableList.of())
         onCuesListeners.clear()
@@ -733,6 +770,12 @@ class Media3VideoPlayer(
     }
 
     override fun prepare(line: ChannelLine, playbackRange: PlaybackRange?) {
+        nativeTextDisabledBeforeArib?.let { disabled ->
+            videoPlayer.trackSelectionParameters = videoPlayer.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, disabled).build()
+            nativeTextDisabledBeforeArib = null
+        }
+        aribCaptions?.reset()
         triggerCues(ImmutableList.of())
         if (Configs.videoPlayerStopPreviousMediaItem)
             videoPlayer.stop()
@@ -836,6 +879,17 @@ class Media3VideoPlayer(
     }
 
     override fun selectSubtitleTrack(track: Metadata.Subtitle?) {
+        if (track?.mimeType == AribCaptionPacket.MIME_TYPE) {
+            if (nativeTextDisabledBeforeArib == null) {
+                nativeTextDisabledBeforeArib = C.TRACK_TYPE_TEXT in videoPlayer.trackSelectionParameters.disabledTrackTypes
+            }
+            videoPlayer.trackSelectionParameters = videoPlayer.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
+            aribCaptions?.select(track.index)
+            return
+        }
+        nativeTextDisabledBeforeArib = null
+        aribCaptions?.select(null)
         if (track == null) {
             videoPlayer.trackSelectionParameters = videoPlayer.trackSelectionParameters
                 .buildUpon()

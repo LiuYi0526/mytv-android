@@ -8,6 +8,7 @@
 | AndroidX / Media3 | [androidx/media](https://github.com/androidx/media)，Apache-2.0；版本及兼容库说明见 `scripts/media3/README.md` |
 | Media3 HLS、RTSP 兼容 AAR | 基于固定版本官方 AAR 重建部分 Java 类；保留上游许可，源码补丁及重建脚本位于 `scripts/media3/` |
 | RTMP 客户端 | [ant-media/LibRtmp-Client-for-Android](https://github.com/ant-media/LibRtmp-Client-for-Android)；AAR 内保留客户端许可及 librtmp 的 COPYING，16 KB 重建说明见 `scripts/native/README.md` |
+| ARIB 字幕 | [libaribcaption](https://github.com/xqq/libaribcaption) 1.1.2（MIT/ISC），静态链接 [FreeType](https://freetype.org/) 2.14.3（FTL）；JNI 源码、固定输入和四架构重建说明见 `scripts/native/arib/README.md`，许可保留在 AAR 中 |
 | FFmpeg、IJK 及原生音频组件 | 各组件以其上游许可证为准；固定来源、构建参数、JNI 修改及重建脚本见 `scripts/native/README.md`、`scripts/media3/README.md` |
 | GSYVideoPlayer | [CarGuo/GSYVideoPlayer](https://github.com/CarGuo/GSYVideoPlayer)，Java 与原生依赖版本见 `tv/build.gradle.kts` |
 | 其它 Maven 依赖 | 版本见 `gradle/libs.versions.toml` 和各模块 Gradle 文件，许可声明以对应依赖包及上游项目为准 |
