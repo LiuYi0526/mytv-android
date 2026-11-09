@@ -7,6 +7,7 @@
 | --- | --- |
 | AndroidX / Media3 | [androidx/media](https://github.com/androidx/media)，Apache-2.0；版本及兼容库说明见 `scripts/media3/README.md` |
 | Media3 HLS、RTSP 兼容 AAR | 基于固定版本官方 AAR 重建部分 Java 类；保留上游许可，源码补丁及重建脚本位于 `scripts/media3/` |
+| Media3 TS 杜比视界适配 | `DolbyVisionH265Reader.java` 基于 Media3 1.11.1 的 `H265Reader`（Apache-2.0），保留上游版权头；修改为输出 DV 格式并保留逐帧 RPU，说明见 `scripts/media3/README.md` |
 | RTMP 客户端 | [ant-media/LibRtmp-Client-for-Android](https://github.com/ant-media/LibRtmp-Client-for-Android)；AAR 内保留客户端许可及 librtmp 的 COPYING，16 KB 重建说明见 `scripts/native/README.md` |
 | ARIB 字幕 | [libaribcaption](https://github.com/xqq/libaribcaption) 1.1.2（MIT/ISC），静态链接 [FreeType](https://freetype.org/) 2.14.3（FTL）；JNI 源码、固定输入和四架构重建说明见 `scripts/native/arib/README.md`，许可保留在 AAR 中 |
 | FFmpeg、IJK 及原生音频组件 | 各组件以其上游许可证为准；固定来源、构建参数、JNI 修改及重建脚本见 `scripts/native/README.md`、`scripts/media3/README.md` |

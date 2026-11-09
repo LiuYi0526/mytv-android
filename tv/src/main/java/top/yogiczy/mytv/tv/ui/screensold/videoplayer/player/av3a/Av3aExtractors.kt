@@ -26,12 +26,13 @@ import androidx.media3.extractor.ts.TsExtractor
 import androidx.media3.extractor.ts.TsPayloadReader
 import top.yogiczy.mytv.core.data.media.Av3aHeader
 import top.yogiczy.mytv.core.data.media.Av3aStreamParser
+import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.dolby.DolbyVisionPayloadReaderFactory
 import java.io.EOFException
 
-/** Adds AV3A to the public Media3 TS extension point; all other stream types use the defaults. */
+/** Adds AV3A and signalled Dolby Vision; all other stream types use Media3 defaults. */
 @OptIn(UnstableApi::class)
 class Av3aPayloadReaderFactory(
-    private val delegate: TsPayloadReader.Factory = DefaultTsPayloadReaderFactory(),
+    private val delegate: TsPayloadReader.Factory = DolbyVisionPayloadReaderFactory(),
 ) : TsPayloadReader.Factory by delegate {
     override fun createPayloadReader(streamType: Int, esInfo: TsPayloadReader.EsInfo): TsPayloadReader? =
         if (streamType == 0xd5) PesReader(Av3aReader(esInfo.language, esInfo.roleFlags))
@@ -115,7 +116,8 @@ class Av3aHlsExtractorFactory(
         }
         val ts = TsExtractor(
             TsExtractor.MODE_HLS, TsExtractor.FLAG_EMIT_RAW_SUBTITLE_DATA, SubtitleParser.Factory.UNSUPPORTED,
-            timestampAdjuster, Av3aPayloadReaderFactory(DefaultTsPayloadReaderFactory(flags, captions)),
+            timestampAdjuster, Av3aPayloadReaderFactory(DolbyVisionPayloadReaderFactory(
+                DefaultTsPayloadReaderFactory(flags, captions), captions, muxedCaptionFormats != null)),
             TsExtractor.DEFAULT_TIMESTAMP_SEARCH_BYTES,
         )
         sniffingExtractorInput.resetPeekPosition()

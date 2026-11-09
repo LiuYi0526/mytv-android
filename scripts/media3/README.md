@@ -5,6 +5,35 @@ The app uses the official Media3 1.11.1 APIs (Android API 23+), with an AV3A TS 
 Stream type `0xD5` is reported as `audio/av3a`. The existing FFmpeg extension
 decodes this MIME type with `libarcdav3a`.
 
+## Single-layer Dolby Vision in MPEG-TS
+
+The TS payload factory also recognizes PMT DOVI descriptors (`0xB0`) on HEVC
+streams signalled as stream type `0x24`, for single-layer profiles 5 and 8.
+Profile 8 accepts HDR10/HLG-compatible base layers. Private stream types are not
+intercepted, so this is not general Profile 5 TS support. Ordinary HEVC, unknown
+profiles, malformed descriptors and dual-layer
+streams keep the upstream path; this does not implement Profile 7 EL decoding.
+
+`tv/src/main/java/androidx/media3/extractor/ts/DolbyVisionH265Reader.java` is an
+Apache-2.0 adaptation of [Media3 1.11.1 H265Reader](https://github.com/androidx/media/blob/1.11.1/libraries/extractor/src/main/java/androidx/media3/extractor/ts/H265Reader.java).
+It emits the DV MIME and codec/profile/level from the PMT, while keeping the
+upstream SPS colour information, CSD, captions, timestamps and frame parsing.
+Its sample reader treats NAL type 62 (RPU) as part of the preceding coded picture;
+the upstream reader otherwise closes the sample before this metadata. The class
+stays in the upstream package to reuse the package-private NalUnitTargetBuffer.
+Compile-only Checker Framework annotations are replaced with AndroidX Nullable;
+the upstream runtime null/state checks are retained.
+Caption descriptor parsing in DolbyVisionPayloadReaderFactory is adapted from
+the same version of DefaultTsPayloadReaderFactory. Upstream copyright notices
+are retained; the license is included in this directory's LICENSE-2.0.txt.
+
+The adaptation does not decode Dolby Vision in software or force it on unsupported
+hardware. Media3 remains responsible for decoder capabilities and compatible
+base-layer fallback. Device display activation must be verified separately.
+Tests cover descriptors, split NAL input, RPU sample retention, caption overrides,
+and optional captured TS extraction in HLS and progressive paths. Captured live
+video is supplied externally at test time and is not included in the repository.
+
 ## Why HLS also needs a patch
 
 Official `HlsSampleStreamWrapper.getMappedTrackOutput` maps audio by type, retaining
