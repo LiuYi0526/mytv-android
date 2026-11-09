@@ -155,6 +155,10 @@ class ReplayMedia3Test {
         assertTrue(liveReady.await(8, TimeUnit.SECONDS))
         Thread.sleep(650)
         assertTrue("Normal live playback was forced to its beginning", position.get() > windowStart + 7_000_000)
+        main { player.pause(); player.seekTo(windowStart + 120_000) }
+        Thread.sleep(650)
+        assertTrue("Live seek must use its window start, not an EPG programme start",
+            position.get() in windowStart + 120_000..windowStart + 122_000)
     }
 
     @Test fun programmeEndPausesInsteadOfReturningToLive() = withPlayer { player, windowStart ->

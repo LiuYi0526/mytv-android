@@ -813,9 +813,20 @@ class Media3VideoPlayer(
         cancelPlaybackMonitoring()
     }
 
+    override val positionIsAbsolute: Boolean
+        get() = playbackRange != null || videoPlayer.currentLiveOffset != C.TIME_UNSET
+
     override fun seekTo(position: Long) {
         val range = playbackRange
-        if (range == null) videoPlayer.seekTo(position)
+        if (range == null) {
+            // Live callbacks also report UTC; convert using the actual window, not the EPG start.
+            val window = playbackWindow()
+            val windowStart = window?.startAtOrNull() ?: if (positionIsAbsolute)
+                System.currentTimeMillis() - videoPlayer.currentLiveOffset - videoPlayer.currentPosition
+            else null
+            val target = if (positionIsAbsolute && windowStart != null) position - windowStart else position
+            videoPlayer.seekTo(target.coerceAtLeast(0))
+        }
         else {
             playbackPositionAt = position.coerceIn(range.startAt, range.endAt)
             playbackEnded = false

@@ -35,6 +35,9 @@ abstract class VideoPlayer(
 
     abstract fun pause()
 
+    /** Position callbacks and seekTo share this time base: UTC milliseconds or media-relative milliseconds. */
+    open val positionIsAbsolute: Boolean get() = false
+
     abstract fun seekTo(position: Long)
 
     abstract fun setVolume(volume: Float)

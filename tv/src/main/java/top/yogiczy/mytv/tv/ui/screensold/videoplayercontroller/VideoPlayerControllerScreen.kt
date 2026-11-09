@@ -25,6 +25,7 @@ fun VideoPlayerControllerScreen(
     isVideoPlayerBufferingProvider: () -> Boolean = { false },
     videoPlayerCurrentPositionProvider: () -> Long = { 0L },
     videoPlayerDurationProvider: () -> Pair<Long, Long> = { 0L to 0L },
+    videoPlayerPositionIsAbsoluteProvider: () -> Boolean = { false },
     onVideoPlayerPlay: () -> Unit = {},
     onVideoPlayerPause: () -> Unit = {},
     onVideoPlayerSeekTo: (Long) -> Unit = {},
@@ -52,6 +53,7 @@ fun VideoPlayerControllerScreen(
             VideoPlayerControllerPositionCtrl(
                 currentPositionProvider = videoPlayerCurrentPositionProvider,
                 durationProvider = videoPlayerDurationProvider,
+                positionIsAbsoluteProvider = videoPlayerPositionIsAbsoluteProvider,
                 onSeekTo = onVideoPlayerSeekTo,
             )
         }

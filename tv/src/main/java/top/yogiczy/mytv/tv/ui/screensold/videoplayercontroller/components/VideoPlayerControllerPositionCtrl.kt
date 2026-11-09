@@ -18,9 +18,12 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
@@ -32,6 +35,7 @@ import top.yogiczy.mytv.tv.ui.material.ProgressBar
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.math.max
 import kotlin.math.min
 
@@ -40,6 +44,7 @@ fun VideoPlayerControllerPositionCtrl(
     modifier: Modifier = Modifier,
     currentPositionProvider: () -> Long = { 0L },
     durationProvider: () -> Pair<Long, Long> = { 0L to 0L },
+    positionIsAbsoluteProvider: () -> Boolean = { false },
     onSeekTo: (Long) -> Unit = {},
 ) {
     var seekToPosition by remember { mutableStateOf<Long?>(null) }
@@ -48,8 +53,8 @@ fun VideoPlayerControllerPositionCtrl(
         wait = 1000L,
         func = {
             seekToPosition?.let { nnSeekToPosition ->
-                val startPosition = durationProvider().first
-                onSeekTo(nnSeekToPosition - startPosition)
+                // Keep the provider's time base, including UTC for Media3 replay.
+                onSeekTo(nnSeekToPosition)
                 seekToPosition = null
             }
         },
@@ -68,7 +73,9 @@ fun VideoPlayerControllerPositionCtrl(
         val currentPosition = currentPositionProvider()
         val endPosition = durationProvider().second
         seekToPosition = min(
-            if (endPosition <= 0L) Long.MAX_VALUE else min(endPosition, System.currentTimeMillis()),
+            if (endPosition <= 0L) Long.MAX_VALUE
+            else if (positionIsAbsoluteProvider()) min(endPosition, System.currentTimeMillis())
+            else endPosition,
             (seekToPosition ?: currentPosition) + ms
         )
     }
@@ -79,19 +86,23 @@ fun VideoPlayerControllerPositionCtrl(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         VideoPlayerControllerBtn(
+            modifier = Modifier.semantics { contentDescription = "后退10分钟" },
             imageVector = Icons.Default.KeyboardDoubleArrowLeft,
             onSelect = { seekForward(1000L * 60 * 10) },
         )
         VideoPlayerControllerBtn(
+            modifier = Modifier.semantics { contentDescription = "后退1分钟" },
             imageVector = Icons.Default.ChevronLeft,
             onSelect = { seekForward(1000L * 60 * 1) },
         )
 
         VideoPlayerControllerBtn(
+            modifier = Modifier.semantics { contentDescription = "前进1分钟" },
             imageVector = Icons.Default.ChevronRight,
             onSelect = { seekNext(1000L * 60 * 1) },
         )
         VideoPlayerControllerBtn(
+            modifier = Modifier.semantics { contentDescription = "前进10分钟" },
             imageVector = Icons.Default.KeyboardDoubleArrowRight,
             onSelect = { seekNext(1000L * 60 * 10) },
         )
@@ -100,6 +111,7 @@ fun VideoPlayerControllerPositionCtrl(
             modifier = Modifier.padding(start = 10.dp),
             currentPositionProvider = { seekToPosition ?: currentPositionProvider() },
             durationProvider = durationProvider,
+            positionIsAbsoluteProvider = positionIsAbsoluteProvider,
         )
     }
 }
@@ -109,10 +121,14 @@ private fun VideoPlayerControllerPositionProgress(
     modifier: Modifier = Modifier,
     currentPositionProvider: () -> Long = { 0L },
     durationProvider: () -> Pair<Long, Long> = { 0L to 0L },
+    positionIsAbsoluteProvider: () -> Boolean = { false },
 ) {
     val currentPosition = currentPositionProvider()
     val duration = durationProvider()
-    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).apply {
+        // Elapsed media positions are durations, not dates in the device's local time zone.
+        if (!positionIsAbsoluteProvider()) timeZone = TimeZone.getTimeZone("UTC")
+    }
 
     Row(
         modifier = modifier,
@@ -124,7 +140,9 @@ private fun VideoPlayerControllerPositionProgress(
         )
 
         ProgressBar(
-            process = (currentPosition - duration.first) / (duration.second - duration.first).toFloat(),
+            process = if (duration.second > duration.first)
+                ((currentPosition - duration.first) / (duration.second - duration.first).toFloat()).coerceIn(0f, 1f)
+            else 0f,
             modifier = Modifier
                 .weight(1f)
                 .height(6.dp),
@@ -159,7 +177,9 @@ class Debounce internal constructor(
 fun rememberDebounce(
     @IntRange(from = 0) wait: Long,
     func: () -> Unit = {},
-) = remember { Debounce(wait = wait, func = func) }.also {
+) = rememberUpdatedState(func).let { latest ->
+    remember(wait) { Debounce(wait = wait, func = { latest.value() }) }
+}.also {
     LaunchedEffect(it) { it.observe() }
 }
 

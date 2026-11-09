@@ -59,6 +59,8 @@ class VideoPlayerState(
     /** 当前播放位置 */
     var currentPosition by mutableLongStateOf(0L)
 
+    val positionIsAbsolute: Boolean get() = instance.positionIsAbsolute
+
     /** 当前音量 */
     private var _volume by mutableFloatStateOf(1f)
     var volume: Float
@@ -74,10 +76,11 @@ class VideoPlayerState(
     fun prepare(line: ChannelLine, playbackRange: PlaybackRange? = null) {
         displayMode = defaultDisplayModeProvider()
         error = null
-        currentPosition = playbackRange?.startAt ?: 0L
+        currentPosition = 0L
         duration = playbackRange?.durationMs ?: 0L
         metadata = VideoPlayer.Metadata()
         instance.prepare(line, playbackRange)
+        currentPosition = if (positionIsAbsolute) playbackRange?.startAt ?: 0L else 0L
     }
 
     fun play() {
