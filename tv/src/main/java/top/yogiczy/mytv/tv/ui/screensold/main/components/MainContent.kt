@@ -74,6 +74,7 @@ fun MainContent(
         videoPlayerState = videoPlayerState,
         channelGroupListProvider = filteredChannelGroupListProvider,
         favoriteChannelListProvider = favoriteChannelListProvider,
+        epgListProvider = epgListProvider,
     )
     val channelNumberSelectState = rememberChannelNumberSelectState {
         val idx = it.toInt() - 1
@@ -248,7 +249,7 @@ fun MainContent(
         onDismissRequest = { mainContentState.isVideoPlayerControllerScreenVisible = false },
     ) {
         VideoPlayerControllerScreen(
-            isVideoPlayerPlayingProvider = { videoPlayerState.isPlaying },
+            isVideoPlayerPlayingProvider = { videoPlayerState.playRequested },
             isVideoPlayerBufferingProvider = { videoPlayerState.isBuffering },
             videoPlayerCurrentPositionProvider = { videoPlayerState.currentPosition },
             videoPlayerPositionIsAbsoluteProvider = { videoPlayerState.positionIsAbsolute },
@@ -269,7 +270,9 @@ fun MainContent(
             },
             onVideoPlayerPlay = { videoPlayerState.play() },
             onVideoPlayerPause = { videoPlayerState.pause() },
-            onVideoPlayerSeekTo = { videoPlayerState.seekTo(it) },
+            onVideoPlayerSeekTo = {
+                mainContentState.seekTo(it, epgListProvider().recentProgramme(mainContentState.currentChannel)?.now)
+            },
             onClose = { mainContentState.isVideoPlayerControllerScreenVisible = false },
         )
     }

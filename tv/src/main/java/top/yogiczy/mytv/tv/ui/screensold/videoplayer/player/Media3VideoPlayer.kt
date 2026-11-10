@@ -353,7 +353,7 @@ class Media3VideoPlayer(
             contentTypeAttempts[contentType ?: Util.inferContentType(uri)] = true
             triggerPrepared()
             if (playbackRange != null) {
-                pendingPlaybackPositionAt = playbackPositionAt ?: playbackRange!!.startAt
+                pendingPlaybackPositionAt = playbackPositionAt ?: playbackRange!!.sourceStartAt
                 videoPlayer.playWhenReady = false
                 videoPlayer.setMediaSource(mediaSource, 0L)
             } else {
@@ -417,13 +417,14 @@ class Media3VideoPlayer(
         prepare()
     }
 
-    private fun finishPlayback() {
+    private fun finishPlayback(at: Long? = null) {
         val range = playbackRange ?: return
+        val end = (at ?: range.endAt).coerceIn(range.startAt, range.endAt)
         playbackEnded = true
         playbackShouldPlay = false
-        playbackPositionAt = range.endAt
+        playbackPositionAt = end
         videoPlayer.pause()
-        triggerCurrentPosition(range.endAt)
+        triggerCurrentPosition(end)
         triggerBuffering(false)
         cancelPlaybackMonitoring()
     }
@@ -540,9 +541,9 @@ class Media3VideoPlayer(
                         val range = playbackRange
                         if (range != null && !playbackEnded && pendingPlaybackPositionAt == null) {
                             rememberPlaybackPosition()
-                            val position = playbackPositionAt ?: range.startAt
+                            val position = playbackPositionAt ?: range.sourceStartAt
                             triggerCurrentPosition(position)
-                            if (position >= range.endAt) finishPlayback()
+                            if (!range.continuous && position >= range.endAt) finishPlayback()
                         } else if (range == null) {
                             val liveOffset = videoPlayer.currentLiveOffset
                             triggerCurrentPosition(if (liveOffset != C.TIME_UNSET)
@@ -558,7 +559,22 @@ class Media3VideoPlayer(
             }
 
             if (playbackState == Player.STATE_ENDED) {
-                if (playbackRange != null) finishPlayback()
+                if (playbackRange != null) {
+                    if (pendingPlaybackPositionAt != null || playbackEnded) return
+                    // The native clock may overshoot at EOS (especially without renderers).
+                    // Resume from the manifest/window boundary, not the late callback position.
+                    val window = playbackWindow()
+                    val endPosition = window?.durationMs?.takeIf { it != C.TIME_UNSET && it >= 0 }
+                        ?: videoPlayer.currentPosition
+                    playbackPositionAt = playbackRange!!.absolutePosition(endPosition, window?.startAtOrNull())
+                    if (playbackRange!!.continuous) {
+                        playbackEnded = true
+                        cancelPlaybackMonitoring()
+                        val position = playbackPositionAt ?: playbackRange!!.sourceStartAt
+                        triggerCurrentPosition(position)
+                        triggerPlaybackWindowEnded(position)
+                    } else finishPlayback(playbackPositionAt)
+                }
                 else {
                     videoPlayer.seekToDefaultPosition()
                     videoPlayer.prepare()
@@ -786,8 +802,8 @@ class Media3VideoPlayer(
         // Internal reconnects and decoder fallback reuse the current jar.
         playbackCookies = PlaybackCookieJar()
         this.playbackRange = playbackRange
-        playbackPositionAt = playbackRange?.startAt
-        pendingPlaybackPositionAt = playbackRange?.startAt
+        playbackPositionAt = playbackRange?.sourceStartAt
+        pendingPlaybackPositionAt = playbackRange?.sourceStartAt
         playbackShouldPlay = true
         playbackEnded = false
         playbackUnavailable = false
@@ -799,7 +815,7 @@ class Media3VideoPlayer(
         playbackShouldPlay = true
         if (playbackUnavailable) return
         if (playbackEnded || videoPlayer.playerError != null) {
-            if (playbackEnded) playbackPositionAt = playbackRange?.startAt
+            if (playbackEnded) playbackPositionAt = playbackRange?.sourceStartAt
             playbackEnded = false
             playbackRetryCount = 0
             prepare()
@@ -816,6 +832,21 @@ class Media3VideoPlayer(
     override val positionIsAbsolute: Boolean
         get() = playbackRange != null || videoPlayer.currentLiveOffset != C.TIME_UNSET
 
+    override fun canSeekTo(position: Long): Boolean {
+        val window = playbackWindow() ?: return false
+        val range = playbackRange
+        if (range != null && !range.continuous && position == range.endAt) return true
+        if (!window.isSeekable) return false
+        val duration = window.durationMs.takeIf { it != C.TIME_UNSET }
+        val relative = if (range != null) {
+            range.windowPosition(position, window.startAtOrNull(), duration) ?: return false
+        } else if (positionIsAbsolute) {
+            val start = window.startAtOrNull() ?: return false
+            position - start
+        } else position
+        return relative >= 0 && (duration == null || relative < duration)
+    }
+
     override fun seekTo(position: Long) {
         val range = playbackRange
         if (range == null) {
@@ -828,10 +859,11 @@ class Media3VideoPlayer(
             videoPlayer.seekTo(target.coerceAtLeast(0))
         }
         else {
-            playbackPositionAt = position.coerceIn(range.startAt, range.endAt)
+            playbackPositionAt = if (range.continuous) position.coerceAtLeast(range.startAt)
+                else position.coerceIn(range.startAt, range.endAt)
             playbackEnded = false
             pendingPlaybackPositionAt = playbackPositionAt
-            if (playbackPositionAt == range.endAt) finishPlayback()
+            if (!range.continuous && playbackPositionAt == range.endAt) finishPlayback()
             else applyPendingPlaybackPosition()
         }
     }

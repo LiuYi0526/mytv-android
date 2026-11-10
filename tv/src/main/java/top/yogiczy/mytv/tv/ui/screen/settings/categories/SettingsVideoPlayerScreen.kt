@@ -114,6 +114,15 @@ fun SettingsVideoPlayerScreen(
         }
 
         item {
+            SettingsListItem(
+                headlineContent = "回放重载 URL 优先",
+                supportingContent = "开启后，跳转回看进度时重新请求回看地址；关闭时优先在当前视频内跳转，超出可定位范围时尝试重载。",
+                trailingContent = { Switch(settingsViewModel.videoPlayerPlaybackReload, null) },
+                onSelect = { settingsViewModel.videoPlayerPlaybackReload = !settingsViewModel.videoPlayerPlaybackReload },
+            )
+        }
+
+        item {
             val isValid = settingsViewModel.videoPlayerHeaders.headersValid()
 
             SettingsListItem(

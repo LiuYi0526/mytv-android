@@ -38,6 +38,9 @@ abstract class VideoPlayer(
     /** Position callbacks and seekTo share this time base: UTC milliseconds or media-relative milliseconds. */
     open val positionIsAbsolute: Boolean get() = false
 
+    /** Whether the current loaded media window can represent this target without a new URL. */
+    open fun canSeekTo(position: Long): Boolean = true
+
     abstract fun seekTo(position: Long)
 
     abstract fun setVolume(volume: Float)
@@ -81,6 +84,12 @@ abstract class VideoPlayer(
     private val onCurrentPositionChanged = mutableListOf<(position: Long) -> Unit>()
     private val onMetadataListeners = mutableListOf<(metadata: Metadata) -> Unit>()
     private val onInterruptListeners = mutableListOf<() -> Unit>()
+    private val onPlaybackWindowEndedListeners = mutableListOf<(Long) -> Unit>()
+
+    fun onPlaybackWindowEnded(listener: (Long) -> Unit) { onPlaybackWindowEndedListeners.add(listener) }
+    protected fun triggerPlaybackWindowEnded(position: Long) {
+        onPlaybackWindowEndedListeners.forEach { it(position) }
+    }
 
     private fun clearAllListeners() {
         onResolutionListeners.clear()
@@ -93,6 +102,7 @@ abstract class VideoPlayer(
         onCurrentPositionChanged.clear()
         onMetadataListeners.clear()
         onInterruptListeners.clear()
+        onPlaybackWindowEndedListeners.clear()
     }
 
     protected fun triggerResolution(width: Int, height: Int) {

@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
+import top.yogiczy.mytv.core.data.media.PlaybackRange
 import top.yogiczy.mytv.core.data.network.HttpBasicAuth
 import top.yogiczy.mytv.core.util.utils.toHeaders
 import top.yogiczy.mytv.tv.ui.utils.Configs
@@ -26,6 +27,7 @@ class IjkVideoPlayer(
 ) : VideoPlayer(coroutineScope),
     IMediaPlayer.OnPreparedListener,
     IMediaPlayer.OnVideoSizeChangedListener,
+    IMediaPlayer.OnCompletionListener,
     IMediaPlayer.OnErrorListener {
 
     private val player by lazy {
@@ -52,6 +54,8 @@ class IjkVideoPlayer(
     private var currentLine: ChannelLine? = null
     private var resumePosition: Long? = null
     private var shouldPlay = true
+    private var playbackRange: PlaybackRange? = null
+    private var endedPositionAt: Long? = null
 
     private fun setOption() {
         val mediaCodec = if (softwareDecodePreferred) 0L else 1L
@@ -66,11 +70,17 @@ class IjkVideoPlayer(
     }
 
     override fun prepare(line: ChannelLine) {
+        prepare(line, null)
+    }
+
+    override fun prepare(line: ChannelLine, playbackRange: PlaybackRange?) {
+        this.playbackRange = playbackRange
         shouldPlay = true
         prepareLine(line)
     }
 
     private fun prepareLine(line: ChannelLine, position: Long? = null) {
+        endedPositionAt = null
         currentLine = line
         resumePosition = position
         player.reset()
@@ -100,6 +110,7 @@ class IjkVideoPlayer(
     }
 
     override fun play() {
+        endedPositionAt = null
         shouldPlay = true
         player.start()
     }
@@ -109,8 +120,17 @@ class IjkVideoPlayer(
         player.pause()
     }
 
+    override val positionIsAbsolute: Boolean get() = playbackRange != null
+
+    override fun canSeekTo(position: Long): Boolean {
+        val relative = playbackRange?.let { position - it.sourceStartAt } ?: position
+        return player.duration > 0 && relative in 0..player.duration
+    }
+
     override fun seekTo(position: Long) {
-        player.seekTo(position)
+        endedPositionAt = null
+        val relative = playbackRange?.let { position - it.sourceStartAt } ?: position
+        player.seekTo(relative.coerceAtLeast(0))
     }
 
     override fun setVolume(volume: Float) {
@@ -171,12 +191,14 @@ class IjkVideoPlayer(
         player.setOnPreparedListener(this)
         player.setOnVideoSizeChangedListener(this)
         player.setOnErrorListener(this)
+        player.setOnCompletionListener(this)
     }
 
     override fun release() {
         player.setOnPreparedListener(null)
         player.setOnVideoSizeChangedListener(null)
         player.setOnErrorListener(null)
+        player.setOnCompletionListener(null)
         player.stop()
         player.release()
         cacheSurfaceTexture?.release()
@@ -267,16 +289,29 @@ class IjkVideoPlayer(
         triggerMetadata(metadata)
         triggerReady()
         triggerBuffering(false)
-        triggerDuration(player.duration)
+        triggerDuration(playbackRange?.durationMs ?: player.duration)
 
         updateJob?.cancel()
         updateJob = coroutineScope.launch {
             while (true) {
+                val range = playbackRange
+                val position = endedPositionAt ?: range?.absolutePosition(player.currentPosition, null) ?: player.currentPosition
+                if (range != null && !range.continuous && position >= range.endAt && player.isPlaying) pause()
                 triggerIsPlayingChanged(player.isPlaying)
-                triggerCurrentPosition(player.currentPosition)
+                triggerCurrentPosition(position)
                 delay(500)
             }
         }
+    }
+
+    override fun onCompletion(player: IMediaPlayer) {
+        val range = playbackRange ?: return
+        cancelPlaybackMonitoring()
+        val position = range.absolutePosition(player.duration.takeIf { it > 0 } ?: player.currentPosition, null)
+        endedPositionAt = position
+        triggerCurrentPosition(position)
+        triggerIsPlayingChanged(false)
+        if (range.continuous) triggerPlaybackWindowEnded(position)
     }
 
     override fun onError(player: IMediaPlayer, what: Int, extra: Int): Boolean {

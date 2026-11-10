@@ -49,4 +49,25 @@ class PlaybackRangeTest {
     fun emptyProgrammeIsRejected() {
         PlaybackRange(start, start)
     }
+
+    @Test fun reloadedStaticWindowStartsAtRequestedTimeAndKeepsProgrammeDuration() {
+        val reloaded = range.copy(sourceStartAt = start + 120_000)
+        assertEquals(600_000L, reloaded.durationMs)
+        assertEquals(0L, reloaded.windowPosition(start + 120_000, null, 480_000))
+        assertEquals(start + 180_000, reloaded.absolutePosition(60_000, null))
+        assertNull(reloaded.windowPosition(start + 60_000, null, 480_000))
+    }
+
+    @Test fun reloadedDynamicWindowStillUsesManifestClock() {
+        val reloaded = range.copy(sourceStartAt = start + 120_000)
+        assertEquals(0L, reloaded.windowPosition(start + 120_000, start + 122_000, 480_000))
+        assertEquals(start + 182_000, reloaded.absolutePosition(60_000, start + 122_000))
+    }
+
+    @Test fun continuousTimelineCanCrossProgrammeEndWithoutClampingOrRejectingTheNewWindow() {
+        val continuous = range.copy(continuous = true)
+        assertEquals(start + 720_000, continuous.absolutePosition(720_000, null))
+        assertEquals(60_000L, continuous.windowPosition(start + 720_000, start + 660_000, 300_000))
+    }
+
 }

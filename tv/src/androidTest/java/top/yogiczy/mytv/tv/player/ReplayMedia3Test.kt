@@ -115,16 +115,39 @@ class ReplayMedia3Test {
         }
     }
 
-    private fun withPlayer(failures: Int = 0, block: (Media3VideoPlayer, Long) -> Unit) {
+    private fun withPlayer(failures: Int = 0, clocked: Boolean = true, durationMs: Long = 7_200_000, block: (Media3VideoPlayer, Long) -> Unit) {
         val windowStart = System.currentTimeMillis() - 7_200_000
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         lateinit var player: Media3VideoPlayer
         main {
-            player = Media3VideoPlayer(instrumentation.targetContext, scope, TimelineFactory(windowStart, failures))
+            player = Media3VideoPlayer(instrumentation.targetContext, scope, TimelineFactory(windowStart, failures, clocked, durationMs))
             player.initialize()
         }
         try { block(player, windowStart) }
         finally { main { player.release(); scope.cancel() } }
+    }
+
+    @Test fun reloadedStaticRequestStartsAtRequestedUtcAndCanSeekWithinItsNewWindow() = withPlayer(clocked = false) { player, windowStart ->
+        val start = windowStart + 3_600_000
+        val requested = start + 120_000
+        val position = AtomicLong()
+        val ready = CountDownLatch(1)
+        main {
+            player.onCurrentPositionChanged { position.set(it) }
+            player.onReady { ready.countDown() }
+            player.prepare(ChannelLine("https://example.test/replay.mpd"), PlaybackRange(start, start + 600_000, requested))
+        }
+        assertTrue(ready.await(8, TimeUnit.SECONDS))
+        Thread.sleep(650)
+        assertTrue(position.get() in requested..requested + 3_000)
+        main {
+            assertFalse(player.canSeekTo(start + 60_000))
+            assertTrue(player.canSeekTo(start + 240_000))
+            player.pause()
+            player.seekTo(start + 240_000)
+        }
+        Thread.sleep(650)
+        assertTrue(position.get() in start + 240_000..start + 242_000)
     }
 
     @Test fun dynamicReplayUsesProgrammeStartAndAbsoluteSeekWhileLiveKeepsDefaultPosition() = withPlayer { player, windowStart ->
@@ -181,6 +204,45 @@ class ReplayMedia3Test {
         assertEquals(range.endAt, position.get())
     }
 
+    @Test fun recordedWindowEndDoesNotJumpToTheFutureProgrammeEnd() = withPlayer(clocked = false, durationMs = 1_200) { player, windowStart ->
+        val start = windowStart + 3_600_000
+        val range = PlaybackRange(start, start + 600_000)
+        val ended = CountDownLatch(1)
+        val position = AtomicLong()
+        main {
+            player.onCurrentPositionChanged {
+                position.set(it)
+                if (it >= start + 1_000) ended.countDown()
+            }
+            player.prepare(ChannelLine("https://example.test/live.mpd"), range)
+        }
+        assertTrue(ended.await(8, TimeUnit.SECONDS))
+        Thread.sleep(650)
+        assertTrue("Natural end must keep the actual window position", position.get() in start + 1_000..start + 1_500)
+        main { assertFalse(player.canSeekTo(start + 60_000)) }
+    }
+
+    @Test fun continuousWindowCrossesProgrammeEndAndEmitsActualEndOnce() = withPlayer(clocked = false, durationMs = 1_200) { player, windowStart ->
+        val start = windowStart + 3_600_000
+        val ended = CountDownLatch(1)
+        val count = AtomicInteger()
+        val position = AtomicLong()
+        main {
+            player.onPlaybackWindowEnded {
+                val field = Media3VideoPlayer::class.java.getDeclaredField("videoPlayer").apply { isAccessible = true }
+                val engine = field.get(player) as androidx.media3.exoplayer.ExoPlayer
+                Log.i("ReplayWindowEndTest", "offset=${it - start}, native=${engine.currentPosition}, duration=${engine.duration}")
+                position.set(it); count.incrementAndGet(); ended.countDown()
+            }
+            player.prepare(ChannelLine("https://example.test/live.mpd"),
+                PlaybackRange(start, start + 400, continuous = true))
+        }
+        assertTrue("Continuous source did not report natural completion", ended.await(8, TimeUnit.SECONDS))
+        Thread.sleep(650)
+        assertTrue("Unexpected continuous window end offset=${position.get() - start}", position.get() in start + 1_000..start + 1_500)
+        assertEquals(1, count.get())
+    }
+
     @Test fun expiredProgrammeReportsUnavailableInsteadOfPlayingLive() = withPlayer { player, windowStart ->
         val error = AtomicReference<VideoPlayer.PlaybackException>()
         val failed = CountDownLatch(1)
@@ -219,7 +281,8 @@ class ReplayMedia3Test {
         assertNotNull(error.get())
     }
 
-    private class TimelineFactory(private val windowStart: Long, failures: Int) : MediaSource.Factory {
+    private class TimelineFactory(private val windowStart: Long, failures: Int, private val clocked: Boolean = true,
+        private val durationMs: Long = 7_200_000) : MediaSource.Factory {
         private val remainingFailures = AtomicInteger(failures)
         override fun createMediaSource(mediaItem: MediaItem): MediaSource {
             val fail = remainingFailures.getAndDecrement() > 0
@@ -227,11 +290,12 @@ class ReplayMedia3Test {
             override fun getMediaItem() = mediaItem
             override fun prepareSourceInternal(mediaTransferListener: TransferListener?) {
                 if (fail) return
-                refreshSourceInfo(SinglePeriodTimeline(windowStart, windowStart, C.TIME_UNSET,
-                    7_200_000_000L, 7_200_000_000L, 0L, 7_195_000_000L,
-                    true, true, true, null, mediaItem,
-                    MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(5_000)
-                        .setMinPlaybackSpeed(1f).setMaxPlaybackSpeed(1f).build()))
+                refreshSourceInfo(SinglePeriodTimeline(if (clocked) windowStart else C.TIME_UNSET,
+                    if (clocked) windowStart else C.TIME_UNSET, C.TIME_UNSET,
+                    durationMs * 1_000, durationMs * 1_000, 0L, if (clocked) 7_195_000_000L else 0L,
+                    true, clocked, clocked, null, mediaItem,
+                    if (clocked) MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(5_000)
+                        .setMinPlaybackSpeed(1f).setMaxPlaybackSpeed(1f).build() else null))
             }
             override fun maybeThrowSourceInfoRefreshError() {
                 if (fail) throw IOException("Synthetic source failure")

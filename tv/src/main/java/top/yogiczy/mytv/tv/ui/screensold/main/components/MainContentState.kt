@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.channelFirstOrNull
@@ -25,10 +26,13 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLineList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
+import top.yogiczy.mytv.core.data.entities.epg.EpgList
+import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.match
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserve
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
 import top.yogiczy.mytv.core.data.utils.ChannelPlayback
 import top.yogiczy.mytv.core.data.media.PlaybackRange
+import top.yogiczy.mytv.core.data.media.PlaybackContinuation
 import top.yogiczy.mytv.core.data.utils.Constants
 import top.yogiczy.mytv.core.data.utils.Loggable
 import top.yogiczy.mytv.core.util.utils.urlHost
@@ -49,6 +53,8 @@ class MainContentState(
     private val channelGroupListProvider: () -> ChannelGroupList = { ChannelGroupList() },
     private val favoriteChannelListProvider: () -> ChannelList = { ChannelList() },
     private val settingsViewModel: SettingsViewModel,
+    private val epgListProvider: () -> EpgList = { EpgList() },
+    private val nowProvider: () -> Long = { System.currentTimeMillis() },
 ) : Loggable("MainContentState") {
     // Channel equality describes stream content, while selection also has a group/index.
     private var _currentChannel by mutableStateOf(Channel(), referentialEqualityPolicy())
@@ -61,6 +67,12 @@ class MainContentState(
 
     private var _currentPlaybackEpgProgramme by mutableStateOf<EpgProgramme?>(null)
     val currentPlaybackEpgProgramme get() = _currentPlaybackEpgProgramme
+    private var playbackSessionStartAt: Long? = null
+    private var continuationJob: Job? = null
+    private var playbackGeneration = 0L
+    private var playbackRequestId = 0L
+    private var evaluatedEndRequestId: Long? = null
+    private val continuation = PlaybackContinuation()
 
     private var _tempChannelScreenHideJob: Job? = null
 
@@ -162,12 +174,22 @@ class MainContentState(
         }
 
         videoPlayerState.onInterrupt {
+            if (_currentPlaybackEpgProgramme != null) {
+                reloadPlaybackAt(videoPlayerState.currentPosition, videoPlayerState.playRequested)
+                return@onInterrupt
+            }
             changeCurrentChannel(
                 _currentChannel,
                 _currentChannelLineIdx,
                 _currentPlaybackEpgProgramme
             )
         }
+
+        videoPlayerState.onPosition { position ->
+            if (_currentPlaybackEpgProgramme != null)
+                _currentPlaybackEpgProgramme = programmeAt(position, _currentPlaybackEpgProgramme)
+        }
+        videoPlayerState.onPlaybackWindowEnded { position -> scheduleContinuation(position) }
 
         videoPlayerState.onIsBuffering { isBuffering ->
             if (isBuffering) {
@@ -276,13 +298,16 @@ class MainContentState(
     ) {
         val selectedLineIdx = getLineIdx(channel.lineList, lineIdx)
         val selectedLine = channel.lineList.getOrNull(selectedLineIdx) ?: return
-        val url = if (playbackEpgProgramme != null) {
-            ChannelPlayback.playbackUrl(selectedLine, playbackEpgProgramme.startAt, playbackEpgProgramme.endAt)
+        val playbackRequest = if (playbackEpgProgramme != null) {
+            ChannelPlayback.reloadRequest(selectedLine,
+                PlaybackRange(playbackEpgProgramme.startAt, playbackEpgProgramme.endAt), playbackEpgProgramme.startAt,
+                now = nowProvider(), continuous = true)
                 ?: run {
                     Snackbar.show("无法生成回看地址，请检查直播源的回看配置")
                     return
                 }
-        } else selectedLine.playableUrl
+        } else null
+        val url = playbackRequest?.line?.url ?: selectedLine.playableUrl
 
         settingsViewModel.iptvChannelLastPlay = channel
 
@@ -303,6 +328,8 @@ class MainContentState(
             settingsViewModel.iptvChannelLinePlayableHostList -= currentChannelLine.url.urlHost()
         }
 
+        cancelContinuation()
+        playbackSessionStartAt = playbackEpgProgramme?.startAt
         _isTempChannelScreenVisible = true
 
         _currentChannel = channel
@@ -318,7 +345,8 @@ class MainContentState(
             videoPlayerState.metadata = VideoPlayer.Metadata()
             videoPlayerState.stop()
         } else {
-            videoPlayerState.prepare(line, playbackEpgProgramme?.let { PlaybackRange(it.startAt, it.endAt) })
+            playbackRequestId++
+            videoPlayerState.prepare(line, playbackRequest?.range)
         }
         restoreDisplayMode()
     }
@@ -326,6 +354,81 @@ class MainContentState(
     private fun restoreDisplayMode() {
         videoPlayerState.displayMode = settingsViewModel.channelDisplayMode(
             currentChannel, channelGroupListProvider().channelList)
+    }
+
+    fun seekTo(position: Long, liveProgramme: EpgProgramme? = null) {
+        cancelContinuation()
+        val startingTimeshift = currentPlaybackEpgProgramme == null && videoPlayerState.positionIsAbsolute &&
+            position < nowProvider() - 1_000 && ChannelPlayback.isSupported(currentChannelLine)
+        val canSeek = videoPlayerState.instance.canSeekTo(position)
+        if (!videoPlayerState.positionIsAbsolute ||
+            (!settingsViewModel.videoPlayerPlaybackReload && canSeek && !startingTimeshift)) {
+            videoPlayerState.seekTo(position)
+            return
+        }
+        if (!reloadPlaybackAt(position, videoPlayerState.playRequested,
+                currentPlaybackEpgProgramme ?: liveProgramme)) {
+            if (canSeek) videoPlayerState.seekTo(position)
+            else Snackbar.show("当前播放窗口无法定位，且频道未提供可用的回看地址")
+        }
+    }
+
+    private fun programmeAt(position: Long, fallback: EpgProgramme?): EpgProgramme {
+        if (fallback != null && fallback.title != "时移播放" && position >= fallback.startAt && position < fallback.endAt)
+            return fallback
+        epgListProvider().match(currentChannel)?.programmeList?.firstOrNull {
+            position >= it.startAt && position < it.endAt
+        }?.let { return it }
+        val start = playbackSessionStartAt ?: minOf(fallback?.startAt ?: position, position)
+        return EpgProgramme(start, maxOf(start + 1, position + 1, nowProvider()), "时移播放")
+    }
+
+    private fun reloadPlaybackAt(position: Long, shouldPlay: Boolean, fallback: EpgProgramme? = currentPlaybackEpgProgramme): Boolean {
+        val programme = programmeAt(position, fallback)
+        val request = ChannelPlayback.reloadRequest(currentChannelLine,
+            PlaybackRange(programme.startAt, programme.endAt), position, now = nowProvider(), continuous = true) ?: return false
+        val displayMode = videoPlayerState.displayMode
+        if (playbackSessionStartAt == null) playbackSessionStartAt = programme.startAt
+        _currentPlaybackEpgProgramme = programme
+        playbackRequestId++
+        videoPlayerState.prepare(request.line, request.range)
+        videoPlayerState.displayMode = displayMode
+        if (!shouldPlay) videoPlayerState.pause()
+        return true
+    }
+
+    private fun cancelContinuation() {
+        playbackGeneration++
+        continuationJob?.cancel()
+        continuationJob = null
+        continuation.reset()
+        evaluatedEndRequestId = null
+    }
+
+    private fun scheduleContinuation(position: Long) {
+        if (_currentPlaybackEpgProgramme == null || !videoPlayerState.playRequested) return
+        continuationJob?.cancel()
+        if (evaluatedEndRequestId != playbackRequestId && !continuation.accept(position)) {
+            continuation.reset()
+            videoPlayerState.pause()
+            Snackbar.show("暂时没有新的录像内容，请稍后继续播放")
+            return
+        }
+        evaluatedEndRequestId = playbackRequestId
+        val generation = playbackGeneration
+        continuationJob = coroutineScope.launch {
+            // Do not replace the media source inside a native completion callback.
+            yield()
+            while (generation == playbackGeneration && videoPlayerState.playRequested) {
+                val wait = continuation.waitMs(position, nowProvider())
+                if (wait > 0) { delay(minOf(wait, 1_000)); continue }
+                if (!reloadPlaybackAt(position, true)) {
+                    videoPlayerState.pause()
+                    Snackbar.show("无法续接录像，请检查频道的回看配置")
+                }
+                return@launch
+            }
+        }
     }
 
     fun changeDisplayMode(mode: VideoPlayerDisplayMode) {
@@ -385,8 +488,10 @@ fun rememberMainContentState(
     channelGroupListProvider: () -> ChannelGroupList = { ChannelGroupList() },
     favoriteChannelListProvider: () -> ChannelList = { ChannelList() },
     settingsViewModel: SettingsViewModel = settingsVM,
+    epgListProvider: () -> EpgList = { EpgList() },
 ): MainContentState {
     val favoriteChannelListProviderUpdated by rememberUpdatedState(favoriteChannelListProvider)
+    val epgListProviderUpdated by rememberUpdatedState(epgListProvider)
 
     return remember(settingsVM.videoPlayerCore) {
         MainContentState(
@@ -395,6 +500,7 @@ fun rememberMainContentState(
             channelGroupListProvider = channelGroupListProvider,
             favoriteChannelListProvider = favoriteChannelListProviderUpdated,
             settingsViewModel = settingsViewModel,
+            epgListProvider = { epgListProviderUpdated() },
         )
     }
 }

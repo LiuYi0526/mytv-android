@@ -60,6 +60,9 @@ class VideoPlayerState(
     var currentPosition by mutableLongStateOf(0L)
 
     val positionIsAbsolute: Boolean get() = instance.positionIsAbsolute
+    var playRequested by mutableStateOf(false)
+        private set
+    private var endedWindowAt: Long? = null
 
     /** 当前音量 */
     private var _volume by mutableFloatStateOf(1f)
@@ -74,28 +77,41 @@ class VideoPlayerState(
     var metadata by mutableStateOf(VideoPlayer.Metadata())
 
     fun prepare(line: ChannelLine, playbackRange: PlaybackRange? = null) {
+        playRequested = true
+        endedWindowAt = null
         displayMode = defaultDisplayModeProvider()
         error = null
         currentPosition = 0L
         duration = playbackRange?.durationMs ?: 0L
         metadata = VideoPlayer.Metadata()
         instance.prepare(line, playbackRange)
-        currentPosition = if (positionIsAbsolute) playbackRange?.startAt ?: 0L else 0L
+        currentPosition = if (positionIsAbsolute) playbackRange?.sourceStartAt ?: 0L else 0L
     }
 
     fun play() {
+        playRequested = true
+        endedWindowAt?.let { position ->
+            if (onPlaybackWindowEndedListeners.isNotEmpty()) {
+                onPlaybackWindowEndedListeners.forEach { it(position) }
+                return
+            }
+        }
         instance.play()
     }
 
     fun pause() {
+        playRequested = false
         instance.pause()
     }
 
     fun seekTo(position: Long) {
+        endedWindowAt = null
         instance.seekTo(position)
     }
 
     fun stop() {
+        playRequested = false
+        endedWindowAt = null
         instance.stop()
     }
 
@@ -123,6 +139,11 @@ class VideoPlayerState(
     private val onErrorListeners = mutableListOf<() -> Unit>()
     private val onInterruptListeners = mutableListOf<() -> Unit>()
     private val onIsBufferingListeners = mutableListOf<(Boolean) -> Unit>()
+    private val onPlaybackWindowEndedListeners = mutableListOf<(Long) -> Unit>()
+    private val onPositionListeners = mutableListOf<(Long) -> Unit>()
+
+    fun onPlaybackWindowEnded(listener: (Long) -> Unit) { onPlaybackWindowEndedListeners.add(listener) }
+    fun onPosition(listener: (Long) -> Unit) { onPositionListeners.add(listener) }
 
     fun onReady(listener: () -> Unit) {
         onReadyListeners.add(listener)
@@ -162,16 +183,29 @@ class VideoPlayerState(
         instance.onPrepared { }
         instance.onIsPlayingChanged { isPlaying = it }
         instance.onDurationChanged { duration = it }
-        instance.onCurrentPositionChanged { currentPosition = it }
+        instance.onCurrentPositionChanged { position ->
+            currentPosition = position
+            onPositionListeners.forEach { it(position) }
+        }
+        instance.onPlaybackWindowEnded { position ->
+            currentPosition = position
+            onPositionListeners.forEach { it(position) }
+            endedWindowAt = position
+            onPlaybackWindowEndedListeners.forEach { it(position) }
+        }
         instance.onMetadata { metadata = it }
         instance.onInterrupt { onInterruptListeners.forEach { it.invoke() } }
     }
 
     fun release() {
+        playRequested = false
+        endedWindowAt = null
         onReadyListeners.clear()
         onErrorListeners.clear()
         onInterruptListeners.clear()
         onIsBufferingListeners.clear()
+        onPlaybackWindowEndedListeners.clear()
+        onPositionListeners.clear()
         instance.release()
     }
 }

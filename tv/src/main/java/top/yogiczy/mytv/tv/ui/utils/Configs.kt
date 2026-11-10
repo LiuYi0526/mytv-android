@@ -187,6 +187,7 @@ object Configs {
         VIDEO_PLAYER_LOAD_TIMEOUT,
 
         VIDEO_PLAYER_RTSP_TCP,
+        VIDEO_PLAYER_PLAYBACK_RELOAD,
 
         /** 播放器 显示模式 */
         VIDEO_PLAYER_DISPLAY_MODE,
@@ -594,6 +595,11 @@ object Configs {
         get() = SP.getBoolean(KEY.VIDEO_PLAYER_RTSP_TCP.name, false)
         set(value) = SP.putBoolean(KEY.VIDEO_PLAYER_RTSP_TCP.name, value)
 
+    /** Prefer regenerating the catchup URL; otherwise reload only outside the seekable window. */
+    var videoPlayerPlaybackReload: Boolean
+        get() = SP.getBoolean(KEY.VIDEO_PLAYER_PLAYBACK_RELOAD.name, false)
+        set(value) = SP.putBoolean(KEY.VIDEO_PLAYER_PLAYBACK_RELOAD.name, value)
+
     /** 播放器 显示模式 */
     var videoPlayerDisplayMode: VideoPlayerDisplayMode
         get() = VideoPlayerDisplayMode.fromValue(
@@ -806,6 +812,7 @@ object Configs {
             videoPlayerHeaders = videoPlayerHeaders,
             videoPlayerLoadTimeout = videoPlayerLoadTimeout,
             videoPlayerRtspTcp = videoPlayerRtspTcp,
+            videoPlayerPlaybackReload = videoPlayerPlaybackReload,
             videoPlayerDisplayMode = videoPlayerDisplayMode,
             videoPlayerChannelDisplayModes = videoPlayerChannelDisplayModes,
             videoPlayerForceAudioSoftDecode = videoPlayerForceAudioSoftDecode,
@@ -879,6 +886,7 @@ object Configs {
         configs.videoPlayerHeaders?.let { videoPlayerHeaders = it }
         configs.videoPlayerLoadTimeout?.let { videoPlayerLoadTimeout = it }
         configs.videoPlayerRtspTcp?.let { videoPlayerRtspTcp = it }
+        configs.videoPlayerPlaybackReload?.let { videoPlayerPlaybackReload = it }
         configs.videoPlayerDisplayMode?.let { videoPlayerDisplayMode = it }
         configs.videoPlayerChannelDisplayModes?.let { videoPlayerChannelDisplayModes = it }
         configs.videoPlayerForceAudioSoftDecode?.let { videoPlayerForceAudioSoftDecode = it }
@@ -951,6 +959,7 @@ object Configs {
         val videoPlayerHeaders: String? = null,
         val videoPlayerLoadTimeout: Long? = null,
         val videoPlayerRtspTcp: Boolean? = null,
+        val videoPlayerPlaybackReload: Boolean? = null,
         val videoPlayerDisplayMode: VideoPlayerDisplayMode? = null,
         val videoPlayerChannelDisplayModes: ChannelDisplayModeList? = null,
         val videoPlayerForceAudioSoftDecode: Boolean? = null,

@@ -1,6 +1,7 @@
 package top.yogiczy.mytv.core.data.utils
 
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
+import top.yogiczy.mytv.core.data.media.PlaybackRange
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -28,6 +29,24 @@ object ChannelPlayback {
     }
 
     fun isSupported(line: ChannelLine): Boolean = options(line) != null
+
+    data class ReloadRequest(val line: ChannelLine, val range: PlaybackRange)
+
+    /** Request recorded content up to now using the M3U rule, retaining the programme timeline separately. */
+    fun reloadRequest(
+        originalLine: ChannelLine,
+        programme: PlaybackRange,
+        targetAt: Long,
+        now: Long = System.currentTimeMillis(),
+        timeZone: TimeZone = TimeZone.getDefault(),
+        continuous: Boolean = false,
+    ): ReloadRequest? {
+        if (now < programme.startAt) return null
+        val target = targetAt.coerceIn(programme.startAt, if (continuous) now else minOf(programme.endAt, now))
+        if ((!continuous && target >= programme.endAt) || target >= now) return null
+        val url = playbackUrl(originalLine, target, now, now, timeZone) ?: return null
+        return ReloadRequest(originalLine.copy(url = url), PlaybackRange(programme.startAt, programme.endAt, target, continuous))
+    }
 
     /** Returns null on malformed templates, without changing the live line or its DRM/UA. */
     fun playbackUrl(
