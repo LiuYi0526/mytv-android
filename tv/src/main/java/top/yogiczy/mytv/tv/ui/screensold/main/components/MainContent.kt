@@ -2,9 +2,12 @@ package top.yogiczy.mytv.tv.ui.screensold.main.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.channelList
@@ -18,7 +21,11 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.match
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
+import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeRecent
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
+import top.yogiczy.mytv.core.data.media.PlaybackProgrammeNavigation
+import top.yogiczy.mytv.core.data.media.PlaybackControllerTimeline
+import top.yogiczy.mytv.core.data.utils.ChannelPlayback
 import top.yogiczy.mytv.core.data.repositories.epg.EpgRepository
 import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
 import top.yogiczy.mytv.tv.ui.material.PopupContent
@@ -143,7 +150,7 @@ fun MainContent(
         }
     }
 
-    Visibility({ settingsViewModel.uiShowEpgProgrammePermanentProgress }) {
+    Visibility({ settingsViewModel.uiShowEpgProgrammePermanentProgress && !mainContentState.isVideoPlayerControllerScreenVisible }) {
         EpgProgrammeProgressScreen(
             currentEpgProgrammeProvider = {
                 mainContentState.currentPlaybackEpgProgramme ?: epgListProvider().recentProgramme(
@@ -160,6 +167,7 @@ fun MainContent(
                 && !mainContentState.isQuickOpScreenVisible
                 && !mainContentState.isEpgScreenVisible
                 && !mainContentState.isChannelLineScreenVisible
+                && !mainContentState.isVideoPlayerControllerScreenVisible
                 && channelNumberSelectState.channelNumber.isEmpty()
     }) {
         DatetimeScreen(showModeProvider = { settingsViewModel.uiTimeShowMode })
@@ -248,30 +256,67 @@ fun MainContent(
         visibleProvider = { mainContentState.isVideoPlayerControllerScreenVisible },
         onDismissRequest = { mainContentState.isVideoPlayerControllerScreenVisible = false },
     ) {
+        val controllerNow by produceState(System.currentTimeMillis()) {
+            while (true) { value = System.currentTimeMillis(); delay(1_000) }
+        }
+        val liveProgramme = epgListProvider().recentProgramme(mainContentState.currentChannel)?.now
+        val timeline = PlaybackControllerTimeline.resolve(
+            position = videoPlayerState.currentPosition,
+            duration = videoPlayerState.duration,
+            nativeAbsolute = videoPlayerState.positionIsAbsolute,
+            replay = mainContentState.currentPlaybackEpgProgramme,
+            live = liveProgramme,
+            supportsReplay = ChannelPlayback.isSupported(mainContentState.currentChannelLine),
+            now = controllerNow,
+        )
         VideoPlayerControllerScreen(
+            previousProgrammeProvider = {
+                PlaybackProgrammeNavigation.adjacent(
+                    epgListProvider().match(mainContentState.currentChannel)?.programmeList.orEmpty(),
+                    mainContentState.currentPlaybackEpgProgramme ?: epgListProvider().recentProgramme(mainContentState.currentChannel)?.now,
+                    -1,
+                )
+            },
+            nextProgrammeProvider = {
+                PlaybackProgrammeNavigation.adjacent(
+                    epgListProvider().match(mainContentState.currentChannel)?.programmeList.orEmpty(),
+                    mainContentState.currentPlaybackEpgProgramme ?: epgListProvider().recentProgramme(mainContentState.currentChannel)?.now,
+                    1,
+                )
+            },
+            canStartProgramme = { PlaybackProgrammeNavigation.canStart(it, mainContentState.currentChannelLine) },
+            onProgrammePlayback = mainContentState::playProgrammeFromStart,
+            channelProvider = { mainContentState.currentChannel },
+            channelLineIdxProvider = { mainContentState.currentChannelLineIdx },
+            currentPlaybackEpgProgrammeProvider = { mainContentState.currentPlaybackEpgProgramme },
+            recentEpgProgrammeProvider = {
+                val replay = mainContentState.currentPlaybackEpgProgramme
+                if (replay == null) epgListProvider().recentProgramme(mainContentState.currentChannel)
+                else EpgProgrammeRecent(
+                    now = replay,
+                    next = epgListProvider().match(mainContentState.currentChannel)?.programmeList
+                        ?.firstOrNull { it.startAt >= replay.endAt },
+                )
+            },
+            playerMetadataProvider = { videoPlayerState.metadata },
+            showChannelLogo = settingsViewModel.uiShowChannelLogo,
+            onReturnToLive = {
+                // Dispose the controller first so a pending preview cannot seek back into replay.
+                mainContentState.isVideoPlayerControllerScreenVisible = false
+                mainContentState.changeCurrentChannel(
+                    mainContentState.currentChannel, mainContentState.currentChannelLineIdx,
+                )
+            },
             isVideoPlayerPlayingProvider = { videoPlayerState.playRequested },
             isVideoPlayerBufferingProvider = { videoPlayerState.isBuffering },
-            videoPlayerCurrentPositionProvider = { videoPlayerState.currentPosition },
-            videoPlayerPositionIsAbsoluteProvider = { videoPlayerState.positionIsAbsolute },
-            videoPlayerDurationProvider = {
-                if (videoPlayerState.positionIsAbsolute) {
-                    val playback = mainContentState.currentPlaybackEpgProgramme
-
-                    if (playback != null) {
-                        playback.startAt to playback.endAt
-                    } else {
-                        val programme =
-                            epgListProvider().recentProgramme(mainContentState.currentChannel)?.now
-                        (programme?.startAt ?: 0L) to (programme?.endAt ?: 0L)
-                    }
-                } else {
-                    0L to videoPlayerState.duration
-                }
-            },
+            videoPlayerCurrentPositionProvider = { timeline.position },
+            videoPlayerPositionIsAbsoluteProvider = { timeline.absolute },
+            videoPlayerDurationProvider = { timeline.range },
+            videoPlayerSeekEnabledProvider = { timeline.seekEnabled },
             onVideoPlayerPlay = { videoPlayerState.play() },
             onVideoPlayerPause = { videoPlayerState.pause() },
             onVideoPlayerSeekTo = {
-                mainContentState.seekTo(it, epgListProvider().recentProgramme(mainContentState.currentChannel)?.now)
+                mainContentState.seekTo(it, liveProgramme, absoluteTarget = timeline.absolute)
             },
             onClose = { mainContentState.isVideoPlayerControllerScreenVisible = false },
         )

@@ -169,7 +169,7 @@ private fun LiveChannelsChannelInfoNo(
 }
 
 @Composable
-private fun LiveChannelsChannelInfoTags(
+internal fun LiveChannelsChannelInfoTags(
     modifier: Modifier = Modifier,
     channelProvider: () -> Channel = { Channel() },
     channelLineIdxProvider: () -> Int = { 0 },

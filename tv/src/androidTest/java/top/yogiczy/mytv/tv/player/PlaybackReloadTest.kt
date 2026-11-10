@@ -134,6 +134,42 @@ class PlaybackReloadTest {
         assertTrue(Configs.videoPlayerPlaybackReload)
     }
 
+    @Test fun epgClockOnRelativeLiveReloadsTemplateWithoutNativeSeek() = isolated { state, player, engine, _ ->
+        val explicitLine = line.copy(url = "https://example.test/live", catchup = "append",
+            catchupSource = "?startTime={b:10}&stopTime={e:10}", pltv2tvod = false)
+        state.changeCurrentChannel(channel.copy(lineList = ChannelLineList(listOf(explicitLine))))
+        engine.absolute = false
+        player.pause()
+        player.displayMode = VideoPlayerDisplayMode.FOUR_THREE
+        state.seekTo(start + 120_000, programme, absoluteTarget = true)
+        assertNull(engine.seek)
+        assertEquals(start + 120_000, engine.range!!.sourceStartAt)
+        assertEquals(programme, state.currentPlaybackEpgProgramme)
+        assertTrue(engine.line.url.contains("startTime=${(start + 120_000) / 1_000}"))
+        assertFalse(engine.line.url.contains("playseek="))
+        assertEquals(explicitLine.copy(url = engine.line.url), engine.line)
+        assertFalse(player.playRequested)
+        assertEquals(VideoPlayerDisplayMode.FOUR_THREE, player.displayMode)
+    }
+
+    @Test fun unsupportedEpgClockNeverFallsBackToRelativeNativeSeek() = isolated { state, _, engine, _ ->
+        state.changeCurrentChannel(channel.copy(lineList = ChannelLineList(listOf(line.copy(catchup = "none")))))
+        engine.absolute = false
+        val prepares = engine.prepares
+        state.seekTo(start + 120_000, programme, absoluteTarget = true)
+        assertNull(engine.seek)
+        assertEquals(prepares, engine.prepares)
+        assertNull(state.currentPlaybackEpgProgramme)
+    }
+
+    @Test fun relativeMediaSeekStillUsesRelativeMilliseconds() = isolated { state, _, engine, _ ->
+        engine.absolute = false
+        val prepares = engine.prepares
+        state.seekTo(120_000)
+        assertEquals(120_000L, engine.seek)
+        assertEquals(prepares, engine.prepares)
+    }
+
     private class RecordingPlayer(scope: CoroutineScope) : VideoPlayer(scope) {
         var line = ChannelLine()
         var range: PlaybackRange? = null
@@ -141,7 +177,8 @@ class PlaybackReloadTest {
         var seekable = true
         var prepares = 0
         var pauses = 0
-        override val positionIsAbsolute = true
+        var absolute = true
+        override val positionIsAbsolute get() = absolute
         override fun canSeekTo(position: Long) = seekable
         override fun prepare(line: ChannelLine) { this.line = line; prepares++ }
         override fun prepare(line: ChannelLine, playbackRange: PlaybackRange?) {

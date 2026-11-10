@@ -33,6 +33,7 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
 import top.yogiczy.mytv.core.data.utils.ChannelPlayback
 import top.yogiczy.mytv.core.data.media.PlaybackRange
 import top.yogiczy.mytv.core.data.media.PlaybackContinuation
+import top.yogiczy.mytv.core.data.media.PlaybackProgrammeNavigation
 import top.yogiczy.mytv.core.data.utils.Constants
 import top.yogiczy.mytv.core.data.utils.Loggable
 import top.yogiczy.mytv.core.util.utils.urlHost
@@ -356,8 +357,26 @@ class MainContentState(
             currentChannel, channelGroupListProvider().channelList)
     }
 
-    fun seekTo(position: Long, liveProgramme: EpgProgramme? = null) {
+    fun playProgrammeFromStart(programme: EpgProgramme) {
+        if (!PlaybackProgrammeNavigation.canStart(programme, currentChannelLine, nowProvider())) return
+        val current = currentPlaybackEpgProgramme
+        if (current != null && current.startAt == programme.startAt && current.endAt == programme.endAt) {
+            // Reselecting the same programme normally reuses playback; restart must really seek.
+            seekTo(programme.startAt, programme)
+        } else {
+            changeCurrentChannel(currentChannel, currentChannelLineIdx, programme)
+        }
+    }
+
+    fun seekTo(position: Long, liveProgramme: EpgProgramme? = null, absoluteTarget: Boolean = videoPlayerState.positionIsAbsolute) {
         cancelContinuation()
+        // An EPG clock is a wall-clock target, even when the live engine exposes no timeline.
+        // Never pass that timestamp to a relative seekTo (including when URL reload fails).
+        if (absoluteTarget && !videoPlayerState.positionIsAbsolute) {
+            if (!reloadPlaybackAt(position, videoPlayerState.playRequested, currentPlaybackEpgProgramme ?: liveProgramme))
+                Snackbar.show("当前播放窗口无法定位，且频道未提供可用的回看地址")
+            return
+        }
         val startingTimeshift = currentPlaybackEpgProgramme == null && videoPlayerState.positionIsAbsolute &&
             position < nowProvider() - 1_000 && ChannelPlayback.isSupported(currentChannelLine)
         val canSeek = videoPlayerState.instance.canSeekTo(position)

@@ -160,11 +160,13 @@ fun Modifier.clickableNoIndication(
     val currentOnLongClick by rememberUpdatedState(onLongClick)
     val currentOnDoubleClick by rememberUpdatedState(onDoubleClick)
 
-    pointerInput(Unit) {
+    pointerInput(onClick != null, onLongClick != null, onDoubleClick != null) {
         detectTapGestures(
-            onDoubleTap = currentOnDoubleClick?.let { { _ -> it() } },
-            onLongPress = currentOnLongClick?.let { { _ -> it() } },
-            onTap = currentOnClick?.let { { _ -> it() } },
+            // Read the updated callback when the gesture fires, not when this
+            // long-lived pointer coroutine starts (e.g. after switching programmes).
+            onDoubleTap = if (onDoubleClick != null) { { _ -> currentOnDoubleClick?.invoke() } } else null,
+            onLongPress = if (onLongClick != null) { { _ -> currentOnLongClick?.invoke() } } else null,
+            onTap = if (onClick != null) { { _ -> currentOnClick?.invoke() } } else null,
         )
     }
 }

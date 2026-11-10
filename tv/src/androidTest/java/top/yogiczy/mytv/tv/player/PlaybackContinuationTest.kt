@@ -31,7 +31,14 @@ class PlaybackContinuationTest {
     private class Fixture(val scope: CoroutineScope, val engine: RecordingPlayer, val player: VideoPlayerState,
         val state: MainContentState, val clock: AtomicLong)
 
-    private fun isolated(withGuide: Boolean = true, selectProgramme: Boolean = true, block: (Fixture) -> Unit) {
+    private fun isolated(
+        withGuide: Boolean = true,
+        selectProgramme: Boolean = true,
+        programmes: List<EpgProgramme> = listOf(first, second),
+        initialProgramme: EpgProgramme = first,
+        clockAt: Long = start + 120_000,
+        block: (Fixture) -> Unit,
+    ) {
         lateinit var fixture: Fixture
         val prefs = SP.getInstance(instrumentation.context)
         main {
@@ -42,11 +49,11 @@ class PlaybackContinuationTest {
             val player = VideoPlayerState(engine).also { it.initialize() }
             val groups = ChannelGroupList(listOf(ChannelGroup("测试", ChannelList(listOf(channel)))))
             val guide = if (withGuide) EpgList(listOf(Epg(listOf(channel.name),
-                programmeList = EpgProgrammeList(listOf(first, second))))) else EpgList()
-            val clock = AtomicLong(start + 120_000)
+                programmeList = EpgProgrammeList(programmes)))) else EpgList()
+            val clock = AtomicLong(clockAt)
             val state = MainContentState(scope, player, { groups }, settingsViewModel = SettingsViewModel(),
                 epgListProvider = { guide }, nowProvider = clock::get)
-            if (selectProgramme) state.changeCurrentChannel(channel, 0, first)
+            if (selectProgramme) state.changeCurrentChannel(channel, 0, initialProgramme)
             fixture = Fixture(scope, engine, player, state, clock)
         }
         try { block(fixture) }
@@ -157,11 +164,59 @@ class PlaybackContinuationTest {
         main { assertEquals(start + 60_000, f.engine.range!!.sourceStartAt) }
     }
 
+    @Test fun restartOfSameProgrammeActuallySeeksInsteadOfReusingCurrentPosition() = isolated { f ->
+        main {
+            f.engine.position(first.startAt + 10_000)
+            val count = f.engine.prepares
+            f.state.playProgrammeFromStart(first)
+            assertTrue(f.engine.lastSeek == first.startAt || f.engine.prepares > count)
+            assertEquals(first, f.state.currentPlaybackEpgProgramme)
+        }
+    }
+
+    @Test fun selectedNeighbourStartsAtItsOwnTimeWithOriginalLineMetadata() = isolated { f ->
+        main {
+            f.state.playProgrammeFromStart(second)
+            assertEquals(second, f.state.currentPlaybackEpgProgramme)
+            assertEquals(second.startAt, f.engine.range!!.sourceStartAt)
+            assertEquals("custom-UA", f.engine.line.httpUserAgent)
+        }
+    }
+
+    @Test fun futureProgrammeDoesNotPrepareOrSeek() = isolated { f ->
+        main {
+            val count = f.engine.prepares
+            f.state.playProgrammeFromStart(EpgProgramme(f.clock.get() + 60_000, f.clock.get() + 120_000, "未开播"))
+            assertEquals(count, f.engine.prepares)
+            assertNull(f.engine.lastSeek)
+            assertEquals(first, f.state.currentPlaybackEpgProgramme)
+        }
+    }
+
+    @Test fun previousProgrammeCanReloadAcrossMidnightWithActualDatesInUrl() {
+        val clockFormat = java.text.SimpleDateFormat("yyyyMMddHHmmss", java.util.Locale.ROOT)
+        val midnight = clockFormat.parse("20261111000000")!!.time
+        val yesterday = EpgProgramme(midnight - 3_600_000, midnight, "同名节目")
+        val today = EpgProgramme(midnight, midnight + 3_600_000, "同名节目")
+        isolated(programmes = listOf(yesterday, today), initialProgramme = today,
+            clockAt = midnight + 1_800_000) { f ->
+            main {
+                val target = top.yogiczy.mytv.core.data.media.PlaybackProgrammeNavigation
+                    .adjacent(listOf(yesterday, today), f.state.currentPlaybackEpgProgramme, -1)!!
+                f.state.playProgrammeFromStart(target)
+                assertEquals(yesterday, f.state.currentPlaybackEpgProgramme)
+                assertEquals(yesterday.startAt, f.engine.range!!.sourceStartAt)
+                assertTrue(f.engine.line.url.contains("playseek=20261110230000-20261111003000"))
+            }
+        }
+    }
+
     private class RecordingPlayer(scope: CoroutineScope) : VideoPlayer(scope) {
         var line = ChannelLine()
         var range: PlaybackRange? = null
         var prepares = 0
         var playCalls = 0
+        var lastSeek: Long? = null
         fun position(at: Long) = triggerCurrentPosition(at)
         fun end(at: Long) = triggerPlaybackWindowEnded(at)
         override val positionIsAbsolute = true
@@ -169,7 +224,7 @@ class PlaybackContinuationTest {
         override fun prepare(line: ChannelLine, playbackRange: PlaybackRange?) { prepare(line); range = playbackRange }
         override fun play() { playCalls++ }
         override fun pause() {}
-        override fun seekTo(position: Long) { triggerCurrentPosition(position) }
+        override fun seekTo(position: Long) { lastSeek = position; triggerCurrentPosition(position) }
         override fun setVolume(volume: Float) {}
         override fun getVolume() = 1f
         override fun selectVideoTrack(track: Metadata.Video?) {}
