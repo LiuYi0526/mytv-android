@@ -47,6 +47,8 @@ import top.yogiczy.mytv.tv.ui.screensold.videoplayer.rememberVideoPlayerState
 import kotlin.math.max
 import kotlin.math.min
 
+private const val LIVE_EDGE_SNAP_MS = 5_000L
+
 @Stable
 class MainContentState(
     private val coroutineScope: CoroutineScope,
@@ -296,6 +298,7 @@ class MainContentState(
         channel: Channel,
         lineIdx: Int? = null,
         playbackEpgProgramme: EpgProgramme? = null,
+        forceReload: Boolean = false,
     ) {
         val selectedLineIdx = getLineIdx(channel.lineList, lineIdx)
         val selectedLine = channel.lineList.getOrNull(selectedLineIdx) ?: return
@@ -315,7 +318,7 @@ class MainContentState(
         val positionChanged = channel.groupName != _currentChannel.groupName || channel.index != _currentChannel.index
         // Reuse the stream for another occurrence, but retain the existing
         // explicit reselect/reload behavior when the selected position is unchanged.
-        if (channel == _currentChannel && selectedLineIdx == _currentChannelLineIdx &&
+        if (!forceReload && channel == _currentChannel && selectedLineIdx == _currentChannelLineIdx &&
             playbackEpgProgramme == _currentPlaybackEpgProgramme &&
             (lineIdx == _currentChannelLineIdx || positionChanged)) {
             _currentChannel = channel
@@ -370,6 +373,17 @@ class MainContentState(
 
     fun seekTo(position: Long, liveProgramme: EpgProgramme? = null, absoluteTarget: Boolean = videoPlayerState.positionIsAbsolute) {
         cancelContinuation()
+        // Preview debounce and second-resolution templates can leave a tiny archive
+        // request at the live edge. Use the original live line instead, even if the
+        // native DVR window claims it can seek to that timestamp.
+        if (absoluteTarget && position >= nowProvider() - LIVE_EDGE_SNAP_MS) {
+            val shouldPlay = videoPlayerState.playRequested
+            val displayMode = videoPlayerState.displayMode
+            changeCurrentChannel(currentChannel, currentChannelLineIdx, forceReload = true)
+            videoPlayerState.displayMode = displayMode
+            if (!shouldPlay) videoPlayerState.pause()
+            return
+        }
         // An EPG clock is a wall-clock target, even when the live engine exposes no timeline.
         // Never pass that timestamp to a relative seekTo (including when URL reload fails).
         if (absoluteTarget && !videoPlayerState.positionIsAbsolute) {

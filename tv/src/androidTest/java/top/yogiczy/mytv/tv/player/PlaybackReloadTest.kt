@@ -33,7 +33,7 @@ class PlaybackReloadTest {
     private val channel = Channel(name = "测试频道", groupName = "测试", index = 0,
         lineList = ChannelLineList(listOf(line)))
 
-    private fun isolated(block: (MainContentState, VideoPlayerState, RecordingPlayer, SettingsViewModel) -> Unit) {
+    private fun isolated(now: Long? = null, block: (MainContentState, VideoPlayerState, RecordingPlayer, SettingsViewModel) -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -45,7 +45,8 @@ class PlaybackReloadTest {
                 val engine = RecordingPlayer(scope)
                 val player = VideoPlayerState(engine)
                 val groups = ChannelGroupList(listOf(ChannelGroup("测试", ChannelList(listOf(channel)))))
-                val state = MainContentState(scope, player, { groups }, settingsViewModel = settings)
+                val state = MainContentState(scope, player, { groups }, settingsViewModel = settings,
+                    nowProvider = { now ?: System.currentTimeMillis() })
                 player.isPlaying = true
                 block(state, player, engine, settings)
             } finally {
@@ -167,6 +168,69 @@ class PlaybackReloadTest {
         val prepares = engine.prepares
         state.seekTo(120_000)
         assertEquals(120_000L, engine.seek)
+        assertEquals(prepares, engine.prepares)
+    }
+
+    @Test fun oneSecondArchiveAtLiveEdgeReturnsToOriginalLiveLine() = isolated(now = start + 120_000) { state, player, engine, settings ->
+        settings.videoPlayerPlaybackReload = true
+        state.changeCurrentChannel(channel, 0, programme)
+        engine.seekable = false
+        val prepares = engine.prepares
+        state.seekTo(start + 119_000, programme)
+        assertEquals(prepares + 1, engine.prepares)
+        assertEquals(line, engine.line)
+        assertNull(engine.range)
+        assertNull(engine.seek)
+        assertNull(state.currentPlaybackEpgProgramme)
+        assertTrue(player.playRequested)
+    }
+
+    @Test fun liveEdgeReturnsToLiveEvenWhenNativeWindowCanSeek() = isolated(now = start + 120_000) { state, _, engine, _ ->
+        state.changeCurrentChannel(channel, 0, programme)
+        state.seekTo(start + 120_000)
+        assertEquals(line, engine.line)
+        assertNull(engine.range)
+        assertNull(engine.seek)
+        assertNull(state.currentPlaybackEpgProgramme)
+    }
+
+    @Test fun nativeDvrWithoutReplayStateReallyReloadsLiveEdge() = isolated(now = start + 120_000) { state, _, engine, _ ->
+        state.changeCurrentChannel(channel, 0)
+        val prepares = engine.prepares
+        state.seekTo(start + 120_000, programme)
+        assertEquals(prepares + 1, engine.prepares)
+        assertEquals(line, engine.line)
+        assertNull(engine.seek)
+    }
+
+    @Test fun epgFallbackSnapsToLiveAndKeepsPauseAndDisplayMode() = isolated(now = start + 120_000) { state, player, engine, _ ->
+        state.changeCurrentChannel(channel, 0, programme)
+        engine.absolute = false
+        player.pause()
+        player.displayMode = VideoPlayerDisplayMode.FOUR_THREE
+        state.seekTo(start + 115_000, programme, absoluteTarget = true)
+        assertEquals(line, engine.line)
+        assertNull(engine.range)
+        assertNull(engine.seek)
+        assertNull(state.currentPlaybackEpgProgramme)
+        assertFalse(player.playRequested)
+        assertEquals(VideoPlayerDisplayMode.FOUR_THREE, player.displayMode)
+    }
+
+    @Test fun positionOutsideSnapRangeStillUsesReplayTemplate() = isolated(now = start + 120_000) { state, _, engine, settings ->
+        settings.videoPlayerPlaybackReload = true
+        state.changeCurrentChannel(channel, 0, programme)
+        state.seekTo(start + 114_000)
+        assertEquals(start + 114_000, engine.range!!.sourceStartAt)
+        assertTrue(engine.line.url.contains("playseek="))
+        assertEquals(programme, state.currentPlaybackEpgProgramme)
+    }
+
+    @Test fun relativeMediaEndDoesNotSnapToWallClockLive() = isolated(now = 600_000) { state, _, engine, _ ->
+        engine.absolute = false
+        val prepares = engine.prepares
+        state.seekTo(599_000)
+        assertEquals(599_000L, engine.seek)
         assertEquals(prepares, engine.prepares)
     }
 
