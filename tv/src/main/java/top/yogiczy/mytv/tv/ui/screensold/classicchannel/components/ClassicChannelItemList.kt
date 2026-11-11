@@ -404,7 +404,10 @@ private fun ClassicChannelItem(
                             .align(Alignment.BottomStart)
                             .fillMaxWidth(nnNowEpgProgramme.progress())
                             .height(2.dp)
-                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)),
+                            .background(
+                                (if (isFocused) colorScheme.surface else colorScheme.onSurface)
+                                    .copy(alpha = 0.9f)
+                            ),
                     )
                 }
             }
