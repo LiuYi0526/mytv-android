@@ -203,7 +203,7 @@ private fun QuickOpScreenBottom(
                 channelProvider = currentChannelProvider,
                 channelLineIdxProvider = currentChannelLineIdxProvider,
                 recentEpgProgrammeProvider = {
-                    epgListProvider().recentProgramme(currentChannelProvider())
+                    epgListProvider().recentProgramme(currentChannelProvider(), currentPlaybackEpgProgrammeProvider())
                 },
                 isInTimeShiftProvider = isInTimeShiftProvider,
                 currentPlaybackEpgProgrammeProvider = currentPlaybackEpgProgrammeProvider,

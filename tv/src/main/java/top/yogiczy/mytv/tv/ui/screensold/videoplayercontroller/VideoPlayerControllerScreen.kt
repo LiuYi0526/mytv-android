@@ -247,12 +247,17 @@ private fun PlaybackControllerInfo(
                 style = MaterialTheme.typography.headlineSmall,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
                 programme?.let {
                     Text(clock.format(it.startAt) + " — " + clock.format(it.endAt),
+                        modifier = Modifier.alignByBaseline(),
                         style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(0.75f))
                     Text(channel.name, style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.widthIn(max = 280.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        modifier = Modifier.alignByBaseline().widthIn(max = 280.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 LiveChannelsChannelInfoTags(
                     channelProvider = channelProvider, channelLineIdxProvider = channelLineIdxProvider,

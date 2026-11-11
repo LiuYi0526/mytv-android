@@ -38,7 +38,13 @@ data class EpgList(
     }
 
     companion object {
-        fun EpgList.recentProgramme(channel: Channel): EpgProgrammeRecent? {
+        fun EpgList.recentProgramme(channel: Channel, playback: EpgProgramme? = null): EpgProgrammeRecent? {
+            if (playback != null) return EpgProgrammeRecent(
+                now = playback,
+                next = match(channel)?.programmeList?.asSequence()
+                    ?.filter { it.startAt >= playback.endAt && it.endAt > it.startAt }
+                    ?.minByOrNull { it.startAt },
+            )
             if (isEmpty()) return null
 
             return match(channel)?.recentProgramme()

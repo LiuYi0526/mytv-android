@@ -21,7 +21,6 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.match
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
-import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeRecent
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
 import top.yogiczy.mytv.core.data.media.PlaybackProgrammeNavigation
 import top.yogiczy.mytv.core.data.media.PlaybackControllerTimeline
@@ -188,7 +187,7 @@ fun MainContent(
             channelProvider = { mainContentState.currentChannel },
             channelLineIdxProvider = { mainContentState.currentChannelLineIdx },
             recentEpgProgrammeProvider = {
-                epgListProvider().recentProgramme(mainContentState.currentChannel)
+                epgListProvider().recentProgramme(mainContentState.currentChannel, mainContentState.currentPlaybackEpgProgramme)
             },
             currentPlaybackEpgProgrammeProvider = { mainContentState.currentPlaybackEpgProgramme },
             playerMetadataProvider = { videoPlayerState.metadata },
@@ -290,13 +289,7 @@ fun MainContent(
             channelLineIdxProvider = { mainContentState.currentChannelLineIdx },
             currentPlaybackEpgProgrammeProvider = { mainContentState.currentPlaybackEpgProgramme },
             recentEpgProgrammeProvider = {
-                val replay = mainContentState.currentPlaybackEpgProgramme
-                if (replay == null) epgListProvider().recentProgramme(mainContentState.currentChannel)
-                else EpgProgrammeRecent(
-                    now = replay,
-                    next = epgListProvider().match(mainContentState.currentChannel)?.programmeList
-                        ?.firstOrNull { it.startAt >= replay.endAt },
-                )
+                epgListProvider().recentProgramme(mainContentState.currentChannel, mainContentState.currentPlaybackEpgProgramme)
             },
             playerMetadataProvider = { videoPlayerState.metadata },
             showChannelLogo = settingsViewModel.uiShowChannelLogo,

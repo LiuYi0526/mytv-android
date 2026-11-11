@@ -29,6 +29,9 @@ import org.junit.Test
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeList
+import top.yogiczy.mytv.core.data.entities.epg.Epg
+import top.yogiczy.mytv.core.data.entities.epg.EpgList
+import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
 import top.yogiczy.mytv.tv.ui.material.PopupContent
 import top.yogiczy.mytv.tv.ui.material.PopupHandleableApplication
 import top.yogiczy.mytv.tv.ui.material.SimplePopup
@@ -249,6 +252,43 @@ class EpgProgrammeDetailsTest {
         compose.onNodeWithText("精彩节目").assertDoesNotExist()
         compose.onNodeWithText("00:00 — 23:59").assertDoesNotExist()
         assertTrue(compose.onAllNodesWithContentDescription("节目简介").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test fun replayChannelInfoShowsCurrentAndFollowingBroadcast() {
+        val channel = Channel(name = "Replay channel")
+        val guide = EpgList(listOf(Epg(channelList = listOf(channel.name),
+            programmeList = EpgProgrammeList(listOf(past, live, next)))))
+        compose.setContent {
+            MyTvTheme {
+                LiveChannelsChannelInfo(
+                    channelProvider = { channel },
+                    currentPlaybackEpgProgrammeProvider = { past },
+                    recentEpgProgrammeProvider = { guide.recentProgramme(channel, past) },
+                    showChannelLogo = false,
+                )
+            }
+        }
+        compose.onNodeWithText(past.title).assertIsDisplayed()
+        compose.onNodeWithText(live.title).assertIsDisplayed()
+        compose.onNodeWithText(next.title).assertDoesNotExist()
+        compose.onNodeWithText("回放").assertIsDisplayed()
+    }
+
+    @Test fun replayWithoutFollowingGuideDoesNotShowAFakeNextProgramme() {
+        val channel = Channel(name = "Replay channel")
+        compose.setContent {
+            MyTvTheme {
+                LiveChannelsChannelInfo(
+                    channelProvider = { channel },
+                    currentPlaybackEpgProgrammeProvider = { past },
+                    recentEpgProgrammeProvider = { EpgList().recentProgramme(channel, past) },
+                    showChannelLogo = false,
+                )
+            }
+        }
+        compose.onNodeWithText(past.title).assertIsDisplayed()
+        compose.onNodeWithText(live.title).assertDoesNotExist()
+        compose.onNodeWithText(next.title).assertDoesNotExist()
     }
 
     @Test fun popupRecompositionUpdatesContentWithoutDuplicatesAndDisposalCleansItUp() {

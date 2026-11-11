@@ -106,30 +106,19 @@ fun LiveChannelsChannelInfo(
                 dense = dense,
             )
 
-            if (currentPlaybackEpgProgramme != null) {
-                LiveChannelsChannelInfoEpgProgramme(
-                    programmeProvider = { currentPlaybackEpgProgramme },
-                    showProgress = false,
-                    isCurrent = true,
-                )
-                if (showProgrammeDescription) {
-                    LiveChannelsChannelInfoDescription(currentPlaybackEpgProgramme)
-                }
-
-            } else {
-                LiveChannelsChannelInfoEpgProgramme(
-                    programmeProvider = { recentProgramme?.now },
-                    showProgress = true,
-                    isCurrent = true,
-                )
-                if (showProgrammeDescription) {
-                    LiveChannelsChannelInfoDescription(recentProgramme?.now)
-                }
-                LiveChannelsChannelInfoEpgProgramme(
-                    programmeProvider = { recentProgramme?.next },
-                    showProgress = false,
-                )
+            val displayedProgramme = currentPlaybackEpgProgramme ?: recentProgramme?.now
+            LiveChannelsChannelInfoEpgProgramme(
+                programmeProvider = { displayedProgramme },
+                showProgress = currentPlaybackEpgProgramme == null,
+                isCurrent = true,
+            )
+            if (showProgrammeDescription) {
+                LiveChannelsChannelInfoDescription(displayedProgramme)
             }
+            LiveChannelsChannelInfoEpgProgramme(
+                programmeProvider = { recentProgramme?.next },
+                showProgress = false,
+            )
         }
     }
 }

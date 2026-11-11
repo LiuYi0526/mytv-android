@@ -6,9 +6,53 @@ import org.junit.Assert.*
 import org.junit.Test
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.match
+import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
 
 class EpgListMatchTest {
     private fun guide(id: String, name: String) = Epg(channelId = id, channelList = listOf(id, name))
+
+    @Test fun replayInfoUsesTheFollowingBroadcastRatherThanTheLiveClock() {
+        val channel = Channel(name = "Channel")
+        val past = EpgProgramme(10, 20, "Replay")
+        val following = EpgProgramme(20, 30, "Next after replay")
+        val list = EpgList(listOf(Epg(channelList = listOf(channel.name),
+            programmeList = EpgProgrammeList(listOf(past, following)))))
+        assertEquals(EpgProgrammeRecent(past, following), list.recentProgramme(channel, past))
+    }
+
+    @Test fun replayNextHandlesMidnightAndRepeatedTitles() {
+        val channel = Channel(name = "Channel")
+        val midnight = 86_400_000L
+        val past = EpgProgramme(midnight - 1_800_000, midnight, "News")
+        val following = EpgProgramme(midnight, midnight + 1_800_000, "News")
+        val list = EpgList(listOf(Epg(channelList = listOf(channel.name),
+            programmeList = EpgProgrammeList(listOf(past, following)))))
+        assertEquals(following, list.recentProgramme(channel, past)?.next)
+    }
+
+    @Test fun replayNextSelectsEarliestValidBroadcastAcrossGapsAndUnsortedInput() {
+        val channel = Channel(name = "Channel")
+        val past = EpgProgramme(10, 20, "Replay")
+        val following = EpgProgramme(25, 30, "Following")
+        val list = EpgList(listOf(Epg(channelList = listOf(channel.name), programmeList = EpgProgrammeList(listOf(
+            EpgProgramme(40, 50, "Later"), EpgProgramme(15, 25, "Overlap"),
+            EpgProgramme(20, 20, "Invalid"), following,
+        )))))
+        assertEquals(following, list.recentProgramme(channel, past)?.next)
+    }
+
+    @Test fun missingGuidePreservesReplayWithoutInventingANextProgramme() {
+        val past = EpgProgramme(10, 20, "Replay")
+        assertEquals(EpgProgrammeRecent(past), EpgList().recentProgramme(Channel(name = "Missing"), past))
+        assertNull(EpgList().recentProgramme(Channel(name = "Missing")))
+    }
+
+    @Test fun lastBroadcastHasNoNextProgramme() {
+        val channel = Channel(name = "Channel")
+        val past = EpgProgramme(10, 20, "Replay")
+        val list = EpgList(listOf(Epg(channelList = listOf(channel.name), programmeList = EpgProgrammeList(listOf(past)))))
+        assertEquals(EpgProgrammeRecent(past), list.recentProgramme(channel, past))
+    }
 
     @Test
     fun tvgIdTakesPriorityOverConflictingDisplayNames() {
