@@ -27,6 +27,13 @@ data class Epg(
 
     val channelId: String? = null,
 ) {
+    // Delegated properties are not serialized. Fill old cached guides without
+    // downloading again or rebuilding the display schedule on every position tick.
+    internal val displayGuide by lazy {
+        val programmes = EpgDisplaySchedule.fillGaps(programmeList)
+        if (programmes === programmeList) this else copy(programmeList = programmes)
+    }
+
     companion object {
         private val log = Logger.create("Epg")
 
@@ -35,19 +42,7 @@ data class Epg(
 
             val t = measureTimedValue {
                 val currentTime = System.currentTimeMillis()
-                val liveProgramIndex = programmeList.binarySearch {
-                    when {
-                        currentTime < it.startAt -> 1
-                        currentTime > it.endAt -> -1
-                        else -> 0
-                    }
-                }
-
-                if (liveProgramIndex > -1) EpgProgrammeRecent(
-                    now = programmeList[liveProgramIndex],
-                    next = programmeList.getOrNull(liveProgramIndex + 1)
-                )
-                else EpgProgrammeRecent()
+                EpgDisplaySchedule.recent(programmeList, currentTime)
             }
             log.v("recentProgramme: ${channelList.firstOrNull()}", null, t.duration)
 

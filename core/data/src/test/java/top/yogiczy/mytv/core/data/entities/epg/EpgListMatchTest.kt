@@ -7,6 +7,7 @@ import org.junit.Test
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.match
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
+import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.displayGuide
 
 class EpgListMatchTest {
     private fun guide(id: String, name: String) = Epg(channelId = id, channelList = listOf(id, name))
@@ -41,10 +42,14 @@ class EpgListMatchTest {
         assertEquals(following, list.recentProgramme(channel, past)?.next)
     }
 
-    @Test fun missingGuidePreservesReplayWithoutInventingANextProgramme() {
+    @Test fun missingGuidePreservesReplayAndUsesHourlyUnknownNext() {
         val past = EpgProgramme(10, 20, "Replay")
-        assertEquals(EpgProgrammeRecent(past), EpgList().recentProgramme(Channel(name = "Missing"), past))
-        assertNull(EpgList().recentProgramme(Channel(name = "Missing")))
+        val channel = Channel(name = "Missing")
+        val recent = EpgList().recentProgramme(channel, past)
+        assertEquals(past, recent?.now)
+        assertEquals("无信息", recent?.next?.title)
+        assertTrue(recent!!.next!!.startAt >= past.endAt)
+        assertTrue(EpgList().displayGuide(channel).programmeList.all { it.title == "无信息" })
     }
 
     @Test fun lastBroadcastHasNoNextProgramme() {

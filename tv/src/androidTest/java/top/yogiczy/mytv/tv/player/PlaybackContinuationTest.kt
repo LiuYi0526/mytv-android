@@ -157,7 +157,7 @@ class PlaybackContinuationTest {
         main { f.state.seekTo(start + 30_000) }
         val count = f.engine.prepares
         main {
-            assertEquals("时移播放", f.state.currentPlaybackEpgProgramme!!.title)
+            assertEquals("无信息", f.state.currentPlaybackEpgProgramme!!.title)
             f.engine.end(start + 60_000)
         }
         awaitPrepare(f, count + 1)

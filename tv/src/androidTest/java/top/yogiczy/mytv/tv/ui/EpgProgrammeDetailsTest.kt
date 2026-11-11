@@ -32,6 +32,8 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeList
 import top.yogiczy.mytv.core.data.entities.epg.Epg
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
+import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.displayGuide
+import top.yogiczy.mytv.core.data.entities.epg.EpgDisplaySchedule
 import top.yogiczy.mytv.tv.ui.material.PopupContent
 import top.yogiczy.mytv.tv.ui.material.PopupHandleableApplication
 import top.yogiczy.mytv.tv.ui.material.SimplePopup
@@ -274,7 +276,7 @@ class EpgProgrammeDetailsTest {
         compose.onNodeWithText("回放").assertIsDisplayed()
     }
 
-    @Test fun replayWithoutFollowingGuideDoesNotShowAFakeNextProgramme() {
+    @Test fun replayWithoutRealGuideShowsHourlyUnknownNextProgramme() {
         val channel = Channel(name = "Replay channel")
         compose.setContent {
             MyTvTheme {
@@ -289,6 +291,22 @@ class EpgProgrammeDetailsTest {
         compose.onNodeWithText(past.title).assertIsDisplayed()
         compose.onNodeWithText(live.title).assertDoesNotExist()
         compose.onNodeWithText(next.title).assertDoesNotExist()
+        compose.onNodeWithText("无信息").assertIsDisplayed()
+    }
+
+    @Test fun guideDisplaysAnUnknownEntryInTheGapBetweenRealProgrammes() {
+        val before = past.copy(endAt = live.startAt - 300_000)
+        val filled = EpgDisplaySchedule.fillGaps(EpgProgrammeList(listOf(before, live, next)))
+        showGuide(filled)
+        compose.onNodeWithText("无信息").assertIsDisplayed().performTouchInput { click() }
+        assertEquals(1, replayCount)
+    }
+
+    @Test fun channelWithoutGuideDisplaysHourlyUnknownRows() {
+        val schedule = EpgList().displayGuide(Channel(name = "没有节目单")).programmeList
+        val current = schedule.indexOfFirst { now >= it.startAt && now < it.endAt }
+        showGuide(schedule.subList(current - 1, current + 2))
+        compose.onAllNodesWithText("无信息").assertCountEquals(3)
     }
 
     @Test fun popupRecompositionUpdatesContentWithoutDuplicatesAndDisposalCleansItUp() {

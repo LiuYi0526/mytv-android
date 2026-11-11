@@ -27,7 +27,7 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelLineList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
-import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.match
+import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.displayGuide
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserve
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
 import top.yogiczy.mytv.core.data.utils.ChannelPlayback
@@ -409,7 +409,7 @@ class MainContentState(
     private fun programmeAt(position: Long, fallback: EpgProgramme?): EpgProgramme {
         if (fallback != null && fallback.title != "时移播放" && position >= fallback.startAt && position < fallback.endAt)
             return fallback
-        epgListProvider().match(currentChannel)?.programmeList?.firstOrNull {
+        epgListProvider().displayGuide(currentChannel, position).programmeList.firstOrNull {
             position >= it.startAt && position < it.endAt
         }?.let { return it }
         val start = playbackSessionStartAt ?: minOf(fallback?.startAt ?: position, position)

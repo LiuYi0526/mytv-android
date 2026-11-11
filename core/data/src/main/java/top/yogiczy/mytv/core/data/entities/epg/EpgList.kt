@@ -41,13 +41,22 @@ data class EpgList(
         fun EpgList.recentProgramme(channel: Channel, playback: EpgProgramme? = null): EpgProgrammeRecent? {
             if (playback != null) return EpgProgrammeRecent(
                 now = playback,
-                next = match(channel)?.programmeList?.asSequence()
-                    ?.filter { it.startAt >= playback.endAt && it.endAt > it.startAt }
-                    ?.minByOrNull { it.startAt },
+                next = displayGuide(channel, playback.startAt).programmeList.asSequence()
+                    .filter { it.startAt >= playback.endAt && it.endAt > it.startAt }
+                    .minByOrNull { it.startAt },
             )
-            if (isEmpty()) return null
+            return displayGuide(channel).recentProgramme()
+        }
 
-            return match(channel)?.recentProgramme()
+        fun EpgList.displayGuide(channel: Channel, at: Long = System.currentTimeMillis()): Epg {
+            val actual = match(channel)?.displayGuide
+            if (actual != null && actual.programmeList.isNotEmpty()) return actual
+            return Epg(
+                channelList = actual?.channelList ?: listOf(channel.epgName.ifBlank { channel.name }),
+                channelId = actual?.channelId,
+                logo = actual?.logo,
+                programmeList = EpgDisplaySchedule.hourly(at),
+            )
         }
 
         fun EpgList.match(channel: Channel): Epg? {

@@ -16,9 +16,8 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.control.ControlAction
 import top.yogiczy.mytv.core.data.entities.control.ControlKey
 import top.yogiczy.mytv.core.data.entities.control.ControlKeyActions
-import top.yogiczy.mytv.core.data.entities.epg.Epg
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
-import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.match
+import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.displayGuide
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
@@ -200,7 +199,7 @@ fun MainContent(
     ) {
         EpgScreen(
             epgProvider = {
-                epgListProvider().match(mainContentState.currentChannel) ?: Epg()
+                epgListProvider().displayGuide(mainContentState.currentChannel)
             },
             epgProgrammeReserveListProvider = {
                 EpgProgrammeReserveList(settingsViewModel.epgChannelReserveList.filter {
@@ -271,14 +270,16 @@ fun MainContent(
         VideoPlayerControllerScreen(
             previousProgrammeProvider = {
                 PlaybackProgrammeNavigation.adjacent(
-                    epgListProvider().match(mainContentState.currentChannel)?.programmeList.orEmpty(),
+                    epgListProvider().displayGuide(mainContentState.currentChannel,
+                        mainContentState.currentPlaybackEpgProgramme?.startAt ?: System.currentTimeMillis()).programmeList,
                     mainContentState.currentPlaybackEpgProgramme ?: epgListProvider().recentProgramme(mainContentState.currentChannel)?.now,
                     -1,
                 )
             },
             nextProgrammeProvider = {
                 PlaybackProgrammeNavigation.adjacent(
-                    epgListProvider().match(mainContentState.currentChannel)?.programmeList.orEmpty(),
+                    epgListProvider().displayGuide(mainContentState.currentChannel,
+                        mainContentState.currentPlaybackEpgProgramme?.startAt ?: System.currentTimeMillis()).programmeList,
                     mainContentState.currentPlaybackEpgProgramme ?: epgListProvider().recentProgramme(mainContentState.currentChannel)?.now,
                     1,
                 )
