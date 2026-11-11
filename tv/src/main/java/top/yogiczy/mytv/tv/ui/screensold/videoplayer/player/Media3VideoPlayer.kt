@@ -19,7 +19,6 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.text.Cue
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.common.util.Util
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
@@ -225,31 +224,17 @@ class Media3VideoPlayer(
         )
     }
 
-    private fun getMediaSource(contentType: Int? = null): MediaSource? {
+    private fun getMediaSource(contentType: Int): MediaSource? {
         val playableUrl = currentChannelLine.playableUrl
         val uri = Uri.parse(HttpBasicAuth.parse(playableUrl)?.url?.toString() ?: playableUrl)
         val mediaItem = MediaItem.fromUri(uri)
         mediaSourceFactory?.let { return it.createMediaSource(mediaItem) }
 
-        var contentTypeForce = contentType
-
-        if (uri.toString().startsWith("rtp://")) {
-            contentTypeForce = C.CONTENT_TYPE_RTSP
-        }
-        if (uri.scheme.equals("rtsp", true)) {
-            contentTypeForce = C.CONTENT_TYPE_RTSP
-        }
-
-        val manifestType = currentChannelLine.manifestType?.trim()?.removeSurrounding("\"")?.lowercase()
+        val manifestType = Media3ContentType.normalize(currentChannelLine.manifestType)
         val forceMmt = manifestType == "mmt" || manifestType == "custom"
-        if (manifestType == "mpd") {
-            contentTypeForce = C.CONTENT_TYPE_DASH
-        } else if (forceMmt) {
-            contentTypeForce = C.CONTENT_TYPE_OTHER
-        }
 
         val dataSourceFactory = getDataSourceFactory()
-        return when (contentTypeForce ?: Util.inferContentType(uri)) {
+        return when (contentType) {
             C.CONTENT_TYPE_HLS -> {
                 HlsMediaSource.Factory(dataSourceFactory)
                     .setExtractorFactory(Av3aHlsExtractorFactory())
@@ -347,10 +332,11 @@ class Media3VideoPlayer(
         updatePositionJob?.cancel()
         updatePositionJob = null
         val uri = Uri.parse(currentChannelLine.playableUrl)
-        val mediaSource = getMediaSource(contentType)
+        val resolvedContentType = Media3ContentType.resolve(uri, currentChannelLine.manifestType, contentType)
+        val mediaSource = getMediaSource(resolvedContentType)
 
         if (mediaSource != null) {
-            contentTypeAttempts[contentType ?: Util.inferContentType(uri)] = true
+            contentTypeAttempts[resolvedContentType] = true
             triggerPrepared()
             if (playbackRange != null) {
                 pendingPlaybackPositionAt = playbackPositionAt ?: playbackRange!!.sourceStartAt
@@ -479,6 +465,12 @@ class Media3VideoPlayer(
 
                 // 当解析容器不支持时，尝试使用其他解析容器
                 androidx.media3.common.PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED -> {
+                    // An explicit hint must not be retried indefinitely as the same source
+                    // while recording another fallback type as attempted.
+                    if (Media3ContentType.explicit(currentChannelLine.manifestType) != null) {
+                        triggerError(PlaybackException.UNSUPPORTED_TYPE)
+                        return
+                    }
                     videoPlayer.currentMediaItem?.localConfiguration?.uri?.let {
                         if (contentTypeAttempts[C.CONTENT_TYPE_HLS] != true) {
                             prepare(C.CONTENT_TYPE_HLS)
