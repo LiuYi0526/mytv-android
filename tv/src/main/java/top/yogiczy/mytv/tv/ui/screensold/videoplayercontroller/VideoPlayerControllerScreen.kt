@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.LiveTv
@@ -23,10 +22,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -69,6 +65,7 @@ fun VideoPlayerControllerScreen(
     videoPlayerDurationProvider: () -> Pair<Long, Long> = { 0L to 0L },
     videoPlayerPositionIsAbsoluteProvider: () -> Boolean = { false },
     videoPlayerSeekEnabledProvider: () -> Boolean = { true },
+    videoPlayerAvailableUntilProvider: () -> Long? = { null },
     channelProvider: () -> Channel = { Channel() },
     channelLineIdxProvider: () -> Int = { 0 },
     recentEpgProgrammeProvider: () -> EpgProgrammeRecent? = { null },
@@ -94,19 +91,14 @@ fun VideoPlayerControllerScreen(
     val next = nextProgrammeProvider()
     val padding = rememberChildPadding()
     val progressFocus = remember { FocusRequester() }
-    var more by remember { mutableStateOf(false) }
-    fun dismissMore() { more = false; progressFocus.requestFocus() }
     fun playProgramme(target: EpgProgramme?, focusProgress: Boolean = true) {
         if (target == null || !canStartProgramme(target)) return
-        more = false
         if (focusProgress) progressFocus.requestFocus()
         onProgrammePlayback(target)
     }
 
     CompositionLocalProvider(LocalContentColor provides Color.White) {
-        Box(modifier.fillMaxSize().backHandler {
-            if (more) dismissMore() else onClose()
-        }.clickableNoIndication { onClose() }) {
+        Box(modifier.fillMaxSize().backHandler { onClose() }.clickableNoIndication { onClose() }) {
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.72f), Color.Black.copy(0.94f))))
@@ -119,29 +111,14 @@ fun VideoPlayerControllerScreen(
                     currentPlaybackEpgProgrammeProvider, playerMetadataProvider, showChannelLogo,
                 )
                 VideoPlayerControllerPositionCtrl(
-                    modifier = Modifier.fillMaxWidth().focusRequester(progressFocus).then(
-                        if (hasProgress) Modifier.focusOnLaunchedSaveable() else Modifier
-                    ),
+                    modifier = Modifier.fillMaxWidth().focusRequester(progressFocus),
                     currentPositionProvider = { position },
                     durationProvider = videoPlayerDurationProvider,
                     positionIsAbsoluteProvider = videoPlayerPositionIsAbsoluteProvider,
                     seekEnabledProvider = videoPlayerSeekEnabledProvider,
+                    availableUntilProvider = videoPlayerAvailableUntilProvider,
                     onSeekTo = onVideoPlayerSeekTo,
                     toolbar = { positionLabel, adjust, cancelPreview ->
-                        if (more) {
-                            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                                listOf(-600_000L to "后退10分钟", -60_000L to "后退1分钟",
-                                    60_000L to "前进1分钟", 600_000L to "前进10分钟").forEachIndexed { index, (delta, label) ->
-                                    VideoPlayerControllerBtn(
-                                        modifier = Modifier.size(96.dp, 44.dp)
-                                            .then(if (index == 0) Modifier.focusOnLaunchedSaveable() else Modifier)
-                                            .semantics { contentDescription = label },
-                                        enabled = hasProgress,
-                                        onSelect = { adjust(delta); dismissMore() },
-                                    ) { Text(label, style = MaterialTheme.typography.labelLarge) }
-                                }
-                            }
-                        }
                         PlaybackControllerFooter(
                             positionLabel = positionLabel,
                             transport = {
@@ -159,12 +136,11 @@ fun VideoPlayerControllerScreen(
                                         onSelect = { adjust(-10_000L) },
                                     )
                                     VideoPlayerControllerStateCtrl(
-                                        modifier = if (hasProgress) Modifier else Modifier.focusOnLaunchedSaveable(),
+                                        modifier = Modifier.focusOnLaunchedSaveable(),
                                         isPlayingProvider = isVideoPlayerPlayingProvider,
                                         isBufferingProvider = isVideoPlayerBufferingProvider,
                                         onPlay = onVideoPlayerPlay,
                                         onPause = onVideoPlayerPause,
-                                        prominent = true,
                                     )
                                     VideoPlayerControllerBtn(
                                         modifier = Modifier.semantics { contentDescription = "前进10秒" },
@@ -202,12 +178,6 @@ fun VideoPlayerControllerScreen(
                                             Text("直播", style = MaterialTheme.typography.labelLarge)
                                         }
                                     }
-                                    VideoPlayerControllerBtn(
-                                        modifier = Modifier.semantics { contentDescription = "更多定位" },
-                                        imageVector = Icons.Default.MoreHoriz,
-                                        enabled = hasProgress,
-                                        onSelect = { if (more) dismissMore() else more = true },
-                                    )
                                 }
                             },
                         )

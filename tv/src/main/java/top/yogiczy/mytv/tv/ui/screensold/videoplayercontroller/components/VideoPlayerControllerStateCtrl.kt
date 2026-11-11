@@ -14,8 +14,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.LocalContentColor
-import androidx.tv.material3.IconButtonDefaults
-import androidx.tv.material3.MaterialTheme
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import top.yogiczy.mytv.tv.ui.material.CircularProgressIndicator
@@ -28,20 +26,12 @@ fun VideoPlayerControllerStateCtrl(
     isBufferingProvider: () -> Boolean = { false },
     onPlay: () -> Unit = {},
     onPause: () -> Unit = {},
-    prominent: Boolean = false,
 ) {
     val isPlaying = isPlayingProvider()
     val isBuffering = isBufferingProvider()
 
     VideoPlayerControllerBtn(
-        modifier = modifier.semantics { contentDescription = if (isPlaying) "暂停播放" else "继续播放" }
-            .then(if (prominent) Modifier.size(52.dp) else Modifier),
-        colors = if (prominent) IconButtonDefaults.colors(
-            containerColor = Color.White,
-            contentColor = Color.Black,
-            focusedContainerColor = MaterialTheme.colorScheme.primary,
-            focusedContentColor = MaterialTheme.colorScheme.onPrimary,
-        ) else IconButtonDefaults.colors(),
+        modifier = modifier.semantics { contentDescription = if (isPlaying) "暂停播放" else "继续播放" },
         onSelect = {
             if (!isBuffering) {
                 if (isPlaying) onPause()

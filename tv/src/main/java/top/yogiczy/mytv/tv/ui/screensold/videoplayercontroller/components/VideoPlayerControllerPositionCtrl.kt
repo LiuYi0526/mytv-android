@@ -47,7 +47,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.min
-import kotlin.math.sqrt
 
 @Composable
 fun VideoPlayerControllerPositionCtrl(
@@ -56,6 +55,7 @@ fun VideoPlayerControllerPositionCtrl(
     durationProvider: () -> Pair<Long, Long> = { 0L to 0L },
     positionIsAbsoluteProvider: () -> Boolean = { false },
     seekEnabledProvider: () -> Boolean = { true },
+    availableUntilProvider: () -> Long? = { null },
     onSeekTo: (Long) -> Unit = {},
     toolbar: (@Composable (positionLabel: String, adjust: (Long) -> Unit, cancelPreview: () -> Unit) -> Unit)? = null,
 ) {
@@ -101,12 +101,12 @@ fun VideoPlayerControllerPositionCtrl(
             currentPosition = pending ?: currentPositionProvider(),
             range = range,
             absolute = absolute,
+            availableUntil = availableUntilProvider().takeIf { absolute },
             seekEnabled = seekEnabled,
             showTimeLabels = toolbar == null,
-            onRemoteAdjust = { direction, repeat ->
+            onRemoteAdjust = { direction ->
                 keyHeld = true
-                // YYKM: 10 seconds initially, accelerating to at most 30 seconds.
-                adjust(min(3L, sqrt(repeat.toDouble()).toLong() + 1) * 10_000L * direction)
+                adjust(600_000L * direction)
             },
             onRemoteRelease = { keyHeld = false },
             onConfirm = { keyHeld = false; commit() },
@@ -160,9 +160,10 @@ private fun VideoPlayerControllerPositionProgress(
     currentPosition: Long,
     range: Pair<Long, Long>,
     absolute: Boolean,
+    availableUntil: Long?,
     seekEnabled: Boolean,
     showTimeLabels: Boolean,
-    onRemoteAdjust: (Int, Int) -> Unit,
+    onRemoteAdjust: (Int) -> Unit,
     onRemoteRelease: () -> Unit,
     onConfirm: () -> Unit,
     onDragStart: () -> Unit,
@@ -172,8 +173,12 @@ private fun VideoPlayerControllerPositionProgress(
     onSetProgress: (Float) -> Unit,
 ) {
     val valid = seekEnabled && range.second > range.first
+    val availableFraction = availableUntil?.takeIf { range.second > range.first }?.let {
+        ((it - range.first).toDouble() / (range.second - range.first)).toFloat().coerceIn(0f, 1f)
+    }
     val fraction = if (range.second > range.first)
         ((currentPosition - range.first).toDouble() / (range.second - range.first)).toFloat().coerceIn(0f, 1f)
+            .coerceAtMost(availableFraction ?: 1f)
     else 0f
     val timeFormat = remember(absolute) {
         SimpleDateFormat("HH:mm:ss", Locale.getDefault()).apply {
@@ -186,7 +191,8 @@ private fun VideoPlayerControllerPositionProgress(
     val latestDrag by rememberUpdatedState(onDrag)
     val latestEnd by rememberUpdatedState(onDragEnd)
     val latestCancel by rememberUpdatedState(onDragCancel)
-    val color = if (focused) MaterialTheme.colorScheme.primary else LocalContentColor.current
+    val color = MaterialTheme.colorScheme.primary
+    val availableColor = LocalContentColor.current.copy(alpha = 0.55f)
     val trackColor = LocalContentColor.current.copy(alpha = 0.25f)
 
     Column {
@@ -200,7 +206,7 @@ private fun VideoPlayerControllerPositionProgress(
                         KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                             if (!valid) false else {
                                 if (event.action == KeyEvent.ACTION_DOWN) {
-                                    onRemoteAdjust(if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1, event.repeatCount)
+                                    onRemoteAdjust(if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1)
                                 } else if (event.action == KeyEvent.ACTION_UP) onRemoteRelease()
                                 true
                             }
@@ -236,6 +242,12 @@ private fun VideoPlayerControllerPositionProgress(
             val right = Offset((size.width - inset).coerceAtLeast(inset), left.y)
             val thumb = Offset(left.x + (right.x - left.x) * fraction, left.y)
             drawLine(trackColor, left, right, 6.dp.toPx(), StrokeCap.Round)
+            // Past broadcasts are available up to the live clock; the remaining
+            // programme duration is still in the future, not buffered media.
+            availableFraction?.takeIf { it > 0f }?.let {
+                val liveEdge = Offset(left.x + (right.x - left.x) * it, left.y)
+                drawLine(availableColor, left, liveEdge, 6.dp.toPx(), StrokeCap.Round)
+            }
             drawLine(color, left, thumb, 6.dp.toPx(), StrokeCap.Round)
             drawCircle(color, (if (focused) 8.dp else 5.dp).toPx(), thumb)
         }

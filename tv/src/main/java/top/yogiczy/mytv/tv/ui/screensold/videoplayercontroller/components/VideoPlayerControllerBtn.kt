@@ -10,6 +10,7 @@ import androidx.tv.material3.IconButtonDefaults
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.focusProperties
 import androidx.tv.material3.LocalContentColor
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
 
@@ -27,6 +28,7 @@ fun VideoPlayerControllerBtn(
 ) {
     IconButton(
         modifier = modifier
+            .focusProperties { canFocus = enabled }
             .handleKeyEvents(onSelect = { if (enabled) onSelect() }),
         onClick = {},
         enabled = enabled,

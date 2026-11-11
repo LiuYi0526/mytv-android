@@ -33,7 +33,7 @@ class PlaybackControllerPanelTest {
     private val previous = programme.copy(startAt = start - 600_000, endAt = start)
     private val next = programme.copy(startAt = programme.endAt, endAt = programme.endAt + 600_000)
 
-    private fun show(replay: Boolean = false, absolute: Boolean = true, supported: Boolean = true, futureNext: Boolean = false) {
+    private fun show(replay: Boolean = false, absolute: Boolean = true, supported: Boolean = true, futureNext: Boolean = false, playing: Boolean = true) {
         val visible = mutableStateOf(true)
         compose.setContent {
             MyTvTheme {
@@ -48,7 +48,7 @@ class PlaybackControllerPanelTest {
                     videoPlayerCurrentPositionProvider = { if (absolute) start + 120_000 else 120_000 },
                     videoPlayerDurationProvider = { if (absolute) start to start + 600_000 else 0L to 600_000L },
                     videoPlayerPositionIsAbsoluteProvider = { absolute },
-                    isVideoPlayerPlayingProvider = { true },
+                    isVideoPlayerPlayingProvider = { playing },
                     onVideoPlayerSeekTo = { seek.set(it) },
                     onVideoPlayerPause = { pause.incrementAndGet() },
                     onReturnToLive = { live.incrementAndGet(); visible.value = false },
@@ -60,17 +60,48 @@ class PlaybackControllerPanelTest {
 
     private fun clock(time: Long) = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(time)
 
+    private fun focusProgress() = compose.onNodeWithContentDescription("播放进度").apply {
+        performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+    }
+
+    @Test fun controllerInitiallyFocusesPauseWithAValidProgressBar() {
+        show()
+        compose.onNodeWithContentDescription("暂停播放").assertIsFocused()
+        compose.onNodeWithContentDescription("播放进度").assertIsNotFocused()
+    }
+
+    @Test fun pausedControllerInitiallyFocusesPlay() {
+        show(playing = false)
+        compose.onNodeWithContentDescription("继续播放").assertIsFocused()
+    }
+
+    @Test fun playPauseUsesTheSameSizeAsOtherTransportButtons() {
+        show()
+        val pauseSize = compose.onNodeWithContentDescription("暂停播放").fetchSemanticsNode().size
+        val backSize = compose.onNodeWithContentDescription("后退10秒").fetchSemanticsNode().size
+        assertEquals(backSize, pauseSize)
+    }
+
+    @Test fun remoteDoesNotFocusUnavailableLiveButton() {
+        show()
+        compose.onNodeWithContentDescription("回到直播").assertIsNotEnabled()
+        val restart = compose.onNodeWithContentDescription("从头观看")
+        restart.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        restart.performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithContentDescription("回到直播").assertIsNotFocused()
+    }
+
     @Test fun absoluteTimeShowsRealClockAndRemotePreview() {
         show()
         compose.onNodeWithText("测试节目").assertExists()
         compose.onNodeWithText("当前节目的简介").assertExists()
         compose.onNodeWithText("${clock(start + 120_000)} / ${clock(start + 600_000)}").assertExists()
-        val bar = compose.onNodeWithContentDescription("播放进度")
+        val bar = focusProgress()
         bar.assertIsFocused()
         bar.performKeyInput { pressKey(Key.DirectionRight) }
-        compose.onNodeWithText("${clock(start + 130_000)} / ${clock(start + 600_000)}").assertExists()
+        compose.onNodeWithText("${clock(start + 600_000)} / ${clock(start + 600_000)}").assertExists()
         compose.waitUntil(5_000) { seek.get() != Long.MIN_VALUE }
-        assertEquals(start + 130_000, seek.get())
+        assertEquals(start + 600_000, seek.get())
     }
 
     @Test fun relativeMediaStillUsesElapsedTime() {
@@ -97,15 +128,15 @@ class PlaybackControllerPanelTest {
     @Test fun guideFallbackShowsProgressAndSeeksInWallClockTime() {
         showGuideFallback(true)
         compose.onNodeWithText("${clock(start + 120_000)} / ${clock(programme.endAt)}").assertExists()
-        compose.onNodeWithContentDescription("播放进度").assertIsFocused()
+        focusProgress().assertIsFocused()
             .performKeyInput { pressKey(Key.DirectionLeft); pressKey(Key.Enter) }
-        assertEquals(start + 110_000, seek.get())
+        assertEquals(start, seek.get())
     }
 
     @Test fun guideWithoutReplayStillShowsProgressButDisablesSeeking() {
         showGuideFallback(false)
         compose.onNodeWithText("${clock(start + 120_000)} / ${clock(programme.endAt)}").assertExists()
-        listOf("后退10秒", "前进10秒", "更多定位").forEach {
+        listOf("后退10秒", "前进10秒").forEach {
             compose.onNodeWithContentDescription(it).assertIsNotEnabled().performTouchInput { click() }
         }
         compose.onNodeWithContentDescription("暂停播放").assertDoesNotExist()
@@ -113,13 +144,12 @@ class PlaybackControllerPanelTest {
         assertEquals(Long.MIN_VALUE, seek.get())
     }
 
-    @Test fun moreSeekingRestoresProgressFocusAndUsesOriginalTimeBase() {
+    @Test fun smallTransportButtonsKeepTenSecondStepsWithoutMoreMenu() {
         show()
-        compose.onNodeWithContentDescription("更多定位").performTouchInput { click() }
-        compose.onNodeWithContentDescription("前进1分钟").performTouchInput { click() }
-        compose.onNodeWithContentDescription("播放进度").assertIsFocused()
+        compose.onNodeWithContentDescription("更多定位").assertDoesNotExist()
+        compose.onNodeWithContentDescription("前进10秒").performTouchInput { click() }
         compose.waitUntil(5_000) { seek.get() != Long.MIN_VALUE }
-        assertEquals(start + 180_000, seek.get())
+        assertEquals(start + 130_000, seek.get())
     }
 
     @Test fun pauseTouchOnlyFiresOnce() {
@@ -131,7 +161,7 @@ class PlaybackControllerPanelTest {
 
     @Test fun returnToLiveDisposesPendingReplaySeek() {
         show(replay = true)
-        compose.onNodeWithContentDescription("播放进度").performKeyInput { pressKey(Key.DirectionLeft) }
+        focusProgress().performKeyInput { pressKey(Key.DirectionLeft) }
         compose.onNodeWithContentDescription("回到直播").performTouchInput { click() }
         Thread.sleep(1_200)
         assertEquals(1, live.get())
@@ -149,7 +179,7 @@ class PlaybackControllerPanelTest {
 
     @Test fun restartCancelsPendingPreviewAndKeepsFocusOnProgress() {
         show(replay = true)
-        compose.onNodeWithContentDescription("播放进度").performKeyInput { pressKey(Key.DirectionRight) }
+        focusProgress().performKeyInput { pressKey(Key.DirectionRight) }
         compose.onNodeWithContentDescription("从头观看").performTouchInput { click() }
         compose.onNodeWithContentDescription("播放进度").assertIsFocused()
         Thread.sleep(1_200)

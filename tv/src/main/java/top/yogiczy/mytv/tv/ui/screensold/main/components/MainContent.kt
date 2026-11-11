@@ -313,6 +313,7 @@ fun MainContent(
             videoPlayerPositionIsAbsoluteProvider = { timeline.absolute },
             videoPlayerDurationProvider = { timeline.range },
             videoPlayerSeekEnabledProvider = { timeline.seekEnabled },
+            videoPlayerAvailableUntilProvider = { controllerNow.takeIf { timeline.absolute } },
             onVideoPlayerPlay = { videoPlayerState.play() },
             onVideoPlayerPause = { videoPlayerState.pause() },
             onVideoPlayerSeekTo = {

@@ -86,31 +86,31 @@ class PlaybackProgressInputTest {
 
     @After fun close() { scenario?.close() }
 
-    @Test fun remoteKeysBatchTenSecondStepsAndPreserveUtc() {
-        show(start + 120_000, start to start + 600_000, true)
+    @Test fun remoteKeysBatchTenMinuteStepsAndPreserveUtc() {
+        show(start + 1_200_000, start to start + 3_600_000, true)
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         press(KeyEvent.KEYCODE_DPAD_LEFT)
-        assertTarget(start + 130_000)
+        assertTarget(start + 1_800_000)
     }
 
-    @Test fun heldRemoteAcceleratesButDoesNotSeekBeforeRelease() {
-        show()
+    @Test fun heldRemoteKeepsTenMinuteStepsAndDoesNotSeekBeforeRelease() {
+        show(range = 0L to 3_600_000L)
         key(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_DOWN)
         key(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_DOWN, 1)
         key(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_DOWN, 4)
         SystemClock.sleep(1_200)
         assertEquals(0, calls.get())
         key(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_UP)
-        assertTarget(180_000)
+        assertTarget(1_920_000)
     }
 
     @Test fun confirmImmediatelyCommitsWithoutDuplicateDebounce() {
         show()
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        assertEquals(130_000, target.get())
-        assertTarget(130_000)
+        assertEquals(600_000, target.get())
+        assertTarget(600_000)
     }
 
     @Test fun remoteStopsAtBothProgrammeBounds() {
@@ -147,7 +147,7 @@ class PlaybackProgressInputTest {
         SystemClock.sleep(1_200)
         assertEquals(0, calls.get())
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
-        assertTarget(130_000)
+        assertTarget(600_000)
     }
 
     @Test fun dragClampsToEndAndPreservesUtc() {
