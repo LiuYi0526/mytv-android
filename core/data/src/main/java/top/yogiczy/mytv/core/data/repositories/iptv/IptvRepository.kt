@@ -1,10 +1,15 @@
 package top.yogiczy.mytv.core.data.repositories.iptv
 
+import android.util.AtomicFile
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.encodeToString
@@ -29,6 +34,9 @@ class IptvRepository(private val source: IptvSource) :
     private val log = Logger.create("IptvRepository")
     private val sourceUrl = IptvSourceUrl.parse(source.url)
     private val rawRepository = IptvRawRepository(source.copy(url = sourceUrl.requestUrl))
+    private val parsedFile = File(Globals.cacheDir, source.cacheFileName(PARSED_CACHE_EXTENSION))
+    private val parsedCache = AtomicFile(parsedFile)
+    private val cacheLock = synchronized(cacheLocks) { cacheLocks.getOrPut(parsedFile.absolutePath) { Mutex() } }
 
     suspend fun getCachedInfo(): IptvSourceCacheInfo? = withContext(Dispatchers.IO) {
         IptvSourceCacheInfo.read(
@@ -102,18 +110,61 @@ class IptvRepository(private val source: IptvSource) :
      */
     suspend fun getChannelGroupList(cacheTime: Long): ChannelGroupList {
         try {
-            val json = getOrRefresh({ lastModified, _ -> isExpired(lastModified, cacheTime) }) {
-                refresh(cacheTime) { transform(it) }
+            if (!isExpired(lastModified(), cacheTime)) {
+                getCachedChannelGroupList()?.let { return it }
             }
+
+            val json = refresh(cacheTime) { transform(it) }
 
             val (groupList, duration) = measureTimedValue {
                 Globals.json.decodeFromString<ChannelGroupList>(json)
+            }
+            // Validate the new result before replacing the last readable channel cache.
+            withContext(Dispatchers.IO) {
+                cacheLock.withLock {
+                    currentCoroutineContext().ensureActive()
+                    val output = parsedCache.startWrite()
+                    try {
+                        output.write(json.toByteArray(Charsets.UTF_8))
+                        currentCoroutineContext().ensureActive()
+                        parsedCache.finishWrite(output)
+                    } catch (failure: Throwable) {
+                        parsedCache.failWrite(output)
+                        throw failure
+                    }
+                }
             }
             log.i("加载直播源（${source.name}）：${groupList.size}个分组，${groupList.sumOf { it.channelList.size }}个频道: $duration")
             return sourceUrl.applyTo(groupList)
         } catch (ex: Exception) {
             log.e("加载直播源（${source.name}）失败", ex)
             throw ex
+        }
+    }
+
+    /** Readable data can still be displayed after its refresh deadline. Never downloads. */
+    suspend fun getCachedChannelGroupList(): ChannelGroupList? = withContext(Dispatchers.IO) {
+        try {
+            val json = cacheLock.withLock { parsedCache.openRead().bufferedReader().use { it.readText() } }
+            if (json.isBlank()) return@withContext null
+            sourceUrl.applyTo(Globals.json.decodeFromString<ChannelGroupList>(json))
+        } catch (ex: CancellationException) {
+            throw ex
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Emit old data first; a failed refresh leaves that emission available to the caller. */
+    fun observeChannelGroupList(
+        cacheTime: Long,
+        onRefresh: () -> Unit = {},
+    ): Flow<ChannelGroupList> = flow {
+        val cached = getCachedChannelGroupList()
+        if (cached != null) emit(cached)
+        if (cached == null || isExpired(lastModified(), cacheTime)) {
+            onRefresh()
+            emit(getChannelGroupList(cacheTime))
         }
     }
 
@@ -141,11 +192,12 @@ class IptvRepository(private val source: IptvSource) :
 
     override suspend fun clearCache() {
         rawRepository.clearCache()
-        super.clearCache()
+        withContext(Dispatchers.IO) { cacheLock.withLock { parsedCache.delete() } }
     }
 
     companion object {
         private const val PARSED_CACHE_EXTENSION = "v4.json"
+        private val cacheLocks = mutableMapOf<String, Mutex>()
         suspend fun clearAllCache() = withContext(Dispatchers.IO) {
             IptvSource.cacheDir.deleteRecursively()
         }

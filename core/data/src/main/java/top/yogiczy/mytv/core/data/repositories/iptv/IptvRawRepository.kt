@@ -65,7 +65,7 @@ internal class IptvRawRepository(
                 throw ex
             } catch (ex: Exception) {
                 log.e("获取直播源（${source.name}）失败", ex)
-                throw HttpException("获取直播源失败，请检查网络连接", ex)
+                throw HttpException("获取订阅源失败，请检查网络连接", ex)
             }
         }
     }

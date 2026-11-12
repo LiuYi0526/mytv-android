@@ -7,6 +7,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +41,7 @@ import top.yogiczy.mytv.tv.sync.CloudSyncData
 import top.yogiczy.mytv.tv.ui.material.Snackbar
 import top.yogiczy.mytv.tv.ui.material.SnackbarType
 import top.yogiczy.mytv.tv.ui.utils.Configs
+import java.util.UUID
 
 class MainViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<MainUiState>(MainUiState.Loading())
@@ -62,9 +65,18 @@ class MainViewModel : ViewModel() {
         _lastJob = viewModelScope.launch {
             Configs.reconcileEpgCatalog()
             ChannelAlias.refresh()
-            refreshChannel()
-            refreshEpg()
-            mergeEpgMetadata()
+            coroutineScope {
+                var epgJob: Job? = null
+                refreshChannel {
+                    // Load EPG while an expired subscription refreshes in the background.
+                    // A new channel list must not receive results filtered for the old list.
+                    epgJob?.cancelAndJoin()
+                    epgJob = launch {
+                        refreshEpg()
+                        mergeEpgMetadata()
+                    }
+                }
+            }
         }
     }
 
@@ -82,52 +94,68 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    private suspend fun refreshChannel() {
-        if (Configs.iptvSourceCurrent.url.isBlank()) {
+    private suspend fun refreshChannel(onChannelsLoaded: suspend () -> Unit) {
+        val source = Configs.iptvSourceCurrent
+        if (source.url.isBlank()) {
             _uiState.value = MainUiState.Ready()
             return
         }
-        _uiState.value = MainUiState.Loading("加载直播源")
+        _uiState.value = MainUiState.Loading("加载订阅源")
 
-        flow {
-            emit(
-                IptvRepository(Configs.iptvSourceCurrent)
-                    .getChannelGroupList(Configs.iptvSourceCacheTime)
-            )
-        }
-            .retryWhen { e, attempt ->
-                if (attempt >= Constants.NETWORK_RETRY_COUNT) return@retryWhen false
-                if (e !is HttpException) return@retryWhen false
-
-                _uiState.value =
-                    MainUiState.Loading("加载直播源(${attempt + 1}/${Constants.NETWORK_RETRY_COUNT})...")
-                delay(Constants.NETWORK_RETRY_INTERVAL)
-                true
+        val refreshMessageId = "subscription-refresh-${UUID.randomUUID()}"
+        var showingRefresh = false
+        try {
+            IptvRepository(source).observeChannelGroupList(Configs.iptvSourceCacheTime) {
+                if (_uiState.value is MainUiState.Ready) {
+                    showingRefresh = true
+                    Snackbar.show(
+                        "正在刷新订阅源：${source.name}", leadingLoading = true,
+                        duration = Long.MAX_VALUE, id = refreshMessageId,
+                    )
+                }
             }
-            .catch {
-                _uiState.value = MainUiState.Error(it.message)
-            }
-            .map { mergeSimilarChannel(it) }
-            .map { hybridChannel(it) }
-            .map { groupList ->
-                _uiState.value = MainUiState.Ready(
-                    channelGroupList = groupList,
-                    filteredChannelGroupList = withContext(Dispatchers.Default) {
+                .map { mergeSimilarChannel(it) }
+                .map { hybridChannel(it) }
+                .catch {
+                    if (_uiState.value is MainUiState.Ready) {
+                        Snackbar.show(
+                            "订阅源刷新失败，继续使用缓存", type = SnackbarType.ERROR,
+                            id = refreshMessageId,
+                        )
+                        showingRefresh = false
+                    } else {
+                        _uiState.value = MainUiState.Error(it.message)
+                    }
+                }
+                .collect { groupList ->
+                    val filtered = withContext(Dispatchers.Default) {
                         ChannelGroupList(groupList.filter { it.name !in Configs.iptvChannelGroupHiddenList })
                             .withMetadata()
                     }
-                )
-                groupList
+                    val previous = _uiState.value as? MainUiState.Ready
+                    _uiState.value = (previous ?: MainUiState.Ready()).copy(
+                        channelGroupList = groupList,
+                        filteredChannelGroupList = filtered,
+                    )
+                    refreshChannelFavoriteList(source, groupList)
+                    onChannelsLoaded()
+                }
+            if (showingRefresh) {
+                Snackbar.show("订阅源刷新完成：${source.name}", id = refreshMessageId)
+                showingRefresh = false
             }
-            .map { refreshChannelFavoriteList(Configs.iptvSourceCurrent, it) }
-            .collect()
+        } finally {
+            if (showingRefresh) Snackbar.dismiss(refreshMessageId)
+        }
     }
 
     private suspend fun mergeSimilarChannel(channelGroupList: ChannelGroupList): ChannelGroupList =
         withContext(Dispatchers.Default) {
             if (!Configs.iptvSimilarChannelMerge) return@withContext channelGroupList
 
-            _uiState.value = MainUiState.Loading("合并相似频道")
+            if (_uiState.value !is MainUiState.Ready) {
+                _uiState.value = MainUiState.Loading("合并相似频道")
+            }
 
             return@withContext ChannelGroupList(channelGroupList.map { group ->
                 group.copy(
@@ -161,8 +189,8 @@ class MainViewModel : ViewModel() {
 
     private suspend fun hybridChannel(channelGroupList: ChannelGroupList) =
         withContext(Dispatchers.Default) {
-            if (Configs.iptvHybridMode != Configs.IptvHybridMode.DISABLE) {
-                _uiState.value = MainUiState.Loading("混合直播源")
+            if (Configs.iptvHybridMode != Configs.IptvHybridMode.DISABLE && _uiState.value !is MainUiState.Ready) {
+                _uiState.value = MainUiState.Loading("混合订阅源")
             }
 
             return@withContext when (Configs.iptvHybridMode) {
