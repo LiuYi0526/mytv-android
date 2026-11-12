@@ -24,7 +24,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +45,9 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flowOn
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme.Companion.progress
@@ -301,13 +306,23 @@ private fun ChannelsChannelItemProgress(
 
 @Composable
 fun rememberEpgProgrammeRecent(provider: () -> EpgProgrammeRecent? = { null }): EpgProgrammeRecent? {
+    val currentProvider by rememberUpdatedState(provider)
     var recentEpgProgramme by remember { mutableStateOf<EpgProgrammeRecent?>(null) }
-    LaunchedEffect(provider) {
-        while (true) {
-            recentEpgProgramme = EpgList.action(provider)
-            if (recentEpgProgramme != null) break
-            delay(100)
-        }
+    LaunchedEffect(Unit) {
+        // A non-null result may only be an hourly placeholder while EPG loads. Observe
+        // the provider's snapshot reads instead of freezing the first available result.
+        snapshotFlow { currentProvider() }
+            .flowOn(Dispatchers.Default)
+            .collectLatest { initial ->
+                var current = initial
+                while (true) {
+                    recentEpgProgramme = current
+                    // Wall-clock programme boundaries do not emit snapshot changes.
+                    val untilEnd = (current?.now?.endAt ?: 0L) - System.currentTimeMillis()
+                    delay(if (untilEnd > 0) minOf(untilEnd + 1, 60_000L) else 60_000L)
+                    current = EpgList.action { currentProvider() }
+                }
+            }
     }
 
     return recentEpgProgramme
