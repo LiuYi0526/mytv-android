@@ -87,6 +87,7 @@ class Media3VideoPlayer(
 
     private var currentChannelLine = ChannelLine()
     private var playbackCookies = PlaybackCookieJar()
+    private var initialHlsResponse = HlsInitialResponse()
     private val contentTypeAttempts = mutableMapOf<Int, Boolean>()
     private var updatePositionJob: Job? = null
     private var playbackRange: PlaybackRange? = null
@@ -150,6 +151,7 @@ class Media3VideoPlayer(
     }
 
     private fun reInitPlayer() {
+        resetInitialHlsResponse()
         rememberPlaybackPosition()
         val hadSource = videoPlayer.mediaItemCount > 0
         val volume = videoPlayer.volume
@@ -236,7 +238,8 @@ class Media3VideoPlayer(
         val dataSourceFactory = getDataSourceFactory()
         return when (contentType) {
             C.CONTENT_TYPE_HLS -> {
-                HlsMediaSource.Factory(dataSourceFactory)
+                HlsMediaSource.Factory(initialHlsResponse.replayingFactory(dataSourceFactory))
+                    .setPlaylistParserFactory(HlsPlaylistParserFactoryCompat())
                     .setExtractorFactory(Av3aHlsExtractorFactory())
                     // Some playlists omit AV3A from CODECS; discover all tracks from the TS PMT.
                     .setAllowChunklessPreparation(false)
@@ -316,7 +319,9 @@ class Media3VideoPlayer(
             }
 
             C.CONTENT_TYPE_OTHER -> {
-                ProgressiveMediaSource.Factory(dataSourceFactory, MmtExtractorsFactory(forceMmt))
+                val factory = if (Media3ContentType.explicit(currentChannelLine.manifestType) == null)
+                    initialHlsResponse.detectingFactory(dataSourceFactory) else dataSourceFactory
+                ProgressiveMediaSource.Factory(factory, MmtExtractorsFactory(forceMmt))
                     .createMediaSource(mediaItem)
             }
 
@@ -760,6 +765,7 @@ class Media3VideoPlayer(
     }
 
     override fun release() {
+        initialHlsResponse.close()
         aribCaptions?.close()
         aribCaptions = null
         playbackCookies.clear()
@@ -789,6 +795,7 @@ class Media3VideoPlayer(
             videoPlayer.stop()
 
         contentTypeAttempts.clear()
+        resetInitialHlsResponse()
         currentChannelLine = line
         // A new channel/programme must not inherit another playback's authenticated session.
         // Internal reconnects and decoder fallback reuse the current jar.
@@ -869,10 +876,16 @@ class Media3VideoPlayer(
     }
 
     override fun stop() {
+        resetInitialHlsResponse()
         triggerCues(ImmutableList.of())
         videoPlayer.stop()
         updatePositionJob?.cancel()
         super.stop()
+    }
+
+    private fun resetInitialHlsResponse() {
+        initialHlsResponse.close()
+        initialHlsResponse = HlsInitialResponse()
     }
 
     override fun selectVideoTrack(track: Metadata.Video?) {

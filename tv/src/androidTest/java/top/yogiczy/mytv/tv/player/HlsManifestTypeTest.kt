@@ -45,8 +45,31 @@ class HlsManifestTypeTest {
     @Test fun m3u8UrlStillAutoDetectsWithoutHint() =
         checkPreparation(null, redirect = false, entryPath = "/entry.m3u8")
 
-    @Test fun extensionlessUrlWithoutHintKeepsExistingContainerFallback() =
+    @Test fun extensionlessUrlWithoutHintReusesTheInitialResponse() =
         checkPreparation(null, redirect = false, expectedPrepares = 2)
+
+    @Test fun extensionlessRedirectWithoutHintReusesBodyAndResolvedRelativeUrls() =
+        checkPreparation(null, redirect = true, expectedPrepares = 2)
+
+    @Test fun automaticHlsAcceptsGenericContentTypeBomAndWhitespace() =
+        checkPreparation(null, redirect = false, expectedPrepares = 2,
+            contentType = "text/plain; charset=utf-8", leadingWhitespace = true)
+
+    @Test fun automaticHlsReusesGzippedRedirectResponse() =
+        checkPreparation(null, redirect = true, expectedPrepares = 2, gzip = true,
+            contentType = "application/vnd.apple.mpegurl")
+
+    @Test fun automaticMasterPlaylistReusesOnlyTheInitialResponse() =
+        checkPreparation(null, redirect = true, expectedPrepares = 2, master = true)
+
+    @Test fun automaticCrossOriginRedirectDoesNotLeakUrlCredentialsOrOriginalCookies() =
+        checkPreparation(null, redirect = true, expectedPrepares = 2, crossOrigin = true)
+
+    @Test fun livePlaylistRefreshStillUsesNetworkAfterInitialReuse() =
+        checkPreparation(null, redirect = true, expectedPrepares = 2, refresh = true, leadingWhitespace = true)
+
+    @Test fun explicitHlsAlsoAcceptsBomWithoutAContainerRetry() =
+        checkPreparation("hls", redirect = false, leadingWhitespace = true)
 
     @Test fun explicitHlsWithUnsupportedSegmentDoesNotRestartAsTheSameContainer() =
         checkPreparation("hls", redirect = false, invalidSegment = true)
@@ -58,7 +81,9 @@ class HlsManifestTypeTest {
         checkPreparation("mpd", redirect = false, sourceKind = C.CONTENT_TYPE_DASH)
 
     private fun checkPreparation(hint: String?, redirect: Boolean, entryPath: String = "/entry",
-        expectedPrepares: Int = 1, invalidSegment: Boolean = false, sourceKind: Int = C.CONTENT_TYPE_HLS) {
+        expectedPrepares: Int = 1, invalidSegment: Boolean = false, sourceKind: Int = C.CONTENT_TYPE_HLS,
+        contentType: String? = null, leadingWhitespace: Boolean = false, gzip: Boolean = false,
+        master: Boolean = false, refresh: Boolean = false, crossOrigin: Boolean = false) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val segment = if (invalidSegment) ByteArray(4096) else
             instrumentation.context.assets.open("aac-av3a.ts").use { it.readBytes() }
@@ -70,7 +95,7 @@ class HlsManifestTypeTest {
         val prefs = SP.getInstance(instrumentation.context)
         var player: Media3VideoPlayer? = null
         fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
-        FixtureServer(segment, redirect, entryPath, sourceKind).use { server ->
+        FixtureServer(segment, redirect, entryPath, sourceKind, contentType, leadingWhitespace, gzip, master, refresh, crossOrigin).use { server ->
             try {
                 main {
                     prefs.edit().clear().commit()
@@ -99,6 +124,12 @@ class HlsManifestTypeTest {
                     engine.prepare(ChannelLine(server.url(), httpUserAgent = "ManifestTest/1", manifestType = hint))
                 }
                 assertTrue("Source preparation timed out", completed.await(20, TimeUnit.SECONDS))
+                if (refresh) {
+                    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+                    while (System.nanoTime() < deadline && synchronized(server.requests) {
+                        server.requests.count { it.path == "/nested/playlist" } < 2
+                    }) Thread.sleep(20)
+                }
                 server.failure.get()?.let { throw AssertionError("Fixture server failed", it) }
                 if (invalidSegment) assertNotNull("Invalid media should fail", failure.get())
                 else {
@@ -115,17 +146,26 @@ class HlsManifestTypeTest {
                 // Progressive TS may reopen for duration/position probing without changing
                 // containers. Only playlist entry requests must be exactly one per prepare.
                 if (sourceKind == C.CONTENT_TYPE_OTHER) assertTrue(entryRequests >= 1)
-                else assertEquals("Entry was opened again to probe another container", expectedPrepares, entryRequests)
-                if (redirect) assertEquals(1, requests.count { it.path == "/playlist" })
+                else assertEquals("Entry was opened again to probe another container", 1, entryRequests)
+                if (redirect) {
+                    val loads = requests.count { it.path == "/nested/playlist" }
+                    if (refresh) assertTrue("A live refresh incorrectly reused stale data", loads >= 2)
+                    else assertEquals(1, loads)
+                }
+                if (master) assertEquals(1, requests.count { it.path == "/nested/variant" })
                 val hlsRequests = if (sourceKind == C.CONTENT_TYPE_HLS) 1 else 0
-                assertEquals(hlsRequests, requests.count { it.path == "/key" })
-                assertEquals(hlsRequests, requests.count { it.path == "/segment.ts" })
+                val mediaPrefix = if (redirect) "/nested/" else "/"
+                assertEquals(hlsRequests, requests.count { it.path == "${mediaPrefix}key" })
+                assertEquals(hlsRequests, requests.count { it.path == "${mediaPrefix}segment.ts" })
                 requests.forEach {
                     assertEquals("GET", it.method)
-                    assertEquals(Credentials.basic("user", "pass"), it.headers["authorization"])
+                    if (crossOrigin && it.path != entryPath) assertNull("URL credentials leaked to another host", it.headers["authorization"])
+                    else assertEquals(Credentials.basic("user", "pass"), it.headers["authorization"])
                     assertEquals("ManifestTest/1", it.headers["user-agent"])
                     assertEquals("preserved", it.headers["x-manifest-test"])
-                    if (it.path in listOf("/playlist", "/key", "/segment.ts"))
+                    if (crossOrigin && it.path == "/nested/playlist")
+                        assertFalse("Cookie leaked from the original host", it.headers["cookie"].orEmpty().contains("hls_session=ok"))
+                    else if (it.path != entryPath)
                         assertTrue("Session cookie missing on ${it.path}", it.headers["cookie"].orEmpty().contains("hls_session=ok"))
                 }
             } finally {
@@ -142,7 +182,9 @@ class HlsManifestTypeTest {
     private data class Request(val method: String, val path: String, val headers: Map<String, String>)
 
     private class FixtureServer(private val segment: ByteArray, private val redirect: Boolean,
-        private val entryPath: String, private val sourceKind: Int) : Closeable {
+        private val entryPath: String, private val sourceKind: Int, private val contentType: String?,
+        leadingWhitespace: Boolean, private val gzip: Boolean, private val master: Boolean,
+        refresh: Boolean, private val crossOrigin: Boolean) : Closeable {
         private val server = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
         val requests = Collections.synchronizedList(mutableListOf<Request>())
         val failure = AtomicReference<Throwable>()
@@ -155,10 +197,15 @@ class HlsManifestTypeTest {
             #EXTM3U
             #EXT-X-TARGETDURATION:1
             #EXT-X-MEDIA-SEQUENCE:0
-            #EXT-X-KEY:METHOD=AES-128,URI="/key",IV=0x00000000000000000000000000000000
+            #EXT-X-KEY:METHOD=AES-128,URI="key",IV=0x00000000000000000000000000000000
             #EXTINF:1,
-            /segment.ts
-            #EXT-X-ENDLIST
+            segment.ts
+            ${if (refresh) "" else "#EXT-X-ENDLIST"}
+        """.trimIndent().let { (if (leadingWhitespace) "\uFEFF \r\n" else "") + it }.toByteArray()
+        private val multivariant = """
+            #EXTM3U
+            #EXT-X-STREAM-INF:BANDWIDTH=128000
+            variant
         """.trimIndent().toByteArray()
         private val dash = """
             <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" mediaPresentationDuration="PT60S" minBufferTime="PT2S">
@@ -182,17 +229,28 @@ class HlsManifestTypeTest {
                     val request = Request(first[0], first[1].substringBefore('?'), headers)
                     requests.add(request)
                     val isRedirect = redirect && request.path == entryPath
-                    val body = when (request.path) {
-                        "/key" -> key
-                        "/segment.ts" -> encrypted
+                    val file = request.path.substringAfterLast('/')
+                    val raw = when (file) {
+                        "key" -> key
+                        "segment.ts" -> encrypted
+                        "variant" -> playlist
                         else -> when {
                             isRedirect -> byteArrayOf()
                             sourceKind == C.CONTENT_TYPE_OTHER -> segment
                             sourceKind == C.CONTENT_TYPE_DASH -> dash
+                            master -> multivariant
                             else -> playlist
                         }
                     }
-                    val extra = if (isRedirect) "Location: /playlist\r\n" else ""
+                    val compress = gzip && !isRedirect && file !in listOf("key", "segment.ts")
+                    val body = if (compress) java.io.ByteArrayOutputStream().also { output ->
+                        java.util.zip.GZIPOutputStream(output).use { it.write(raw) }
+                    }.toByteArray() else raw
+                    val location = if (crossOrigin) "http://localhost:${server.localPort}/nested/playlist?session=first"
+                        else "/nested/playlist?session=first"
+                    val extra = (if (isRedirect) "Location: $location\r\n" else "") +
+                        (if (contentType != null && file !in listOf("key", "segment.ts")) "Content-Type: $contentType\r\n" else "") +
+                        (if (compress) "Content-Encoding: gzip\r\n" else "")
                     socket.getOutputStream().apply {
                         write(("HTTP/1.1 ${if (isRedirect) "302 Found" else "200 OK"}\r\n" +
                             "Content-Length: ${body.size}\r\nConnection: close\r\n" +
