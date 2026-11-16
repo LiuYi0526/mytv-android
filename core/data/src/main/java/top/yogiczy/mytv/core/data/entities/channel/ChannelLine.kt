@@ -16,7 +16,20 @@ data class ChannelLine(
     val catchup: String? = null,
     val catchupSource: String? = null,
     val pltv2tvod: Boolean = true,
+    val httpReferrer: String? = null,
+    val httpOrigin: String? = null,
 ) {
+
+    /** Per-line options override global defaults without duplicate case-insensitive header names. */
+    fun httpRequestHeaders(defaults: Map<String, String> = emptyMap()): Map<String, String> =
+        defaults.toMutableMap().apply {
+            listOf("Referer" to httpReferrer, "Origin" to httpOrigin).forEach { (name, value) ->
+                if (!value.isNullOrBlank()) {
+                    keys.removeAll { it.equals(name, ignoreCase = true) }
+                    put(name, value)
+                }
+            }
+        }
 
     val playableUrl: String
         get() = url.substringBefore("$").let {

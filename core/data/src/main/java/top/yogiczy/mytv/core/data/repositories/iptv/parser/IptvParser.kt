@@ -52,6 +52,8 @@ interface IptvParser {
         val catchup: String? = null,
         val catchupSource: String? = null,
         val pltv2tvod: Boolean = true,
+        val httpReferrer: String? = null,
+        val httpOrigin: String? = null,
     ) {
         companion object {
             private fun List<ChannelItem>.toChannelList(): ChannelList {
@@ -70,6 +72,8 @@ interface IptvParser {
                                         ChannelLine(
                                             url = it.url,
                                             httpUserAgent = it.httpUserAgent,
+                                            httpReferrer = it.httpReferrer,
+                                            httpOrigin = it.httpOrigin,
                                             manifestType = it.manifestType,
                                             licenseType = it.licenseType,
                                             licenseKey = it.licenseKey,

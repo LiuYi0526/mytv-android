@@ -104,7 +104,7 @@ private fun rememberLineDelay(line: ChannelLine): Long {
             return@LaunchedEffect
         }
         elapsedTime = try {
-            ChannelLineProbe.Default.measure(line.playableUrl, line.httpUserAgent)
+            ChannelLineProbe.Default.measure(line.playableUrl, line.httpUserAgent, line.httpRequestHeaders())
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

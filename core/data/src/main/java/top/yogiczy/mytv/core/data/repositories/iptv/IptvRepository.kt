@@ -28,7 +28,7 @@ import kotlin.time.measureTimedValue
  * 直播源数据获取
  */
 class IptvRepository(private val source: IptvSource) :
-    // Reparse the raw playlist so existing subscriptions also acquire catchup metadata.
+    // Reparse raw playlists so existing subscriptions also acquire per-line HTTP headers.
     FileCacheRepository(source.cacheFileName(PARSED_CACHE_EXTENSION)) {
 
     private val log = Logger.create("IptvRepository")
@@ -36,16 +36,19 @@ class IptvRepository(private val source: IptvSource) :
     private val rawRepository = IptvRawRepository(source.copy(url = sourceUrl.requestUrl))
     private val parsedFile = File(Globals.cacheDir, source.cacheFileName(PARSED_CACHE_EXTENSION))
     private val parsedCache = AtomicFile(parsedFile)
+    private val legacyParsedFile = File(Globals.cacheDir, source.cacheFileName("v4.json"))
+    private val legacyParsedCache = AtomicFile(legacyParsedFile)
     private val cacheLock = synchronized(cacheLocks) { cacheLocks.getOrPut(parsedFile.absolutePath) { Mutex() } }
 
     suspend fun getCachedInfo(): IptvSourceCacheInfo? = withContext(Dispatchers.IO) {
         IptvSourceCacheInfo.read(
-            File(Globals.cacheDir, source.cacheFileName(PARSED_CACHE_EXTENSION)),
+            if (parsedFile.isFile) parsedFile else legacyParsedFile,
             if (source.isLocal) null else rawRepository.cachedFile,
         )
     }
 
     private fun isExpired(lastModified: Long, cacheTime: Long): Boolean {
+        if (!parsedFile.isFile || parsedFile.length() == 0L) return true
         val rawModified = rawRepository.lastModified()
         // Parsing a prefetched playlist must not extend the freshness of its downloaded data.
         val downloadedAt = if (rawModified > 0) minOf(lastModified, rawModified) else lastModified
@@ -111,7 +114,7 @@ class IptvRepository(private val source: IptvSource) :
     suspend fun getChannelGroupList(cacheTime: Long): ChannelGroupList {
         try {
             if (!isExpired(lastModified(), cacheTime)) {
-                getCachedChannelGroupList()?.let { return it }
+                readCachedChannelGroupList(parsedCache)?.let { return it }
             }
 
             val json = refresh(cacheTime) { transform(it) }
@@ -143,11 +146,13 @@ class IptvRepository(private val source: IptvSource) :
     }
 
     /** Readable data can still be displayed after its refresh deadline. Never downloads. */
-    suspend fun getCachedChannelGroupList(): ChannelGroupList? = withContext(Dispatchers.IO) {
+    suspend fun getCachedChannelGroupList(): ChannelGroupList? =
+        readCachedChannelGroupList(parsedCache) ?: readCachedChannelGroupList(legacyParsedCache)
+
+    private suspend fun readCachedChannelGroupList(cache: AtomicFile): ChannelGroupList? = withContext(Dispatchers.IO) {
         try {
-            val json = cacheLock.withLock { parsedCache.openRead().bufferedReader().use { it.readText() } }
-            if (json.isBlank()) return@withContext null
-            sourceUrl.applyTo(Globals.json.decodeFromString<ChannelGroupList>(json))
+            val json = cacheLock.withLock { cache.openRead().bufferedReader().use { it.readText() } }
+            if (json.isBlank()) null else sourceUrl.applyTo(Globals.json.decodeFromString<ChannelGroupList>(json))
         } catch (ex: CancellationException) {
             throw ex
         } catch (_: Exception) {
@@ -160,9 +165,11 @@ class IptvRepository(private val source: IptvSource) :
         cacheTime: Long,
         onRefresh: () -> Unit = {},
     ): Flow<ChannelGroupList> = flow {
-        val cached = getCachedChannelGroupList()
+        val current = readCachedChannelGroupList(parsedCache)
+        // Keep old channels visible during the parser upgrade, without treating them as reparsed.
+        val cached = current ?: readCachedChannelGroupList(legacyParsedCache)
         if (cached != null) emit(cached)
-        if (cached == null || isExpired(lastModified(), cacheTime)) {
+        if (current == null || isExpired(lastModified(), cacheTime)) {
             onRefresh()
             emit(getChannelGroupList(cacheTime))
         }
@@ -192,11 +199,16 @@ class IptvRepository(private val source: IptvSource) :
 
     override suspend fun clearCache() {
         rawRepository.clearCache()
-        withContext(Dispatchers.IO) { cacheLock.withLock { parsedCache.delete() } }
+        withContext(Dispatchers.IO) {
+            cacheLock.withLock {
+                parsedCache.delete()
+                legacyParsedCache.delete()
+            }
+        }
     }
 
     companion object {
-        private const val PARSED_CACHE_EXTENSION = "v4.json"
+        private const val PARSED_CACHE_EXTENSION = "v5.json"
         private val cacheLocks = mutableMapOf<String, Mutex>()
         suspend fun clearAllCache() = withContext(Dispatchers.IO) {
             IptvSource.cacheDir.deleteRecursively()

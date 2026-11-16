@@ -62,11 +62,20 @@ class M3uIptvParser : IptvParser {
                             pltv2tvod = !options["pltv2tvod"].equals("false", ignoreCase = true),
                         )
                     }
-                } else if (line.substringBefore('=').trim() == "#EXTVLCOPT:http-user-agent") {
+                } else if (line.startsWith("#EXTVLCOPT:", ignoreCase = true)) {
                     // VLC options belong to the current EXTINF entry, including all its groups.
-                    val userAgent = line.substringAfter('=', "").trim().removeSurrounding("\"")
-                    if (userAgent.isNotBlank()) {
-                        addedChannels = addedChannels.map { it.copy(httpUserAgent = userAgent) }
+                    val option = line.substringBefore('=').trim().lowercase()
+                    val value = line.substringAfter('=', "").trim()
+                        .removeSurrounding("\"").removeSurrounding("'").trim()
+                    if (value.isNotBlank() && value.none { it == '\r' || it == '\n' || it == '\u0000' }) {
+                        addedChannels = addedChannels.map {
+                            when (option) {
+                                "#extvlcopt:http-user-agent" -> it.copy(httpUserAgent = value)
+                                "#extvlcopt:http-referrer", "#extvlcopt:http-referer" -> it.copy(httpReferrer = value)
+                                "#extvlcopt:http-origin" -> it.copy(httpOrigin = value)
+                                else -> it
+                            }
+                        }
                     }
                 } else if (line.startsWith("#KODIPROP:", ignoreCase = true)) {
                     val property = line.substringBefore('=').trim().lowercase()

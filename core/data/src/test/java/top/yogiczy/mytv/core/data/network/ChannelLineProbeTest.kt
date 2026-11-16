@@ -22,6 +22,25 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 class ChannelLineProbeTest {
+    @Test(timeout = 5000)
+    fun perLineHeadersReachRedirectAndDoNotLeakToFollowingProbe() = runBlocking<Unit> {
+        server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", server.url("/live")))
+        server.enqueue(MockResponse().setBody("#EXTM3U"))
+        server.enqueue(MockResponse().setBody("#EXTM3U"))
+        val headers = mapOf("Referer" to "https://site.test/watch", "Origin" to "https://site.test")
+        assertTrue(probe.measure(server.url("/entry").toString(), "Player/1", headers) > 0)
+        repeat(2) {
+            val request = server.takeRequest()
+            assertEquals(headers["Referer"], request.getHeader("Referer"))
+            assertEquals(headers["Origin"], request.getHeader("Origin"))
+            assertEquals("Player/1", request.getHeader("User-Agent"))
+        }
+        assertTrue(probe.measure(server.url("/plain").toString()) > 0)
+        val plain = server.takeRequest()
+        assertNull(plain.getHeader("Referer"))
+        assertNull(plain.getHeader("Origin"))
+    }
+
     private lateinit var server: MockWebServer
     private lateinit var client: OkHttpClient
     private lateinit var probe: ChannelLineProbe

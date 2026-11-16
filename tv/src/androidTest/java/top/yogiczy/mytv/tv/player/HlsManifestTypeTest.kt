@@ -19,6 +19,7 @@ import org.junit.Test
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
 import top.yogiczy.mytv.core.data.utils.SP
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.Media3VideoPlayer
+import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.IjkVideoPlayer
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.VideoPlayer
 import top.yogiczy.mytv.tv.ui.utils.Configs
 import java.io.Closeable
@@ -37,6 +38,66 @@ import kotlin.concurrent.thread
 /** Real HTTP/source preparation with synthetic tracks; does not claim audio/video decoding. */
 @OptIn(UnstableApi::class)
 class HlsManifestTypeTest {
+    @Test fun channelHeadersReachRedirectedHlsKeysAndSegments() =
+        checkPreparation("hls", redirect = true, headerMode = HeaderMode.LINE)
+
+    @Test fun autoDetectedMasterKeepsHeadersAndTheNextChannelRestoresGlobalDefaults() =
+        checkPreparation(null, redirect = true, expectedPrepares = 2, master = true,
+            headerMode = HeaderMode.LINE, followingPlainChannel = true)
+
+    @Test fun channelWithoutOptionsStillUsesGlobalHeaders() =
+        checkPreparation("hls", redirect = false, headerMode = HeaderMode.GLOBAL)
+
+    @Test fun ijkSendsChannelHeadersAndResetsThemOnTheNextPrepare() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val prefs = SP.getInstance(instrumentation.context)
+        val segment = instrumentation.context.assets.open("aac-av3a.ts").use { it.readBytes() }
+        var player: IjkVideoPlayer? = null
+        fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
+        FixtureServer(segment, false, "/entry.ts", C.CONTENT_TYPE_OTHER,
+            null, false, false, false, false, false).use { server ->
+            try {
+                main {
+                    prefs.edit().clear().commit()
+                    SP.init(instrumentation.context)
+                    Configs.videoPlayerHeaders = "referer: https://global.test/\nORIGIN: https://global.test\nX-Manifest-Test: preserved"
+                    player = IjkVideoPlayer(instrumentation.targetContext, scope).also { it.initialize() }
+                }
+                listOf(true, false).forEach { hasOptions ->
+                    val marker = if (hasOptions) "/protected.ts" else "/plain.ts"
+                    main {
+                        player!!.prepare(ChannelLine(server.url().substringBefore("/entry.ts") + marker,
+                            httpUserAgent = "ManifestTest/1",
+                            httpReferrer = if (hasOptions) "https://channel.test/" else null,
+                            httpOrigin = if (hasOptions) "https://channel.test" else null))
+                    }
+                    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+                    var captured: Request? = null
+                    while (captured == null && System.nanoTime() < deadline) {
+                        captured = synchronized(server.requests) { server.requests.firstOrNull { it.path == marker } }
+                        if (captured == null) Thread.sleep(20)
+                    }
+                    assertNotNull("IJK did not request $marker", captured)
+                    val site = if (hasOptions) "channel" else "global"
+                    assertEquals("https://$site.test/", captured!!.headers["referer"])
+                    assertEquals("https://$site.test", captured!!.headers["origin"])
+                    assertEquals("preserved", captured!!.headers["x-manifest-test"])
+                    assertEquals("ManifestTest/1", captured!!.headers["user-agent"])
+                }
+            } finally {
+                main {
+                    player?.release()
+                    scope.cancel()
+                    prefs.edit().clear().commit()
+                    SP.init(instrumentation.targetContext)
+                }
+            }
+        }
+    }
+
+    private enum class HeaderMode { NONE, LINE, GLOBAL }
+
     @Test fun explicitHlsOpensExtensionlessPlaylistOnce() = checkPreparation(" HLS ", redirect = false)
 
     @Test fun m3u8AliasOpensRedirectingEntryOnceAndKeepsCredentialsForKeyAndSegment() =
@@ -83,7 +144,8 @@ class HlsManifestTypeTest {
     private fun checkPreparation(hint: String?, redirect: Boolean, entryPath: String = "/entry",
         expectedPrepares: Int = 1, invalidSegment: Boolean = false, sourceKind: Int = C.CONTENT_TYPE_HLS,
         contentType: String? = null, leadingWhitespace: Boolean = false, gzip: Boolean = false,
-        master: Boolean = false, refresh: Boolean = false, crossOrigin: Boolean = false) {
+        master: Boolean = false, refresh: Boolean = false, crossOrigin: Boolean = false,
+        headerMode: HeaderMode = HeaderMode.NONE, followingPlainChannel: Boolean = false) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val segment = if (invalidSegment) ByteArray(4096) else
             instrumentation.context.assets.open("aac-av3a.ts").use { it.readBytes() }
@@ -101,6 +163,9 @@ class HlsManifestTypeTest {
                     prefs.edit().clear().commit()
                     SP.init(instrumentation.context)
                     Configs.videoPlayerHeaders = "X-Manifest-Test: preserved"
+                    if (headerMode != HeaderMode.NONE) {
+                        Configs.videoPlayerHeaders += "\nreferer: https://global.test/\nORIGIN: https://global.test"
+                    }
                     Configs.videoPlayerLoadTimeout = 15_000
                     val engine = Media3VideoPlayer(instrumentation.targetContext, scope)
                     player = engine
@@ -121,7 +186,9 @@ class HlsManifestTypeTest {
                             }
                         }
                     })
-                    engine.prepare(ChannelLine(server.url(), httpUserAgent = "ManifestTest/1", manifestType = hint))
+                    engine.prepare(ChannelLine(server.url(), httpUserAgent = "ManifestTest/1", manifestType = hint,
+                        httpReferrer = if (headerMode == HeaderMode.LINE) "https://channel.test/" else null,
+                        httpOrigin = if (headerMode == HeaderMode.LINE) "https://channel.test" else null))
                 }
                 assertTrue("Source preparation timed out", completed.await(20, TimeUnit.SECONDS))
                 if (refresh) {
@@ -163,10 +230,30 @@ class HlsManifestTypeTest {
                     else assertEquals(Credentials.basic("user", "pass"), it.headers["authorization"])
                     assertEquals("ManifestTest/1", it.headers["user-agent"])
                     assertEquals("preserved", it.headers["x-manifest-test"])
+                    if (headerMode != HeaderMode.NONE) {
+                        val site = if (headerMode == HeaderMode.LINE) "channel" else "global"
+                        assertEquals("https://$site.test/", it.headers["referer"])
+                        assertEquals("https://$site.test", it.headers["origin"])
+                    }
                     if (crossOrigin && it.path == "/nested/playlist")
                         assertFalse("Cookie leaked from the original host", it.headers["cookie"].orEmpty().contains("hls_session=ok"))
                     else if (it.path != entryPath)
                         assertTrue("Session cookie missing on ${it.path}", it.headers["cookie"].orEmpty().contains("hls_session=ok"))
+                }
+                if (followingPlainChannel) {
+                    main { player!!.stop() }
+                    synchronized(server.requests) { server.requests.clear() }
+                    main { player!!.prepare(ChannelLine(server.url(), manifestType = "hls")) }
+                    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+                    while (System.nanoTime() < deadline && synchronized(server.requests) {
+                        server.requests.none { it.path.endsWith("segment.ts") }
+                    }) Thread.sleep(20)
+                    val nextRequests = synchronized(server.requests) { server.requests.toList() }
+                    assertTrue("Next channel did not load media", nextRequests.any { it.path.endsWith("segment.ts") })
+                    nextRequests.forEach {
+                        assertEquals("https://global.test/", it.headers["referer"])
+                        assertEquals("https://global.test", it.headers["origin"])
+                    }
                 }
             } finally {
                 main {

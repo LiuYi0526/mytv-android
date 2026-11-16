@@ -219,7 +219,7 @@ class Media3VideoPlayer(
                 setAllowCrossProtocolRedirects(true)
             }
         }
-        httpFactory.setDefaultRequestProperties(Configs.videoPlayerHeaders.toHeaders())
+        httpFactory.setDefaultRequestProperties(currentChannelLine.httpRequestHeaders(Configs.videoPlayerHeaders.toHeaders()))
         return DefaultDataSource.Factory(
             context,
             httpFactory,
@@ -258,7 +258,7 @@ class Media3VideoPlayer(
                             manifestKeyIds = { ClearKeyLicense.keyIds(ClearKeyLicense.response(licenseKey)) }
                             LocalMediaDrmCallback(ClearKeyLicense.response(licenseKey))
                         } else {
-                            val headers = Configs.videoPlayerHeaders.toHeaders().toMutableMap()
+                            val headers = currentChannelLine.httpRequestHeaders(Configs.videoPlayerHeaders.toHeaders()).toMutableMap()
                             if (headers.keys.none { it.equals("User-Agent", true) }) {
                                 headers["User-Agent"] = currentChannelLine.httpUserAgent ?: Configs.videoPlayerUserAgent
                             }
@@ -297,7 +297,7 @@ class Media3VideoPlayer(
                     factory.setManifestParser(ClearKeyDashManifestParser(manifestKeyIds))
                     factory.setDrmSessionManagerProvider { drmSessionManager }
                 } else if (WidevineDrm.isSupported(currentChannelLine.licenseType)) {
-                    val headers = Configs.videoPlayerHeaders.toHeaders()
+                    val headers = currentChannelLine.httpRequestHeaders(Configs.videoPlayerHeaders.toHeaders())
                     val configuration = try {
                         WidevineDrm.configuration(currentChannelLine.licenseKey, headers)
                     } catch (ex: IllegalArgumentException) {

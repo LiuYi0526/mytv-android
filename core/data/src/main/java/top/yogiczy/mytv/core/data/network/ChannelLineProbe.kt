@@ -13,9 +13,10 @@ import kotlin.coroutines.resumeWithException
 
 /** Measures time to first byte without buffering an entire (possibly endless) live stream. */
 class ChannelLineProbe internal constructor(private val client: OkHttpClient) {
-    suspend fun measure(url: String, userAgent: String? = null): Long =
+    suspend fun measure(url: String, userAgent: String? = null, headers: Map<String, String> = emptyMap()): Long =
         suspendCancellableCoroutine { continuation ->
             val request = Request.Builder().url(url).apply {
+                headers.forEach { (name, value) -> header(name, value) }
                 userAgent?.let { header("User-Agent", it) }
             }.build()
             val call = client.newCall(request)

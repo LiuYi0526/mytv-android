@@ -45,7 +45,7 @@ class IptvStartupCacheTest {
         PlaylistServer().use { server ->
             val source = IptvSource("Startup test ${UUID.randomUUID()}", server.url)
             val repository = IptvRepository(source)
-            val parsed = File(Globals.cacheDir, source.cacheFileName("v4.json"))
+            val parsed = File(Globals.cacheDir, source.cacheFileName("v5.json"))
             try { block(server, source, repository, parsed) }
             finally { repository.clearCache() }
         }
@@ -207,7 +207,7 @@ class IptvStartupCacheTest {
             val configured = source.copy(url = source.url + "#sp;vp-ua=Player/2")
             val repository = IptvRepository(configured)
             try {
-                val file = File(Globals.cacheDir, configured.cacheFileName("v4.json"))
+                val file = File(Globals.cacheDir, configured.cacheFileName("v5.json"))
                 val channels = groups("Cached").let { groups ->
                     // Seed the usual serialized model; source parameters are applied on read.
                     groups.copy(value = groups.map { group -> group.copy(channelList = ChannelList(
@@ -221,6 +221,90 @@ class IptvStartupCacheTest {
                 assertEquals("Player/2", shown.channelList.single().lineList.single().httpUserAgent)
                 assertEquals(0, server.requests.get())
             } finally { repository.clearCache() }
+        }
+    }
+
+    @Test fun parserUpgradeShowsLegacyCacheThenReparsesCachedRawHeadersWithoutDownload() = runBlocking {
+        scenario { server, source, repository, file ->
+            val legacy = File(Globals.cacheDir, source.cacheFileName("v4.json"))
+            cache(legacy, "Legacy", expired = false)
+            server.reply("""
+                #EXTM3U
+                #EXTINF:-1 group-title="Test",Upgraded
+                #EXTVLCOPT:http-referrer=https://channel.test/watch
+                #EXTVLCOPT:http-origin=https://channel.test
+                https://stream.test/live
+            """.trimIndent())
+            repository.getEpgUrls(0)
+            assertEquals(1, server.requests.get())
+            val shown = repository.observeChannelGroupList(day).toList()
+            assertEquals(listOf("Legacy", "Upgraded"), shown.map { it.channelList.single().name })
+            assertEquals(1, server.requests.get())
+            assertTrue(file.isFile)
+            val line = repository.getCachedChannelGroupList()!!.channelList.single().lineList.single()
+            assertEquals("https://channel.test/watch", line.httpReferrer)
+            assertEquals("https://channel.test", line.httpOrigin)
+        }
+    }
+
+    @Test fun parserUpgradeFailureKeepsLegacyChannelsAndClearCacheRemovesBothVersions() = runBlocking {
+        scenario { server, source, repository, file ->
+            val legacy = File(Globals.cacheDir, source.cacheFileName("v4.json"))
+            cache(legacy, "Keep", expired = false)
+            val bytes = legacy.readBytes()
+            server.reply("Unavailable", status = 503)
+            val shown = mutableListOf<ChannelGroupList>()
+            try {
+                repository.observeChannelGroupList(day).collect { shown += it }
+                fail("Refresh should report its failure")
+            } catch (_: top.yogiczy.mytv.core.data.network.HttpException) { }
+            assertEquals(listOf("Keep"), shown.map { it.channelList.single().name })
+            assertEquals(1, server.requests.get())
+            assertArrayEquals(bytes, legacy.readBytes())
+            assertEquals("Keep", repository.getCachedChannelGroupList()!!.channelList.single().name)
+            repository.clearCache()
+            assertFalse(legacy.exists())
+            assertFalse(file.exists())
+            assertNull(repository.getCachedChannelGroupList())
+        }
+    }
+
+    @Test fun corruptNewCacheCanShowLegacyWhileStillRefreshing() = runBlocking {
+        scenario { server, source, repository, file ->
+            cache(File(Globals.cacheDir, source.cacheFileName("v4.json")), "Legacy", expired = false)
+            file.writeText("{broken json")
+            server.reply(playlist("Recovered"))
+            assertEquals(listOf("Legacy", "Recovered"), repository.observeChannelGroupList(day).toList()
+                .map { it.channelList.single().name })
+            assertEquals(1, server.requests.get())
+        }
+    }
+
+    @Test fun sourceConversionAndCacheKeepHeadersOnTheirOwnGroupAndLine() = runBlocking {
+        scenario { server, _, repository, _ ->
+            server.reply("""
+                #EXTM3U
+                #EXTINF:-1 group-title="A;B",Channel
+                #EXTVLCOPT:http-referrer=https://first.test/
+                #EXTVLCOPT:http-origin=https://first.test
+                https://stream.test/one
+                #EXTINF:-1 group-title="A",Channel
+                #EXTVLCOPT:http-origin=https://second.test
+                https://stream.test/two
+                #EXTINF:-1 group-title="A",Plain
+                https://stream.test/plain
+            """.trimIndent())
+            repository.getChannelGroupList(day)
+            val cached = repository.getCachedChannelGroupList()!!
+            val groupA = cached.first { it.name == "A" }
+            val lines = groupA.channelList.first { it.name == "Channel" }.lineList
+            assertEquals(2, lines.size)
+            assertEquals("https://first.test/", lines[0].httpReferrer)
+            assertEquals("https://first.test", lines[0].httpOrigin)
+            assertNull(lines[1].httpReferrer)
+            assertEquals("https://second.test", lines[1].httpOrigin)
+            assertTrue(groupA.channelList.first { it.name == "Plain" }.lineList.single().httpRequestHeaders().isEmpty())
+            assertEquals(lines[0], cached.first { it.name == "B" }.channelList.single().lineList.single())
         }
     }
 

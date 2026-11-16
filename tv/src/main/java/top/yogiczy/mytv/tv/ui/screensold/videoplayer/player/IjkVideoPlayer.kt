@@ -91,7 +91,7 @@ class IjkVideoPlayer(
         player.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "user_agent", userAgent)
         player.setDataSource(
             HttpBasicAuth.parse(line.playableUrl)?.urlWithEncodedCredentials ?: line.playableUrl,
-            Configs.videoPlayerHeaders.toHeaders() + mapOf(
+            line.httpRequestHeaders(Configs.videoPlayerHeaders.toHeaders()) + mapOf(
                 "User-Agent" to userAgent,
             )
         )
