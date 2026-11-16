@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.Icons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.selected
@@ -40,6 +42,7 @@ import top.yogiczy.mytv.core.data.entities.control.ControlAction
 import top.yogiczy.mytv.core.data.entities.control.ControlKey
 import top.yogiczy.mytv.core.data.entities.control.ControlKeyActions
 import top.yogiczy.mytv.tv.ui.material.PaddedLazyVerticalGrid
+import top.yogiczy.mytv.tv.ui.material.LocalPopupManager
 import top.yogiczy.mytv.tv.ui.material.SimplePopup
 import top.yogiczy.mytv.tv.ui.material.Snackbar
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsCategoryScreen
@@ -57,9 +60,26 @@ fun SettingsControlKeyActionsScreen(
     settingsViewModel: SettingsViewModel = settingsVM,
     onBackPressed: () -> Unit = {},
 ) {
+    SettingsControlKeyActionsContent(
+        modifier = modifier,
+        overrides = settingsViewModel.controlKeyActions,
+        flipChannels = settingsViewModel.iptvChannelChangeFlip,
+        onOverridesChange = { settingsViewModel.controlKeyActions = it },
+        onBackPressed = onBackPressed,
+    )
+}
+
+@Composable
+internal fun SettingsControlKeyActionsContent(
+    overrides: Map<String, String>,
+    flipChannels: Boolean,
+    onOverridesChange: (Map<String, String>) -> Unit,
+    modifier: Modifier = Modifier,
+    onBackPressed: () -> Unit = {},
+) {
     var selectedKey by remember { mutableStateOf<ControlKey?>(null) }
-    val overrides = settingsViewModel.controlKeyActions
-    fun actionFor(key: ControlKey) = ControlKeyActions.actionFor(key, overrides, settingsViewModel.iptvChannelChangeFlip)
+    val popupManager = LocalPopupManager.current
+    fun actionFor(key: ControlKey) = ControlKeyActions.actionFor(key, overrides, flipChannels)
 
     SettingsCategoryScreen(
         modifier = modifier,
@@ -72,7 +92,7 @@ fun SettingsControlKeyActionsScreen(
                 headlineContent = "恢复默认映射",
                 supportingContent = "仅作用于直播界面。菜单键、双击屏幕打开快捷操作；返回键保持不变。",
                 onSelect = {
-                    settingsViewModel.controlKeyActions = emptyMap()
+                    onOverridesChange(emptyMap())
                     Snackbar.show("已恢复默认按键映射")
                 },
             )
@@ -85,12 +105,18 @@ fun SettingsControlKeyActionsScreen(
         sections.forEach { (title, keys) ->
             item { Text(title, modifier = Modifier.padding(top = 12.dp)) }
             items(keys, key = { it.name }) { key ->
+                val returnFocusRequester = remember { FocusRequester() }
                 SettingsListItem(
+                    modifier = Modifier.focusRequester(returnFocusRequester),
                     headlineContent = key.label,
                     supportingContent = if (overrides.containsKey(key.name)) "自定义" else "默认",
                     trailingContent = actionFor(key).label,
-                    link = true,
-                    onSelect = { selectedKey = key },
+                    // This opens an inline popup, not another settings page.
+                    trailingIcon = Icons.Default.ChevronRight,
+                    onSelect = {
+                        popupManager.push(returnFocusRequester, emitter = true)
+                        selectedKey = key
+                    },
                 )
             }
         }
@@ -106,8 +132,10 @@ fun SettingsControlKeyActionsScreen(
             currentAction = actionFor(key),
             useDefault = !overrides.containsKey(key.name),
             onSelected = { action ->
-                settingsViewModel.controlKeyActions = if (action == null) overrides - key.name
-                else overrides + (key.name to action.name)
+                onOverridesChange(
+                    if (action == null) overrides - key.name
+                    else overrides + (key.name to action.name),
+                )
                 selectedKey = null
             },
         )
