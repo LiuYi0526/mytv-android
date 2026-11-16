@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
@@ -287,6 +288,7 @@ private fun ClassicChannelItem(
     val currentProgramme = recentEpgProgramme?.now
     val hasCurrentProgramme = currentProgramme != null
     val showEpgProgrammeProgress = showEpgProgrammeProgressProvider()
+    val showProgress = showEpgProgrammeProgress && hasCurrentProgramme
     val focusRequester = focusRequesterProvider()
     val isSelected = isSelectedProvider()
 
@@ -358,7 +360,12 @@ private fun ClassicChannelItem(
                     .fillMaxWidth()
                     .background(containerColor, MaterialTheme.shapes.small)
                     .defaultMinSize(minHeight = 48.dp)
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .padding(
+                        start = 12.dp,
+                        end = 12.dp,
+                        top = if (showProgress) 2.dp else 4.dp,
+                        bottom = if (showProgress) 10.dp else 4.dp,
+                    )
                     .handleKeyEvents(
                         onSelect = onChannelSelected,
                         onLongSelect = onChannelFavoriteToggle
@@ -397,18 +404,31 @@ private fun ClassicChannelItem(
                 }
             }
 
-            if (showEpgProgrammeProgress) {
-                recentEpgProgramme?.now?.let { nnNowEpgProgramme ->
+            if (showProgress) {
+                currentProgramme?.let { programme ->
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .fillMaxWidth(nnNowEpgProgramme.progress())
-                            .height(2.dp)
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, end = 12.dp, bottom = 6.dp)
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(50))
                             .background(
                                 (if (isFocused) colorScheme.surface else colorScheme.onSurface)
-                                    .copy(alpha = 0.9f)
+                                    .copy(alpha = if (isFocused) 0.18f else 0.16f)
                             ),
-                    )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(programme.progress().coerceIn(0f, 1f))
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(50))
+                                .background(
+                                    if (isFocused) Color(0xFF1F62B5)
+                                    else colorScheme.onSurface.copy(alpha = 0.75f)
+                                ),
+                        )
+                    }
                 }
             }
         }
