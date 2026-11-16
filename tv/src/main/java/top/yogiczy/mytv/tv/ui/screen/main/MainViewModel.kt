@@ -100,7 +100,8 @@ class MainViewModel : ViewModel() {
             _uiState.value = MainUiState.Ready()
             return
         }
-        _uiState.value = MainUiState.Loading("加载订阅源")
+        // Check the local cache silently; only a real first download needs a loading page.
+        _uiState.value = MainUiState.Loading()
 
         val refreshMessageId = "subscription-refresh-${UUID.randomUUID()}"
         var showingRefresh = false
@@ -112,6 +113,8 @@ class MainViewModel : ViewModel() {
                         "正在刷新订阅源：${source.name}", leadingLoading = true,
                         duration = Long.MAX_VALUE, id = refreshMessageId,
                     )
+                } else {
+                    _uiState.value = MainUiState.Loading("加载订阅源")
                 }
             }
                 .map { mergeSimilarChannel(it) }
@@ -153,7 +156,7 @@ class MainViewModel : ViewModel() {
         withContext(Dispatchers.Default) {
             if (!Configs.iptvSimilarChannelMerge) return@withContext channelGroupList
 
-            if (_uiState.value !is MainUiState.Ready) {
+            if ((_uiState.value as? MainUiState.Loading)?.showProgress == true) {
                 _uiState.value = MainUiState.Loading("合并相似频道")
             }
 
@@ -189,7 +192,8 @@ class MainViewModel : ViewModel() {
 
     private suspend fun hybridChannel(channelGroupList: ChannelGroupList) =
         withContext(Dispatchers.Default) {
-            if (Configs.iptvHybridMode != Configs.IptvHybridMode.DISABLE && _uiState.value !is MainUiState.Ready) {
+            if (Configs.iptvHybridMode != Configs.IptvHybridMode.DISABLE &&
+                (_uiState.value as? MainUiState.Loading)?.showProgress == true) {
                 _uiState.value = MainUiState.Loading("混合订阅源")
             }
 
@@ -324,7 +328,10 @@ class MainViewModel : ViewModel() {
 }
 
 sealed interface MainUiState {
-    data class Loading(val message: String? = null) : MainUiState
+    data class Loading(
+        val message: String? = null,
+        val showProgress: Boolean = message != null,
+    ) : MainUiState
     data class Error(val message: String? = null) : MainUiState
     data class Ready(
         val channelGroupList: ChannelGroupList = ChannelGroupList(),

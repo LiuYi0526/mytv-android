@@ -2,10 +2,15 @@ package top.yogiczy.mytv.tv.ui.screen.main
 
 import androidx.compose.animation.EnterExitState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -69,10 +74,31 @@ fun MainScreen(
     }
 
     val navController = rememberNavController()
+    val startDestination = remember {
+        initialMainDestination(
+            settingsViewModel.appAgreementAgreed,
+            settingsViewModel.iptvSourceList.isNotEmpty(),
+            settingsViewModel.appStartupScreen,
+            settingsViewModel.cloudSyncAutoPull,
+        )
+    }
+    var pendingDestination by rememberSaveable { mutableStateOf<String?>(null) }
+    var startupUpdateChecked by rememberSaveable { mutableStateOf(false) }
+
+    // The home page can render saved favorites and navigation before channels finish loading.
+    // Playback and channel-dependent pages still need the fully prepared channel list.
+    fun navigateWithChannels(destination: String) {
+        if (uiState is MainUiState.Ready) {
+            navController.navigateSingleTop(destination)
+        } else {
+            pendingDestination = destination
+            navController.navigateSingleTop(Screens.Loading())
+        }
+    }
 
     fun onChannelSelected(channel: Channel) {
         settingsViewModel.iptvChannelLastPlay = channel
-        navController.navigateSingleTop(Screens.Live())
+        navigateWithChannels(Screens.Live())
     }
 
     fun onChannelFavoriteToggle(channel: Channel) {
@@ -87,6 +113,7 @@ fun MainScreen(
 
             Snackbar.show("取消收藏：${channel.name}")
         } else {
+            if (uiState !is MainUiState.Ready) return
             val favoriteChannel = ChannelFavorite(
                 channel = channel,
                 iptvSourceName = settingsViewModel.iptvSourceCurrent.name,
@@ -132,16 +159,26 @@ fun MainScreen(
     }
 
     fun reload() {
+        pendingDestination = null
         settingsViewModel.refresh()
         mainViewModel.init()
         navController.navigateUp()
         navController.navigateSingleTop(Screens.Loading())
     }
 
+    LaunchedEffect(uiState is MainUiState.Ready, settingsViewModel.appAgreementAgreed) {
+        if (uiState is MainUiState.Ready && settingsViewModel.appAgreementAgreed && !startupUpdateChecked) {
+            startupUpdateChecked = true
+            checkUpdate()
+        }
+    }
+
     NavHost(
         modifier = modifier,
         navController = navController,
-        startDestination = if (settingsViewModel.appAgreementAgreed) Screens.Loading() else Screens.Agreement(),
+        startDestination = startDestination,
+        enterTransition = { mainEnterTransition() },
+        exitTransition = { mainExitTransition() },
         popEnterTransition = { livePopEnterTransition() },
         popExitTransition = { livePopExitTransition() },
         builder = {
@@ -160,22 +197,41 @@ fun MainScreen(
                 LoadingScreen(
                     mainUiState = uiState,
                     toDashboardScreen = {
+                        val pending = pendingDestination
                         val destination = if (settingsViewModel.iptvSourceList.isEmpty()) {
                             Screens.Settings.withArgs(SettingsSubCategories.IPTV_SOURCE)
-                        } else settingsViewModel.appStartupScreen
+                        } else pending ?: settingsViewModel.appStartupScreen
+                        pendingDestination = null
                         navController.navigate(destination) {
-                            // Startup/reload is complete; Back must not reopen the agreement or loading screen.
-                            popUpTo(navController.graph.id) { inclusive = true }
+                            // An early home-page click must retain Home in the back stack.
+                            // Normal startup/reload must discard Agreement and Loading.
+                            if (pending != null) popUpTo(Screens.Loading()) { inclusive = true }
+                            else popUpTo(navController.graph.id) { inclusive = true }
                             launchSingleTop = true
                         }
-                        checkUpdate()
                     },
                     toSettingsScreen = { navController.navigateSingleTop(Screens.Settings()) },
-                    onBackPressed = onBackPressed,
+                    onBackPressed = {
+                        if (pendingDestination != null) {
+                            pendingDestination = null
+                            navController.popBackStack()
+                        } else onBackPressed()
+                    },
                 )
             }
 
             composable(Screens.Dashboard()) {
+                // A missing cache still uses the existing download/error page. A readable cache
+                // needs no intermediate page: show Home while it is read and prepared.
+                if (uiState is MainUiState.Error ||
+                    (uiState as? MainUiState.Loading)?.showProgress == true) {
+                    LoadingScreen(
+                        mainUiState = uiState,
+                        toSettingsScreen = { navController.navigateSingleTop(Screens.Settings()) },
+                        onBackPressed = onBackPressed,
+                    )
+                    return@composable
+                }
                 DashboardScreen(
                     recentChannelsProvider = {
                         settingsViewModel.iptvChannelHistory.channels(
@@ -187,11 +243,11 @@ fun MainScreen(
                     channelFavoriteListProvider = { settingsViewModel.iptvChannelFavoriteList },
                     onChannelSelected = { onChannelSelected(it) },
                     epgListProvider = epgListProvider,
-                    toLiveScreen = { navController.navigateSingleTop(Screens.Live()) },
-                    toChannelsScreen = { navController.navigateSingleTop(Screens.Channels()) },
-                    toFavoritesScreen = { navController.navigateSingleTop(Screens.Favorites()) },
-                    toSearchScreen = { navController.navigateSingleTop(Screens.Search()) },
-                    toMultiViewScreen = { navController.navigateSingleTop(Screens.MultiView()) },
+                    toLiveScreen = { navigateWithChannels(Screens.Live()) },
+                    toChannelsScreen = { navigateWithChannels(Screens.Channels()) },
+                    toFavoritesScreen = { navigateWithChannels(Screens.Favorites()) },
+                    toSearchScreen = { navigateWithChannels(Screens.Search()) },
+                    toMultiViewScreen = { navigateWithChannels(Screens.MultiView()) },
                     toPushScreen = { navController.navigateSingleTop(Screens.Push()) },
                     toAboutScreen = { navController.navigateSingleTop(Screens.About()) },
                     toSettingsIptvSourceScreen = {

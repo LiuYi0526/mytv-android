@@ -48,7 +48,7 @@ fun VideoPlayerScreen(
 ) {
     val context = LocalContext.current
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
         val displayModeModifier = when (state.displayMode) {
             VideoPlayerDisplayMode.ORIGINAL -> Modifier.aspectRatio(state.aspectRatio)
             VideoPlayerDisplayMode.FILL -> Modifier.fillMaxSize()

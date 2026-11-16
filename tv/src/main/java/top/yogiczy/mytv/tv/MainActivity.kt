@@ -14,6 +14,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.doOnPreDraw
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import top.yogiczy.mytv.tv.ui.App
@@ -54,6 +55,12 @@ class MainActivity : ComponentActivity() {
                     App(onBackPressed = ::closeApp)
                 }
             }
+        }
+
+        // Use the themed background only for startup. An opaque window clears areas that
+        // playback does not cover, so a previous page cannot remain in the letterbox area.
+        window.decorView.doOnPreDraw {
+            window.setBackgroundDrawableResource(android.R.color.black)
         }
 
         HttpServer.startService(applicationContext)

@@ -9,6 +9,16 @@ import androidx.compose.animation.fadeOut
 import androidx.navigation.NavBackStackEntry
 import top.yogiczy.mytv.tv.ui.screen.Screens
 
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.mainEnterTransition(): EnterTransition =
+    if (initialState.destination.route == Screens.Loading() || targetState.destination.route == Screens.Loading())
+        EnterTransition.None
+    else fadeIn(tween(700))
+
+internal fun AnimatedContentTransitionScope<NavBackStackEntry>.mainExitTransition(): ExitTransition =
+    if (initialState.destination.route == Screens.Loading() || targetState.destination.route == Screens.Loading())
+        ExitTransition.None
+    else fadeOut(tween(700))
+
 // The returning page gets a brief fade; the outgoing video surface is hidden
 // when the Live destination starts exiting (see MainScreen).
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.livePopEnterTransition(): EnterTransition =

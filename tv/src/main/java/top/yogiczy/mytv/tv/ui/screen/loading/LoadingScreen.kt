@@ -30,6 +30,7 @@ import androidx.tv.material3.Text
 import top.yogiczy.mytv.tv.ui.material.CircularProgressIndicator
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
+import top.yogiczy.mytv.tv.ui.screen.components.AppThemeWrapper
 import top.yogiczy.mytv.tv.ui.screen.main.MainUiState
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
@@ -54,6 +55,13 @@ fun LoadingScreen(
             hasReady = true
             toDashboardScreen()
         }
+    }
+
+    // Cached startup and the frame before navigation must not flash the loading card.
+    if (mainUiState is MainUiState.Ready ||
+        (mainUiState is MainUiState.Loading && !mainUiState.showProgress)) {
+        AppThemeWrapper { }
+        return
     }
 
     AppScreen(
