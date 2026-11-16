@@ -1,25 +1,14 @@
 package top.yogiczy.mytv.tv.ui.screen.settings.subcategories
 
-import android.app.Activity
-import android.view.WindowManager
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,6 +31,7 @@ import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.screen.components.Qrcode
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsCategoryScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsListItem
+import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsTextEditor
 import top.yogiczy.mytv.tv.ui.utils.clickableNoIndication
 import top.yogiczy.mytv.tv.ui.utils.Configs
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunched
@@ -271,51 +261,7 @@ internal fun SourceEditField(
         link = true, onSelect = open,
     )
     SimplePopup(visibleProvider = { visible }, onDismissRequest = { visible = false }) {
-        SourceTextEditor(title, value, multiline, uri, onDismiss = { visible = false }, onConfirm = { onChange(it); visible = false })
-    }
-}
-
-@Composable
-private fun SourceTextEditor(
-    title: String, initial: String, multiline: Boolean, uri: Boolean,
-    onDismiss: () -> Unit, onConfirm: (String) -> Unit,
-) {
-    var text by rememberSaveable { mutableStateOf(initial) }
-    val keyboard = LocalSoftwareKeyboardController.current
-    val activity = LocalContext.current as? Activity
-    DisposableEffect(activity) {
-        val window = activity?.window
-        val previous = window?.attributes?.softInputMode
-        if (window != null && previous != null) {
-            // Insets below position the editor; system panning would move it a second time.
-            window.setSoftInputMode((previous and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST.inv()) or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
-        }
-        onDispose { if (window != null && previous != null) window.setSoftInputMode(previous) }
-    }
-    val color = MaterialTheme.colorScheme.onSurface
-    Box(Modifier.fillMaxSize().imePadding().padding(12.dp), contentAlignment = Alignment.Center) {
-        Column(
-            modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.large)
-                .clickableNoIndication { }.padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            BasicTextField(
-                value = text, onValueChange = { text = it },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp, max = 100.dp)
-                    .border(1.dp, color.copy(alpha = 0.6f), MaterialTheme.shapes.small)
-                    .padding(8.dp).focusOnLaunched(),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = color),
-                cursorBrush = SolidColor(color), singleLine = !multiline,
-                keyboardOptions = KeyboardOptions(keyboardType = if (uri) KeyboardType.Uri else KeyboardType.Text, imeAction = if (multiline) ImeAction.Default else ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { keyboard?.hide(); onConfirm(text) }),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                SourceDialogButton("确定", onClick = { keyboard?.hide(); onConfirm(text) })
-                SourceDialogButton("取消", onClick = { keyboard?.hide(); onDismiss() })
-            }
-        }
+        SettingsTextEditor(title, value, multiline, uri, onDismiss = { visible = false }, onConfirm = { onChange(it); visible = false })
     }
 }
 

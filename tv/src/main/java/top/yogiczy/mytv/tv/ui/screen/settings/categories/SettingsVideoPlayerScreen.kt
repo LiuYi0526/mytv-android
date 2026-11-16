@@ -1,18 +1,17 @@
 package top.yogiczy.mytv.tv.ui.screen.settings.categories
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.tv.material3.Switch
 import androidx.tv.material3.Text
-import top.yogiczy.mytv.core.util.utils.headersValid
 import top.yogiczy.mytv.core.util.utils.humanizeMs
 import top.yogiczy.mytv.tv.ui.screen.settings.SettingsViewModel
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsCategoryScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsListItem
+import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsUserAgentItem
+import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsHeadersItem
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 
@@ -97,10 +96,9 @@ fun SettingsVideoPlayerScreen(
         }
 
         item {
-            SettingsListItem(
-                headlineContent = "自定义ua",
-                trailingContent = settingsViewModel.videoPlayerUserAgent,
-                remoteConfig = true,
+            SettingsUserAgentItem(
+                value = settingsViewModel.videoPlayerUserAgent,
+                onChange = { settingsViewModel.videoPlayerUserAgent = it },
             )
         }
 
@@ -123,13 +121,9 @@ fun SettingsVideoPlayerScreen(
         }
 
         item {
-            val isValid = settingsViewModel.videoPlayerHeaders.headersValid()
-
-            SettingsListItem(
-                headlineContent = "自定义headers",
-                supportingContent = settingsViewModel.videoPlayerHeaders,
-                remoteConfig = true,
-                trailingIcon = if (!isValid) Icons.Default.ErrorOutline else null,
+            SettingsHeadersItem(
+                value = settingsViewModel.videoPlayerHeaders,
+                onChange = { settingsViewModel.videoPlayerHeaders = it },
             )
         }
     }
