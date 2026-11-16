@@ -49,12 +49,10 @@ data class EpgList(
         }
 
         fun EpgList.displayGuide(channel: Channel, at: Long = System.currentTimeMillis()): Epg {
-            val actual = match(channel)?.displayGuide
-            if (actual != null && actual.programmeList.isNotEmpty()) return actual
+            val actual = match(channel)
+            if (actual != null) return actual.displayGuide(at)
             return Epg(
-                channelList = actual?.channelList ?: listOf(channel.epgName.ifBlank { channel.name }),
-                channelId = actual?.channelId,
-                logo = actual?.logo,
+                channelList = listOf(channel.epgName.ifBlank { channel.name }),
                 programmeList = EpgDisplaySchedule.hourly(at),
             )
         }

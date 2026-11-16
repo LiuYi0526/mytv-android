@@ -28,6 +28,23 @@ object EpgDisplaySchedule {
         return if (result == programmes.value) programmes else EpgProgrammeList(result)
     }
 
+    /** Extend only the uncovered edges within the rolling display window; retain real history. */
+    fun extendEdges(programmes: EpgProgrammeList, hours: EpgProgrammeList): EpgProgrammeList {
+        if (programmes.isEmpty()) return hours
+        val start = programmes.first().startAt
+        val end = programmes.maxOf { it.endAt }
+        val before = hours.mapNotNull { hour ->
+            val stop = minOf(hour.endAt, start)
+            if (hour.startAt >= stop) null else hour.copy(endAt = stop)
+        }
+        val after = hours.mapNotNull { hour ->
+            val begin = maxOf(hour.startAt, end)
+            if (begin >= hour.endAt) null else hour.copy(startAt = begin)
+        }
+        return if (before.isEmpty() && after.isEmpty()) programmes
+        else EpgProgrammeList(before + programmes.value + after)
+    }
+
     @Synchronized
     fun hourly(at: Long = System.currentTimeMillis(), zone: TimeZone = TimeZone.getDefault()): EpgProgrammeList {
         val today = dayStart(at, zone)

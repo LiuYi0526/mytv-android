@@ -52,11 +52,14 @@ class EpgListMatchTest {
         assertTrue(EpgList().displayGuide(channel).programmeList.all { it.title == "无信息" })
     }
 
-    @Test fun lastBroadcastHasNoNextProgramme() {
+    @Test fun lastBroadcastIsFollowedByUnknownInformation() {
         val channel = Channel(name = "Channel")
         val past = EpgProgramme(10, 20, "Replay")
         val list = EpgList(listOf(Epg(channelList = listOf(channel.name), programmeList = EpgProgrammeList(listOf(past)))))
-        assertEquals(EpgProgrammeRecent(past), list.recentProgramme(channel, past))
+        val recent = list.recentProgramme(channel, past)!!
+        assertEquals(past, recent.now)
+        assertEquals("无信息", recent.next!!.title)
+        assertEquals(past.endAt, recent.next!!.startAt)
     }
 
     @Test

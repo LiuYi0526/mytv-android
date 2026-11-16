@@ -29,9 +29,26 @@ data class Epg(
 ) {
     // Delegated properties are not serialized. Fill old cached guides without
     // downloading again or rebuilding the display schedule on every position tick.
-    internal val displayGuide by lazy {
+    private val gapFilledGuide by lazy {
         val programmes = EpgDisplaySchedule.fillGaps(programmeList)
         if (programmes === programmeList) this else copy(programmeList = programmes)
+    }
+
+    // Delegated caches stay out of JSON. Bound retained views when the clock crosses midnight.
+    private val displayGuides by lazy { linkedMapOf<Pair<Long, Long>, Epg>() }
+
+    internal fun displayGuide(at: Long): Epg {
+        val hours = EpgDisplaySchedule.hourly(at)
+        val key = hours.first().startAt to hours.last().endAt
+        return synchronized(displayGuides) {
+            displayGuides.getOrPut(key) {
+                val filled = gapFilledGuide
+                val extended = EpgDisplaySchedule.extendEdges(filled.programmeList, hours)
+                if (extended === filled.programmeList) filled else filled.copy(programmeList = extended)
+            }.also {
+                if (displayGuides.size > 2) displayGuides.remove(displayGuides.keys.first())
+            }
+        }
     }
 
     companion object {
