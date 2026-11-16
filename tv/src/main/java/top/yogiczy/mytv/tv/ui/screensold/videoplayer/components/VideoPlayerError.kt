@@ -3,9 +3,11 @@ package top.yogiczy.mytv.tv.ui.screensold.videoplayer.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.LocalContentColor
@@ -19,9 +21,12 @@ fun VideoPlayerError(
     errorProvider: () -> String? = { null },
 ) {
     val error = errorProvider() ?: return
+    val code = error.substringBefore('\n')
+    val details = error.substringAfter('\n', "").trim()
 
     Column(
         modifier = modifier
+            .widthIn(max = 720.dp)
             .background(
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
                 shape = MaterialTheme.shapes.medium,
@@ -36,16 +41,27 @@ fun VideoPlayerError(
         )
 
         Text(
-            text = error,
+            text = code,
             style = MaterialTheme.typography.bodyMedium,
             color = LocalContentColor.current.copy(alpha = 0.8f),
         )
 
-        getErrorCodeDesc(error)?.let { nnDesc ->
+        getErrorCodeDesc(code)?.let { nnDesc ->
             Text(
                 text = nnDesc,
                 style = MaterialTheme.typography.bodyMedium,
                 color = LocalContentColor.current.copy(alpha = 0.8f),
+            )
+        }
+
+        if (details.isNotBlank()) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = "具体原因：\n$details",
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalContentColor.current,
+                maxLines = 10,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -84,7 +100,7 @@ private fun getErrorCodeDesc(error: String): String? {
         "MEDIA3_ERROR_AUDIO_TRACK_OFFLOAD_INIT_FAILED" -> "音频轨道离线初始化失败，请检查视频源。"
         "MEDIA3_ERROR_VIDEO_FRAME_PROCESSOR_INIT_FAILED" -> "视频帧处理器初始化失败，请检查视频源。"
         "MEDIA3_ERROR_VIDEO_FRAME_PROCESSING_FAILED" -> "视频帧处理失败，请检查视频源。"
-        "MEDIA3_ERROR_FAILED_RUNTIME_CHECK" -> "运行时检查失败，请检查视频源。"
+        "MEDIA3_ERROR_FAILED_RUNTIME_CHECK" -> "播放器运行检查失败。"
         "MEDIA3_ERROR_DRM_UNSPECIFIED" -> "DRM错误，请检查视频源。"
         "MEDIA3_ERROR_DRM_LICENSE_ACQUISITION_FAILED" -> "DRM授权失败，请检查视频源。"
         "MEDIA3_ERROR_DRM_DISALLOWED_OPERATION" -> "DRM不允许的操作，请检查视频源。"
@@ -100,7 +116,10 @@ private fun getErrorCodeDesc(error: String): String? {
 private fun VideoPlayerErrorPreview() {
     MyTvTheme {
         VideoPlayerError(
-            errorProvider = { "MEDIA3_ERROR_IO_NETWORK_CONNECTION_FAILED(2001)" }
+            errorProvider = {
+                "MEDIA3_ERROR_FAILED_RUNTIME_CHECK(1004)\n" +
+                    "IllegalStateException: Legacy decoding is disabled, can't handle text/vtt samples (expected application/x-media3-cues)."
+            }
         )
     }
 }

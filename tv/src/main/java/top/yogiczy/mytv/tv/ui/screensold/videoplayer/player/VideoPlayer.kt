@@ -206,12 +206,31 @@ abstract class VideoPlayer(
         onInterruptListeners.add(listener)
     }
 
-    data class PlaybackException(val errorCodeName: String, val errorCode: Int) :
+    data class PlaybackException(val errorCodeName: String, val errorCode: Int, val details: String? = null) :
         Exception(errorCodeName) {
+        val displayMessage: String
+            get() = listOfNotNull("$errorCodeName($errorCode)", details?.takeIf { it.isNotBlank() }).joinToString("\n")
+
         companion object {
             val UNSUPPORTED_TYPE = PlaybackException("ERROR_UNSUPPORTED_TYPE", 10002)
             val LOAD_TIMEOUT = PlaybackException("ERROR_LOAD_TIMEOUT", 10003)
             val PLAYBACK_UNAVAILABLE = PlaybackException("回看内容已超出可用窗口", 10004)
+
+            fun fromCause(errorCodeName: String, errorCode: Int, error: Throwable): PlaybackException {
+                val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Throwable, Boolean>())
+                val causes = mutableListOf<String>()
+                var current: Throwable? = error
+                // Guard against cycles and unusually deep exception chains. Keep only text, not the throwable graph.
+                while (current != null && seen.size < 16 && seen.add(current)) {
+                    val message = current.message?.trim()?.takeIf { it.isNotBlank() }
+                    if (message != null) causes += "${current.javaClass.simpleName}: ${message.take(1500)}"
+                    current = current.cause
+                }
+                val details = causes.asReversed().distinct().take(3).joinToString("\n")
+                    .take(2000).takeIf { it.isNotBlank() }
+                    ?: error.javaClass.simpleName
+                return PlaybackException(errorCodeName, errorCode, details)
+            }
         }
     }
 

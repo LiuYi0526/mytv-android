@@ -167,7 +167,7 @@ class VideoPlayerState(
             if (width > 0 && height > 0) aspectRatio = width.toFloat() / height
         }
         instance.onError { ex ->
-            error = ex?.let { "${it.errorCodeName}(${it.errorCode})" }
+            error = ex?.displayMessage
                 ?.apply { onErrorListeners.forEach { it.invoke() } }
 
         }

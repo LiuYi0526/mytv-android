@@ -282,10 +282,11 @@ class Media3VideoPlayer(
                                     MediaDrmCallback.Response(fetcher.load(licenseUrl, request.data))
                             }
                         }
-                    } catch (_: IllegalArgumentException) {
-                        triggerError(PlaybackException(
+                    } catch (ex: IllegalArgumentException) {
+                        triggerError(PlaybackException.fromCause(
                             "Invalid ClearKey license configuration",
                             androidx.media3.common.PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR,
+                            ex,
                         ))
                         return null
                     }
@@ -299,9 +300,9 @@ class Media3VideoPlayer(
                     val headers = Configs.videoPlayerHeaders.toHeaders()
                     val configuration = try {
                         WidevineDrm.configuration(currentChannelLine.licenseKey, headers)
-                    } catch (_: IllegalArgumentException) {
-                        triggerError(PlaybackException("Invalid Widevine license URL",
-                            androidx.media3.common.PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR))
+                    } catch (ex: IllegalArgumentException) {
+                        triggerError(PlaybackException.fromCause("Invalid Widevine license URL",
+                            androidx.media3.common.PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR, ex))
                         return null
                     }
                     dashMediaItem = mediaItem.buildUpon().setDrmConfiguration(configuration).build()
@@ -400,7 +401,8 @@ class Media3VideoPlayer(
             videoPlayer.pause()
             cancelPlaybackMonitoring()
             triggerBuffering(false)
-            triggerError(PlaybackException(error.errorCodeName, error.errorCode))
+            triggerError(PlaybackException.fromCause(
+                error.errorCodeName.replace("ERROR_CODE", "MEDIA3_ERROR"), error.errorCode, error))
             return
         }
         // Reload the stable source URL (including playseek), then resume its saved UTC position.
@@ -473,7 +475,7 @@ class Media3VideoPlayer(
                     // An explicit hint must not be retried indefinitely as the same source
                     // while recording another fallback type as attempted.
                     if (Media3ContentType.explicit(currentChannelLine.manifestType) != null) {
-                        triggerError(PlaybackException.UNSUPPORTED_TYPE)
+                        triggerError(PlaybackException.fromCause("ERROR_UNSUPPORTED_TYPE", 10002, ex))
                         return
                     }
                     videoPlayer.currentMediaItem?.localConfiguration?.uri?.let {
@@ -486,7 +488,7 @@ class Media3VideoPlayer(
                         } else if (contentTypeAttempts[C.CONTENT_TYPE_OTHER] != true) {
                             prepare(C.CONTENT_TYPE_OTHER)
                         } else {
-                            triggerError(PlaybackException.UNSUPPORTED_TYPE)
+                            triggerError(PlaybackException.fromCause("ERROR_UNSUPPORTED_TYPE", 10002, ex))
                         }
                     }
                 }
@@ -498,9 +500,9 @@ class Media3VideoPlayer(
                     if ((!audio && !video) || softwareDecodePreferred ||
                         (audio && audioDecoderFallback) || (video && videoDecoderFallback)) {
                         triggerError(
-                            PlaybackException(
+                            PlaybackException.fromCause(
                                 ex.errorCodeName.replace("ERROR_CODE", "MEDIA3_ERROR"),
-                                ex.errorCode
+                                ex.errorCode, ex
                             )
                         )
                     } else {
@@ -512,9 +514,9 @@ class Media3VideoPlayer(
 
                 else -> {
                     triggerError(
-                        PlaybackException(
+                        PlaybackException.fromCause(
                             ex.errorCodeName.replace("ERROR_CODE", "MEDIA3_ERROR"),
-                            ex.errorCode
+                            ex.errorCode, ex
                         )
                     )
                 }
