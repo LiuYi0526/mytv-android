@@ -5,6 +5,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.DataReader
 import androidx.media3.common.Format
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.ParsableByteArray
 import androidx.media3.common.util.TimestampAdjuster
 import androidx.media3.common.util.UnstableApi
@@ -12,6 +13,7 @@ import androidx.media3.decoder.ffmpeg.FfmpegLibrary
 import androidx.media3.exoplayer.analytics.PlayerId
 import androidx.media3.extractor.*
 import androidx.media3.extractor.ts.TsExtractor
+import androidx.media3.extractor.text.SubtitleParser
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
@@ -96,15 +98,38 @@ class Av3aExtractorsTest {
         assertAv3a(output)
     }
 
-    @Test fun hlsWebVttStillUsesDefaultExtractor() {
-        val input = input("WEBVTT\n\n00:00.000 --> 00:01.000\nTest\n".toByteArray())
-        val extractor = Av3aHlsExtractorFactory().createExtractor(
+    @Test fun hlsWebVttEmitsParsedCuesIncludingRecreatedSegments() {
+        val bytes = "WEBVTT\n\n00:00.000 --> 00:01.000\nTest\n".toByteArray()
+        val factory = Av3aHlsExtractorFactory()
+        val format = Format.Builder().setSampleMimeType(MimeTypes.TEXT_VTT).setLanguage("en").build()
+        val outputFormat = factory.getOutputTextFormat(format)
+        assertEquals(MimeTypes.APPLICATION_MEDIA3_CUES, outputFormat.sampleMimeType)
+        assertEquals("en", outputFormat.language)
+        val extractor = factory.createExtractor(
             Uri.parse("https://example.invalid/subtitle.vtt"),
-            Format.Builder().setSampleMimeType("text/vtt").build(), null,
-            TimestampAdjuster(0), emptyMap(), input, PlayerId.UNSET,
+            format, null, TimestampAdjuster(0), emptyMap(), input(bytes), PlayerId.UNSET,
         )
         assertFalse(extractor.isReusable)
         assertFalse(extractor.isPackedAudioExtractor)
+        listOf(extractor, extractor.recreate()).forEach { segment ->
+            val output = Output()
+            segment.init(output)
+            val input = input(bytes)
+            var reads = 0
+            while (segment.read(input)) check(++reads < 100)
+            assertEquals(MimeTypes.APPLICATION_MEDIA3_CUES, output.formats.single().sampleMimeType)
+            assertTrue("WebVTT must produce cue samples, not just a converted format", output.samples.any { it.second > 0 })
+        }
+    }
+
+    @Test fun hlsSubtitleParserConfigurationIsForwardedWithoutLosingCustomFactory() {
+        val factory = Av3aHlsExtractorFactory()
+        val format = Format.Builder().setSampleMimeType(MimeTypes.TEXT_VTT).build()
+        assertSame(factory, factory.setSubtitleParserFactory(SubtitleParser.Factory.UNSUPPORTED))
+        assertEquals(MimeTypes.TEXT_VTT, factory.getOutputTextFormat(format).sampleMimeType)
+        // Native CEA captions are handled by TextRenderer rather than the WebVTT parser.
+        val captions = Format.Builder().setSampleMimeType(MimeTypes.APPLICATION_CEA608).build()
+        assertEquals(captions, Av3aHlsExtractorFactory().getOutputTextFormat(captions))
     }
 
     @Test fun bundledFfmpegRecognizesAv3aMimeType() {

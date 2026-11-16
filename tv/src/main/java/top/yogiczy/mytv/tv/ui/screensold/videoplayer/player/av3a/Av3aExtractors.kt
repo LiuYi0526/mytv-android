@@ -18,6 +18,7 @@ import androidx.media3.extractor.ExtractorInput
 import androidx.media3.extractor.ExtractorOutput
 import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.TrackOutput
+import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.extractor.text.SubtitleParser
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.extractor.ts.ElementaryStreamReader
@@ -85,8 +86,8 @@ class Av3aExtractorsFactory : ExtractorsFactory {
 
     private fun replaceTs(extractors: Array<Extractor>): Array<Extractor> = extractors.map {
         if (it.underlyingImplementation is TsExtractor) {
-            TsExtractor(TsExtractor.MODE_SINGLE_PMT, TsExtractor.FLAG_EMIT_RAW_SUBTITLE_DATA,
-                SubtitleParser.Factory.UNSUPPORTED, TimestampAdjuster(0), Av3aPayloadReaderFactory(),
+            TsExtractor(TsExtractor.MODE_SINGLE_PMT, 0,
+                DefaultSubtitleParserFactory(), TimestampAdjuster(0), Av3aPayloadReaderFactory(),
                 TsExtractor.DEFAULT_TIMESTAMP_SEARCH_BYTES)
         } else it
     }.toTypedArray()
@@ -96,6 +97,32 @@ class Av3aExtractorsFactory : ExtractorsFactory {
 class Av3aHlsExtractorFactory(
     private val delegate: DefaultHlsExtractorFactory = DefaultHlsExtractorFactory(),
 ) : HlsExtractorFactory by delegate {
+    private var subtitleParserFactory: SubtitleParser.Factory = DefaultSubtitleParserFactory()
+    private var parseSubtitlesDuringExtraction = true
+
+    init {
+        // HlsMediaSource configures its original factory before setExtractorFactory replaces it.
+        // Match the source's default: TextRenderer expects parsed cues, not raw WebVTT samples.
+        delegate.setSubtitleParserFactory(subtitleParserFactory)
+        delegate.experimentalParseSubtitlesDuringExtraction(parseSubtitlesDuringExtraction)
+    }
+
+    override fun setSubtitleParserFactory(subtitleParserFactory: SubtitleParser.Factory): Av3aHlsExtractorFactory {
+        this.subtitleParserFactory = subtitleParserFactory
+        delegate.setSubtitleParserFactory(subtitleParserFactory)
+        return this
+    }
+
+    // Explicitly forward this Java default method; interface delegation can retain the raw format.
+    override fun getOutputTextFormat(sourceFormat: Format): Format = delegate.getOutputTextFormat(sourceFormat)
+
+    @Suppress("OVERRIDE_DEPRECATION", "DEPRECATION")
+    override fun experimentalParseSubtitlesDuringExtraction(parseSubtitlesDuringExtraction: Boolean): Av3aHlsExtractorFactory {
+        this.parseSubtitlesDuringExtraction = parseSubtitlesDuringExtraction
+        delegate.experimentalParseSubtitlesDuringExtraction(parseSubtitlesDuringExtraction)
+        return this
+    }
+
     override fun createExtractor(
         uri: Uri, format: Format, muxedCaptionFormats: List<Format>?,
         timestampAdjuster: TimestampAdjuster, responseHeaders: Map<String, List<String>>,
@@ -115,7 +142,9 @@ class Av3aHlsExtractorFactory(
             }
         }
         val ts = TsExtractor(
-            TsExtractor.MODE_HLS, TsExtractor.FLAG_EMIT_RAW_SUBTITLE_DATA, SubtitleParser.Factory.UNSUPPORTED,
+            TsExtractor.MODE_HLS,
+            if (parseSubtitlesDuringExtraction) 0 else TsExtractor.FLAG_EMIT_RAW_SUBTITLE_DATA,
+            subtitleParserFactory,
             timestampAdjuster, Av3aPayloadReaderFactory(DolbyVisionPayloadReaderFactory(
                 DefaultTsPayloadReaderFactory(flags, captions), captions, muxedCaptionFormats != null)),
             TsExtractor.DEFAULT_TIMESTAMP_SEARCH_BYTES,
