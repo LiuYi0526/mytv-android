@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
@@ -47,6 +49,7 @@ import top.yogiczy.mytv.tv.ui.utils.backHandler
 @Composable
 fun QuickOpScreen(
     modifier: Modifier = Modifier,
+    buttonListState: LazyListState = rememberLazyListState(),
     currentChannelProvider: () -> Channel = { Channel() },
     currentChannelLineIdxProvider: () -> Int = { 0 },
     currentChannelNumberProvider: () -> String = { "" },
@@ -57,6 +60,8 @@ fun QuickOpScreen(
     preferSoftwareDecodeProvider: () -> Boolean = { false },
     onToggleDecodePreference: () -> Unit = {},
     videoPlayerMetadataProvider: () -> VideoPlayer.Metadata = { VideoPlayer.Metadata() },
+    tracksReadyProvider: () -> Boolean = { false },
+    initialFocusKeyProvider: () -> String = { "epg" },
     onShowEpg: () -> Unit = {},
     onShowChannelLine: () -> Unit = {},
     onShowVideoPlayerController: () -> Unit = {},
@@ -64,7 +69,7 @@ fun QuickOpScreen(
     onShowVideoTracks: () -> Unit = {},
     onShowAudioTracks: () -> Unit = {},
     onShowSubtitleTracks: () -> Unit = {},
-    onClearCache: () -> Unit = {},
+    onShowTimingClose: () -> Unit = {},
     toSettingsScreen: (SettingsSubCategories?) -> Unit = {},
     toDashboardScreen: () -> Unit = {},
     onClose: () -> Unit = {},
@@ -86,6 +91,7 @@ fun QuickOpScreen(
         )
 
         QuickOpScreenBottom(
+            buttonListState = buttonListState,
             currentChannelProvider = currentChannelProvider,
             currentChannelLineIdxProvider = currentChannelLineIdxProvider,
             epgListProvider = epgListProvider,
@@ -95,6 +101,8 @@ fun QuickOpScreen(
             preferSoftwareDecodeProvider = preferSoftwareDecodeProvider,
             onToggleDecodePreference = onToggleDecodePreference,
             videoPlayerMetadataProvider = videoPlayerMetadataProvider,
+            tracksReadyProvider = tracksReadyProvider,
+            initialFocusKeyProvider = initialFocusKeyProvider,
             onShowEpg = onShowEpg,
             onShowChannelLine = onShowChannelLine,
             onShowVideoPlayerController = onShowVideoPlayerController,
@@ -102,8 +110,8 @@ fun QuickOpScreen(
             onShowVideoTracks = onShowVideoTracks,
             onShowAudioTracks = onShowAudioTracks,
             onShowSubtitleTracks = onShowSubtitleTracks,
+            onShowTimingClose = onShowTimingClose,
             onShowMoreSettings = { toSettingsScreen(null) },
-            onClearCache = onClearCache,
             toDashboardScreen = toDashboardScreen,
             onUserAction = { screenAutoCloseState.active() },
             onDismissRequest = onClose,
@@ -156,6 +164,7 @@ private fun QuickOpScreenTop(
 @Composable
 private fun QuickOpScreenBottom(
     modifier: Modifier = Modifier,
+    buttonListState: LazyListState = rememberLazyListState(),
     currentChannelProvider: () -> Channel = { Channel() },
     currentChannelLineIdxProvider: () -> Int = { 0 },
     epgListProvider: () -> EpgList = { EpgList() },
@@ -165,6 +174,8 @@ private fun QuickOpScreenBottom(
     preferSoftwareDecodeProvider: () -> Boolean = { false },
     onToggleDecodePreference: () -> Unit = {},
     videoPlayerMetadataProvider: () -> VideoPlayer.Metadata = { VideoPlayer.Metadata() },
+    tracksReadyProvider: () -> Boolean = { false },
+    initialFocusKeyProvider: () -> String = { "epg" },
     onShowEpg: () -> Unit = {},
     onShowChannelLine: () -> Unit = {},
     onShowVideoPlayerController: () -> Unit = {},
@@ -172,8 +183,8 @@ private fun QuickOpScreenBottom(
     onShowVideoTracks: () -> Unit = {},
     onShowAudioTracks: () -> Unit = {},
     onShowSubtitleTracks: () -> Unit = {},
+    onShowTimingClose: () -> Unit = {},
     onShowMoreSettings: () -> Unit = {},
-    onClearCache: () -> Unit = {},
     toDashboardScreen: () -> Unit = {},
     onUserAction: () -> Unit = {},
     onDismissRequest: () -> Unit = {},
@@ -195,7 +206,7 @@ private fun QuickOpScreenBottom(
                         end = Offset(0f, Float.POSITIVE_INFINITY),
                     )
                 )
-                .padding(bottom = childPadding.bottom),
+                .padding(bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             LiveChannelsChannelInfo(
@@ -211,12 +222,15 @@ private fun QuickOpScreenBottom(
             )
 
             QuickOpBtnList(
+                listState = buttonListState,
                 channelProvider = currentChannelProvider,
                 channelLineIdxProvider = currentChannelLineIdxProvider,
                 playerDisplayModeProvider = playerDisplayModeProvider,
                 preferSoftwareDecodeProvider = preferSoftwareDecodeProvider,
                 onToggleDecodePreference = onToggleDecodePreference,
                 playerMetadataProvider = videoPlayerMetadataProvider,
+                tracksReadyProvider = tracksReadyProvider,
+                initialFocusKeyProvider = initialFocusKeyProvider,
                 onShowEpg = onShowEpg,
                 onShowChannelLine = onShowChannelLine,
                 onShowVideoPlayerController = onShowVideoPlayerController,
@@ -225,7 +239,7 @@ private fun QuickOpScreenBottom(
                 onShowVideoTracks = onShowVideoTracks,
                 onShowAudioTracks = onShowAudioTracks,
                 onShowSubtitleTracks = onShowSubtitleTracks,
-                onClearCache = onClearCache,
+                onShowTimingClose = onShowTimingClose,
                 toDashboardScreen = toDashboardScreen,
                 onUserAction = onUserAction,
                 onDismissRequest = onDismissRequest,

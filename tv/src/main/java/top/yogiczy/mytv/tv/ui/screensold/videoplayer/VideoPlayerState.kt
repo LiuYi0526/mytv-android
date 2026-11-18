@@ -75,6 +75,9 @@ class VideoPlayerState(
 
     /** 元数据 */
     var metadata by mutableStateOf(VideoPlayer.Metadata())
+    /** Initial track discovery has finished; later buffering must not turn known tracks into loading slots. */
+    var tracksReady by mutableStateOf(false)
+        private set
 
     fun prepare(line: ChannelLine, playbackRange: PlaybackRange? = null) {
         playRequested = true
@@ -84,6 +87,7 @@ class VideoPlayerState(
         currentPosition = 0L
         duration = playbackRange?.durationMs ?: 0L
         metadata = VideoPlayer.Metadata()
+        tracksReady = false
         instance.prepare(line, playbackRange)
         currentPosition = if (positionIsAbsolute) playbackRange?.sourceStartAt ?: 0L else 0L
     }
@@ -167,11 +171,13 @@ class VideoPlayerState(
             if (width > 0 && height > 0) aspectRatio = width.toFloat() / height
         }
         instance.onError { ex ->
+            if (ex != null) tracksReady = true
             error = ex?.displayMessage
                 ?.apply { onErrorListeners.forEach { it.invoke() } }
 
         }
         instance.onReady {
+            tracksReady = true
             onReadyListeners.forEach { it.invoke() }
             error = null
         }
@@ -180,7 +186,10 @@ class VideoPlayerState(
             if (it) error = null
             onIsBufferingListeners.forEach { cb -> cb(isBuffering) }
         }
-        instance.onPrepared { }
+        instance.onPrepared {
+            tracksReady = false
+            metadata = VideoPlayer.Metadata()
+        }
         instance.onIsPlayingChanged { isPlaying = it }
         instance.onDurationChanged { duration = it }
         instance.onCurrentPositionChanged { position ->

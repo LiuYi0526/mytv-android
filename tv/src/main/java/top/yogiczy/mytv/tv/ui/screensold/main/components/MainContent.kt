@@ -2,11 +2,11 @@ package top.yogiczy.mytv.tv.ui.screensold.main.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
@@ -20,12 +20,9 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.displayGuide
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
-import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
 import top.yogiczy.mytv.core.data.media.PlaybackProgrammeNavigation
 import top.yogiczy.mytv.core.data.media.PlaybackControllerTimeline
 import top.yogiczy.mytv.core.data.utils.ChannelPlayback
-import top.yogiczy.mytv.core.data.repositories.epg.EpgRepository
-import top.yogiczy.mytv.core.data.repositories.iptv.IptvRepository
 import top.yogiczy.mytv.tv.ui.material.PopupContent
 import top.yogiczy.mytv.tv.ui.material.Snackbar
 import top.yogiczy.mytv.tv.ui.material.Visibility
@@ -46,6 +43,7 @@ import top.yogiczy.mytv.tv.ui.screensold.epg.EpgProgrammeProgressScreen
 import top.yogiczy.mytv.tv.ui.screensold.epg.EpgScreen
 import top.yogiczy.mytv.tv.ui.screensold.epgreverse.EpgReverseScreen
 import top.yogiczy.mytv.tv.ui.screensold.quickop.QuickOpScreen
+import top.yogiczy.mytv.tv.ui.screensold.quickop.QuickOpNavigationState
 import top.yogiczy.mytv.tv.ui.screensold.subtitletracks.SubtitleTracksScreen
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.VideoPlayerScreen
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.VideoPlayer
@@ -70,8 +68,8 @@ fun MainContent(
     toDashboardScreen: () -> Unit = {},
     onBackPressed: () -> Unit = {},
 ) {
-    val coroutineScope = rememberCoroutineScope()
     val timingCloseViewModel = LocalTimingCloseViewModel.current
+    val quickOpNavigation = remember { QuickOpNavigationState() }
 
     val videoPlayerState =
         rememberVideoPlayerState(defaultDisplayModeProvider = { settingsViewModel.videoPlayerDisplayMode })
@@ -88,8 +86,26 @@ fun MainContent(
         }
     }
 
+    fun openToolbarChild(key: String, open: () -> Unit) {
+        quickOpNavigation.openChild(key)
+        mainContentState.isQuickOpScreenVisible = false
+        open()
+    }
+
+    fun closeToolbarChild(key: String, close: () -> Unit) {
+        close()
+        if (quickOpNavigation.returnFromChild(key)) mainContentState.isQuickOpScreenVisible = true
+    }
+
+    LaunchedEffect(timingCloseViewModel.showPicker) {
+        if (!timingCloseViewModel.showPicker && quickOpNavigation.returnFromChild("timing")) {
+            mainContentState.isQuickOpScreenVisible = true
+        }
+    }
+
     fun performControl(key: ControlKey, number: Int?) {
         val action = ControlKeyActions.actionFor(key, settingsViewModel.controlKeyActions, settingsViewModel.iptvChannelChangeFlip)
+        if (action == ControlAction.QUICK_OP) quickOpNavigation.openToolbar() else quickOpNavigation.leaveToolbar()
         when (action) {
             ControlAction.NONE -> Unit
             ControlAction.PREVIOUS_CHANNEL -> mainContentState.changeCurrentChannelToPrev()
@@ -122,7 +138,7 @@ fun MainContent(
             .backHandler { onBackPressed() }
             .handleLiveControls(
                 onControl = ::performControl,
-                onQuickOp = { mainContentState.isQuickOpScreenVisible = true },
+                onQuickOp = { quickOpNavigation.openToolbar(); mainContentState.isQuickOpScreenVisible = true },
             ),
     ) {
         VideoPlayerScreen(
@@ -195,7 +211,7 @@ fun MainContent(
 
     PopupContent(
         visibleProvider = { mainContentState.isEpgScreenVisible },
-        onDismissRequest = { mainContentState.isEpgScreenVisible = false },
+        onDismissRequest = { closeToolbarChild("epg") { mainContentState.isEpgScreenVisible = false } },
     ) {
         EpgScreen(
             epgProvider = {
@@ -209,7 +225,7 @@ fun MainContent(
             supportPlaybackProvider = { mainContentState.supportPlayback() },
             currentPlaybackEpgProgrammeProvider = { mainContentState.currentPlaybackEpgProgramme },
             onEpgProgrammePlayback = {
-                mainContentState.isEpgScreenVisible = false
+                closeToolbarChild("epg") { mainContentState.isEpgScreenVisible = false }
                 mainContentState.changeCurrentChannel(
                     mainContentState.currentChannel,
                     mainContentState.currentChannelLineIdx,
@@ -222,37 +238,37 @@ fun MainContent(
                 )
             },
             onLive = {
-                mainContentState.isEpgScreenVisible = false
+                closeToolbarChild("epg") { mainContentState.isEpgScreenVisible = false }
                 mainContentState.changeCurrentChannel(
                     mainContentState.currentChannel,
                     mainContentState.currentChannelLineIdx,
                 )
             },
-            onClose = { mainContentState.isEpgScreenVisible = false },
+            onClose = { closeToolbarChild("epg") { mainContentState.isEpgScreenVisible = false } },
         )
     }
 
     PopupContent(
         visibleProvider = { mainContentState.isChannelLineScreenVisible },
-        onDismissRequest = { mainContentState.isChannelLineScreenVisible = false },
+        onDismissRequest = { closeToolbarChild("line") { mainContentState.isChannelLineScreenVisible = false } },
     ) {
         ChannelLineScreen(
             channelProvider = { mainContentState.currentChannel },
             currentLineProvider = { mainContentState.currentChannelLine },
             onLineSelected = {
-                mainContentState.isChannelLineScreenVisible = false
+                closeToolbarChild("line") { mainContentState.isChannelLineScreenVisible = false }
                 mainContentState.changeCurrentChannel(
                     mainContentState.currentChannel,
                     mainContentState.currentChannel.lineList.indexOf(it),
                 )
             },
-            onClose = { mainContentState.isChannelLineScreenVisible = false },
+            onClose = { closeToolbarChild("line") { mainContentState.isChannelLineScreenVisible = false } },
         )
     }
 
     PopupContent(
         visibleProvider = { mainContentState.isVideoPlayerControllerScreenVisible },
-        onDismissRequest = { mainContentState.isVideoPlayerControllerScreenVisible = false },
+        onDismissRequest = { closeToolbarChild("controller") { mainContentState.isVideoPlayerControllerScreenVisible = false } },
     ) {
         val controllerNow by produceState(System.currentTimeMillis()) {
             while (true) { value = System.currentTimeMillis(); delay(1_000) }
@@ -296,7 +312,7 @@ fun MainContent(
             showChannelLogo = settingsViewModel.uiShowChannelLogo,
             onReturnToLive = {
                 // Dispose the controller first so a pending preview cannot seek back into replay.
-                mainContentState.isVideoPlayerControllerScreenVisible = false
+                closeToolbarChild("controller") { mainContentState.isVideoPlayerControllerScreenVisible = false }
                 mainContentState.changeCurrentChannel(
                     mainContentState.currentChannel, mainContentState.currentChannelLineIdx,
                 )
@@ -313,13 +329,13 @@ fun MainContent(
             onVideoPlayerSeekTo = {
                 mainContentState.seekTo(it, liveProgramme, absoluteTarget = timeline.absolute)
             },
-            onClose = { mainContentState.isVideoPlayerControllerScreenVisible = false },
+            onClose = { closeToolbarChild("controller") { mainContentState.isVideoPlayerControllerScreenVisible = false } },
         )
     }
 
     PopupContent(
         visibleProvider = { mainContentState.isVideoPlayerDisplayModeScreenVisible },
-        onDismissRequest = { mainContentState.isVideoPlayerDisplayModeScreenVisible = false },
+        onDismissRequest = { closeToolbarChild("display") { mainContentState.isVideoPlayerDisplayModeScreenVisible = false } },
     ) {
         VideoPlayerDisplayModeScreen(
             currentDisplayModeProvider = { videoPlayerState.displayMode },
@@ -329,62 +345,63 @@ fun MainContent(
                 Snackbar.show("此频道已跟随全局显示模式")
             },
             onApplyToGlobal = {
-                mainContentState.isVideoPlayerDisplayModeScreenVisible = false
+                closeToolbarChild("display") { mainContentState.isVideoPlayerDisplayModeScreenVisible = false }
                 settingsViewModel.videoPlayerDisplayMode = videoPlayerState.displayMode
                 mainContentState.followGlobalDisplayMode()
                 Snackbar.show("已应用到全局")
             },
-            onClose = { mainContentState.isVideoPlayerDisplayModeScreenVisible = false },
+            onClose = { closeToolbarChild("display") { mainContentState.isVideoPlayerDisplayModeScreenVisible = false } },
         )
     }
 
     PopupContent(
         visibleProvider = { mainContentState.isVideoTracksScreenVisible },
-        onDismissRequest = { mainContentState.isVideoTracksScreenVisible = false },
+        onDismissRequest = { closeToolbarChild("video") { mainContentState.isVideoTracksScreenVisible = false } },
     ) {
         VideoTracksScreen(
             trackListProvider = { videoPlayerState.metadata.videoTracks },
             onTrackChanged = {
                 videoPlayerState.selectVideoTrack(it)
-                mainContentState.isVideoTracksScreenVisible = false
+                closeToolbarChild("video") { mainContentState.isVideoTracksScreenVisible = false }
             },
-            onClose = { mainContentState.isVideoTracksScreenVisible = false },
+            onClose = { closeToolbarChild("video") { mainContentState.isVideoTracksScreenVisible = false } },
         )
     }
 
     PopupContent(
         visibleProvider = { mainContentState.isAudioTracksScreenVisible },
-        onDismissRequest = { mainContentState.isAudioTracksScreenVisible = false },
+        onDismissRequest = { closeToolbarChild("audio") { mainContentState.isAudioTracksScreenVisible = false } },
     ) {
         AudioTracksScreen(
             trackListProvider = { videoPlayerState.metadata.audioTracks },
             onTrackChanged = {
                 videoPlayerState.selectAudioTrack(it)
-                mainContentState.isAudioTracksScreenVisible = false
+                closeToolbarChild("audio") { mainContentState.isAudioTracksScreenVisible = false }
             },
-            onClose = { mainContentState.isAudioTracksScreenVisible = false },
+            onClose = { closeToolbarChild("audio") { mainContentState.isAudioTracksScreenVisible = false } },
         )
     }
 
     PopupContent(
         visibleProvider = { mainContentState.isSubtitleTracksScreenVisible },
-        onDismissRequest = { mainContentState.isSubtitleTracksScreenVisible = false },
+        onDismissRequest = { closeToolbarChild("subtitle") { mainContentState.isSubtitleTracksScreenVisible = false } },
     ) {
         SubtitleTracksScreen(
             trackListProvider = { videoPlayerState.metadata.subtitleTracks },
             onTrackChanged = {
                 videoPlayerState.selectSubtitleTrack(it)
-                mainContentState.isSubtitleTracksScreenVisible = false
+                closeToolbarChild("subtitle") { mainContentState.isSubtitleTracksScreenVisible = false }
             },
-            onClose = { mainContentState.isSubtitleTracksScreenVisible = false },
+            onClose = { closeToolbarChild("subtitle") { mainContentState.isSubtitleTracksScreenVisible = false } },
         )
     }
 
     PopupContent(
         visibleProvider = { mainContentState.isQuickOpScreenVisible },
-        onDismissRequest = { mainContentState.isQuickOpScreenVisible = false },
+        onDismissRequest = { quickOpNavigation.leaveToolbar(); mainContentState.isQuickOpScreenVisible = false },
     ) {
         QuickOpScreen(
+            buttonListState = quickOpNavigation.listState,
             currentChannelProvider = { mainContentState.currentChannel },
             currentChannelLineIdxProvider = { mainContentState.currentChannelLineIdx },
             currentChannelNumberProvider = {
@@ -398,53 +415,41 @@ fun MainContent(
                 videoPlayerState.preferSoftwareDecode = !videoPlayerState.preferSoftwareDecode
             },
             videoPlayerMetadataProvider = { videoPlayerState.metadata },
+            tracksReadyProvider = { videoPlayerState.tracksReady },
+            initialFocusKeyProvider = { quickOpNavigation.focusKey },
             onShowEpg = {
-                mainContentState.isQuickOpScreenVisible = false
-                mainContentState.isEpgScreenVisible = true
+                openToolbarChild("epg") { mainContentState.isEpgScreenVisible = true }
             },
             onShowChannelLine = {
-                mainContentState.isQuickOpScreenVisible = false
-                mainContentState.isChannelLineScreenVisible = true
+                openToolbarChild("line") { mainContentState.isChannelLineScreenVisible = true }
             },
             onShowVideoPlayerController = {
-                mainContentState.isQuickOpScreenVisible = false
-                mainContentState.isVideoPlayerControllerScreenVisible = true
+                openToolbarChild("controller") { mainContentState.isVideoPlayerControllerScreenVisible = true }
             },
             onShowVideoPlayerDisplayMode = {
-                mainContentState.isQuickOpScreenVisible = false
-                mainContentState.isVideoPlayerDisplayModeScreenVisible = true
+                openToolbarChild("display") { mainContentState.isVideoPlayerDisplayModeScreenVisible = true }
             },
             onShowVideoTracks = {
-                mainContentState.isQuickOpScreenVisible = false
-                mainContentState.isVideoTracksScreenVisible = true
+                openToolbarChild("video") { mainContentState.isVideoTracksScreenVisible = true }
             },
             onShowAudioTracks = {
-                mainContentState.isQuickOpScreenVisible = false
-                mainContentState.isAudioTracksScreenVisible = true
+                openToolbarChild("audio") { mainContentState.isAudioTracksScreenVisible = true }
             },
             onShowSubtitleTracks = {
-                mainContentState.isQuickOpScreenVisible = false
-                mainContentState.isSubtitleTracksScreenVisible = true
+                openToolbarChild("subtitle") { mainContentState.isSubtitleTracksScreenVisible = true }
             },
+            onShowTimingClose = { openToolbarChild("timing") { timingCloseViewModel.showPicker = true } },
             toSettingsScreen = {
+                quickOpNavigation.leaveToolbar()
                 mainContentState.isQuickOpScreenVisible = false
                 toSettingsScreen(it)
             },
-            onClearCache = {
-                settingsViewModel.iptvChannelLinePlayableHostList = emptySet()
-                settingsViewModel.iptvChannelLinePlayableUrlList = emptySet()
-                coroutineScope.launch {
-                    IptvRepository(settingsViewModel.iptvSourceCurrent).clearCache()
-                    EpgSourceCatalog.resolve(settingsViewModel.iptvSourceCurrent, settingsViewModel.epgSourceList,
-                        settingsViewModel.epgSourceCurrent).forEach { EpgRepository(it).clearCache() }
-                    Snackbar.show("缓存已清除，请重启应用")
-                }
-            },
             toDashboardScreen = {
+                quickOpNavigation.leaveToolbar()
                 mainContentState.isQuickOpScreenVisible = false
                 toDashboardScreen()
             },
-            onClose = { mainContentState.isQuickOpScreenVisible = false },
+            onClose = { quickOpNavigation.leaveToolbar(); mainContentState.isQuickOpScreenVisible = false },
         )
     }
 
