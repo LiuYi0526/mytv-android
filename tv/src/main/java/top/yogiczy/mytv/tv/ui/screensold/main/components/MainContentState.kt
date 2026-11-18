@@ -341,7 +341,7 @@ class MainContentState(
 
         _currentPlaybackEpgProgramme = playbackEpgProgramme
 
-        val line = currentChannelLine.copy(url = url)
+        val line = playbackRequest?.line ?: currentChannelLine.resolveHttpOptions().copy(url = url)
 
         log.d("播放${_currentChannel.name}（${_currentChannelLineIdx + 1}/${_currentChannel.lineList.size}）: $line")
 

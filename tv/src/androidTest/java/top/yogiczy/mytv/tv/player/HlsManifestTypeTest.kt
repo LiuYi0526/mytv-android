@@ -38,6 +38,20 @@ import kotlin.concurrent.thread
 /** Real HTTP/source preparation with synthetic tracks; does not claim audio/video decoding. */
 @OptIn(UnstableApi::class)
 class HlsManifestTypeTest {
+    @Test fun redirectSuffixOverridesAcrossTwoHopsAndReachesHlsChildrenWithoutProbing() =
+        checkPreparation(null, redirect = true, expectedPrepares = 2, master = true,
+            headerMode = HeaderMode.REDIRECT, followingPlainChannel = true)
+
+    @Test fun explicitHlsAlsoAcceptsHeadersDeclaredInRedirectLocation() =
+        checkPreparation("hls", redirect = true, headerMode = HeaderMode.REDIRECT)
+
+    @Test fun kodiSuffixReachesRedirectMasterKeyAndSegmentWithoutASecondEntryRequest() =
+        checkPreparation(null, redirect = true, expectedPrepares = 2, master = true,
+            headerMode = HeaderMode.INLINE, followingPlainChannel = true)
+
+    @Test fun explicitHlsAlsoUsesKodiSuffixHeaders() =
+        checkPreparation("hls", redirect = false, headerMode = HeaderMode.INLINE)
+
     @Test fun channelHeadersReachRedirectedHlsKeysAndSegments() =
         checkPreparation("hls", redirect = true, headerMode = HeaderMode.LINE)
 
@@ -48,7 +62,11 @@ class HlsManifestTypeTest {
     @Test fun channelWithoutOptionsStillUsesGlobalHeaders() =
         checkPreparation("hls", redirect = false, headerMode = HeaderMode.GLOBAL)
 
-    @Test fun ijkSendsChannelHeadersAndResetsThemOnTheNextPrepare() {
+    @Test fun ijkSendsChannelHeadersAndResetsThemOnTheNextPrepare() = checkIjkHeaders(false)
+
+    @Test fun ijkUsesKodiSuffixAndClearsItOnTheNextChannel() = checkIjkHeaders(true)
+
+    private fun checkIjkHeaders(inline: Boolean) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val prefs = SP.getInstance(instrumentation.context)
@@ -67,8 +85,9 @@ class HlsManifestTypeTest {
                 listOf(true, false).forEach { hasOptions ->
                     val marker = if (hasOptions) "/protected.ts" else "/plain.ts"
                     main {
-                        player!!.prepare(ChannelLine(server.url().substringBefore("/entry.ts") + marker,
-                            httpUserAgent = "ManifestTest/1",
+                        val suffix = if (inline && hasOptions) kodiSuffix else ""
+                        player!!.prepare(ChannelLine(server.url().substringBefore("/entry.ts") + marker + suffix,
+                            httpUserAgent = if (inline && hasOptions) "LowerPriority/1" else "ManifestTest/1",
                             httpReferrer = if (hasOptions) "https://channel.test/" else null,
                             httpOrigin = if (hasOptions) "https://channel.test" else null))
                     }
@@ -84,6 +103,7 @@ class HlsManifestTypeTest {
                     assertEquals("https://$site.test", captured!!.headers["origin"])
                     assertEquals("preserved", captured!!.headers["x-manifest-test"])
                     assertEquals("ManifestTest/1", captured!!.headers["user-agent"])
+                    if (inline) assertEquals(if (hasOptions) "a=b&c+token" else null, captured!!.headers["x-pipe-token"])
                 }
             } finally {
                 main {
@@ -96,7 +116,10 @@ class HlsManifestTypeTest {
         }
     }
 
-    private enum class HeaderMode { NONE, LINE, GLOBAL }
+    private enum class HeaderMode { NONE, LINE, GLOBAL, INLINE, REDIRECT }
+
+    private val kodiSuffix = "|User-Agent=ManifestTest%2F1&Referer=https%3A%2F%2Fchannel.test%2F" +
+        "&Origin=https%3A%2F%2Fchannel.test&X-Pipe-Token=a%3Db%26c%2Btoken&Cookie=custom%3Done"
 
     @Test fun explicitHlsOpensExtensionlessPlaylistOnce() = checkPreparation(" HLS ", redirect = false)
 
@@ -157,7 +180,8 @@ class HlsManifestTypeTest {
         val prefs = SP.getInstance(instrumentation.context)
         var player: Media3VideoPlayer? = null
         fun main(block: () -> Unit) = instrumentation.runOnMainSync(block)
-        FixtureServer(segment, redirect, entryPath, sourceKind, contentType, leadingWhitespace, gzip, master, refresh, crossOrigin).use { server ->
+        FixtureServer(segment, redirect, entryPath, sourceKind, contentType, leadingWhitespace, gzip, master, refresh, crossOrigin,
+            redirectOptions = headerMode == HeaderMode.REDIRECT).use { server ->
             try {
                 main {
                     prefs.edit().clear().commit()
@@ -186,7 +210,8 @@ class HlsManifestTypeTest {
                             }
                         }
                     })
-                    engine.prepare(ChannelLine(server.url(), httpUserAgent = "ManifestTest/1", manifestType = hint,
+                    engine.prepare(ChannelLine(server.url() + if (headerMode == HeaderMode.INLINE) kodiSuffix else "",
+                        httpUserAgent = if (headerMode == HeaderMode.INLINE) "LowerPriority/1" else "ManifestTest/1", manifestType = hint,
                         httpReferrer = if (headerMode == HeaderMode.LINE) "https://channel.test/" else null,
                         httpOrigin = if (headerMode == HeaderMode.LINE) "https://channel.test" else null))
                 }
@@ -220,6 +245,7 @@ class HlsManifestTypeTest {
                     else assertEquals(1, loads)
                 }
                 if (master) assertEquals(1, requests.count { it.path == "/nested/variant" })
+                if (headerMode == HeaderMode.REDIRECT) assertEquals(1, requests.count { it.path == "/mid" })
                 val hlsRequests = if (sourceKind == C.CONTENT_TYPE_HLS) 1 else 0
                 val mediaPrefix = if (redirect) "/nested/" else "/"
                 assertEquals(hlsRequests, requests.count { it.path == "${mediaPrefix}key" })
@@ -228,12 +254,25 @@ class HlsManifestTypeTest {
                     assertEquals("GET", it.method)
                     if (crossOrigin && it.path != entryPath) assertNull("URL credentials leaked to another host", it.headers["authorization"])
                     else assertEquals(Credentials.basic("user", "pass"), it.headers["authorization"])
-                    assertEquals("ManifestTest/1", it.headers["user-agent"])
+                    val isEntry = it.path == entryPath
+                    val redirectFirst = it.path == "/mid"
+                    val expectedAgent = if (headerMode != HeaderMode.REDIRECT || isEntry) "ManifestTest/1"
+                        else if (redirectFirst) "RedirectFirst/1" else "RedirectFinal/1"
+                    assertEquals(expectedAgent, it.headers["user-agent"])
                     assertEquals("preserved", it.headers["x-manifest-test"])
                     if (headerMode != HeaderMode.NONE) {
-                        val site = if (headerMode == HeaderMode.LINE) "channel" else "global"
-                        assertEquals("https://$site.test/", it.headers["referer"])
+                        val fromRedirect = headerMode == HeaderMode.REDIRECT && !isEntry
+                        val site = if (fromRedirect || headerMode in listOf(HeaderMode.LINE, HeaderMode.INLINE)) "channel" else "global"
+                        val expectedReferer = if (fromRedirect && !redirectFirst) "https://redirect.test/final" else "https://$site.test/"
+                        assertEquals(expectedReferer, it.headers["referer"])
                         assertEquals("https://$site.test", it.headers["origin"])
+                    }
+                    if (headerMode == HeaderMode.INLINE || (headerMode == HeaderMode.REDIRECT && !isEntry)) {
+                        assertEquals("a=b&c+token", it.headers["x-pipe-token"])
+                        assertTrue(it.headers["cookie"].orEmpty().contains("custom=one"))
+                    }
+                    if (headerMode == HeaderMode.REDIRECT && !isEntry && !redirectFirst) {
+                        assertEquals("ok", it.headers["x-from-redirect"])
                     }
                     if (crossOrigin && it.path == "/nested/playlist")
                         assertFalse("Cookie leaked from the original host", it.headers["cookie"].orEmpty().contains("hls_session=ok"))
@@ -243,7 +282,8 @@ class HlsManifestTypeTest {
                 if (followingPlainChannel) {
                     main { player!!.stop() }
                     synchronized(server.requests) { server.requests.clear() }
-                    main { player!!.prepare(ChannelLine(server.url(), manifestType = "hls")) }
+                    val nextUrl = if (headerMode == HeaderMode.REDIRECT) server.url().substringBefore(entryPath) + "/plain" else server.url()
+                    main { player!!.prepare(ChannelLine(nextUrl, manifestType = "hls")) }
                     val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
                     while (System.nanoTime() < deadline && synchronized(server.requests) {
                         server.requests.none { it.path.endsWith("segment.ts") }
@@ -253,6 +293,12 @@ class HlsManifestTypeTest {
                     nextRequests.forEach {
                         assertEquals("https://global.test/", it.headers["referer"])
                         assertEquals("https://global.test", it.headers["origin"])
+                        if (headerMode in listOf(HeaderMode.INLINE, HeaderMode.REDIRECT)) {
+                            assertNull(it.headers["x-pipe-token"])
+                            assertNull(it.headers["x-from-redirect"])
+                            assertFalse(it.headers["cookie"].orEmpty().contains("custom=one"))
+                            assertEquals(Configs.videoPlayerUserAgent, it.headers["user-agent"])
+                        }
                     }
                 }
             } finally {
@@ -271,7 +317,7 @@ class HlsManifestTypeTest {
     private class FixtureServer(private val segment: ByteArray, private val redirect: Boolean,
         private val entryPath: String, private val sourceKind: Int, private val contentType: String?,
         leadingWhitespace: Boolean, private val gzip: Boolean, private val master: Boolean,
-        refresh: Boolean, private val crossOrigin: Boolean) : Closeable {
+        refresh: Boolean, private val crossOrigin: Boolean, private val redirectOptions: Boolean = false) : Closeable {
         private val server = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
         val requests = Collections.synchronizedList(mutableListOf<Request>())
         val failure = AtomicReference<Throwable>()
@@ -315,7 +361,7 @@ class HlsManifestTypeTest {
                     }
                     val request = Request(first[0], first[1].substringBefore('?'), headers)
                     requests.add(request)
-                    val isRedirect = redirect && request.path == entryPath
+                    val isRedirect = redirect && (request.path == entryPath || redirectOptions && request.path == "/mid")
                     val file = request.path.substringAfterLast('/')
                     val raw = when (file) {
                         "key" -> key
@@ -333,8 +379,15 @@ class HlsManifestTypeTest {
                     val body = if (compress) java.io.ByteArrayOutputStream().also { output ->
                         java.util.zip.GZIPOutputStream(output).use { it.write(raw) }
                     }.toByteArray() else raw
-                    val location = if (crossOrigin) "http://localhost:${server.localPort}/nested/playlist?session=first"
-                        else "/nested/playlist?session=first"
+                    val location = when {
+                        redirectOptions && request.path == entryPath -> "/mid?token=a%2Bb==" +
+                            "|User-Agent=RedirectFirst%2F1&Referer=https%3A%2F%2Fchannel.test%2F&Origin=https%3A%2F%2Fchannel.test" +
+                            "&X-Pipe-Token=a%3Db%26c%2Btoken&Cookie=custom%3Done"
+                        redirectOptions -> "/nested/playlist?session=first|user-agent=RedirectFinal%2F1" +
+                            "&Referer=https%3A%2F%2Fredirect.test%2Ffinal&X-From-Redirect=ok"
+                        crossOrigin -> "http://localhost:${server.localPort}/nested/playlist?session=first"
+                        else -> "/nested/playlist?session=first"
+                    }
                     val extra = (if (isRedirect) "Location: $location\r\n" else "") +
                         (if (contentType != null && file !in listOf("key", "segment.ts")) "Content-Type: $contentType\r\n" else "") +
                         (if (compress) "Content-Encoding: gzip\r\n" else "")

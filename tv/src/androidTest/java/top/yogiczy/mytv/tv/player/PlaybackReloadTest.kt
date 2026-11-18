@@ -65,6 +65,22 @@ class PlaybackReloadTest {
         assertEquals(prepares, engine.prepares)
     }
 
+    @Test fun kodiHeadersSurviveLivePrepareReplayReloadAndReturnToLive() = isolated { state, _, engine, _ ->
+        val protectedChannel = channel.copy(lineList = ChannelLineList(listOf(line.copy(url = line.url +
+            "|User-Agent=Pipe%2F1&Referer=https%3A%2F%2Fsite.test%2F&X-Token=a%2Bb%3D%3D"))))
+        state.changeCurrentChannel(protectedChannel, 0)
+        val headers = engine.line.httpRequestHeaders()
+        assertEquals("a+b==", headers["X-Token"])
+        assertEquals("Pipe/1", engine.line.httpUserAgent)
+        assertFalse(engine.line.url.contains('|'))
+        state.changeCurrentChannel(protectedChannel, 0, programme)
+        assertEquals(headers, engine.line.httpRequestHeaders())
+        assertTrue(engine.line.url.contains("playseek="))
+        state.changeCurrentChannel(protectedChannel, 0)
+        assertEquals(headers, engine.line.httpRequestHeaders())
+        assertEquals(line.url, engine.line.url)
+    }
+
     @Test fun initialReplayRequestsUntilNowWhileKeepingTheSelectedProgrammeEnd() = isolated { state, _, engine, _ ->
         val before = System.currentTimeMillis()
         state.changeCurrentChannel(channel, 0, programme)

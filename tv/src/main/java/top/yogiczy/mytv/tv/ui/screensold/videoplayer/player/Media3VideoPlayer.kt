@@ -21,6 +21,8 @@ import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import top.yogiczy.mytv.core.data.network.HttpRedirectHeaders
+import top.yogiczy.mytv.core.data.network.HttpRedirectHeadersInterceptor
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DecoderReuseEvaluation
@@ -87,6 +89,7 @@ class Media3VideoPlayer(
 
     private var currentChannelLine = ChannelLine()
     private var playbackCookies = PlaybackCookieJar()
+    private var redirectHeaders = HttpRedirectHeaders()
     private var initialHlsResponse = HlsInitialResponse()
     private val contentTypeAttempts = mutableMapOf<Int, Boolean>()
     private var updatePositionJob: Job? = null
@@ -202,6 +205,7 @@ class Media3VideoPlayer(
                 .connectTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
                 .readTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
             if (usePlaybackCookies) {
+                clientBuilder.addNetworkInterceptor(HttpRedirectHeadersInterceptor(redirectHeaders))
                 clientBuilder.addNetworkInterceptor(PlaybackCookieInterceptor(playbackCookies))
             }
             if (authentication != null) clientBuilder.sslSocketFactory(
@@ -771,6 +775,7 @@ class Media3VideoPlayer(
         aribCaptions?.close()
         aribCaptions = null
         playbackCookies.clear()
+        redirectHeaders.clear()
         triggerCues(ImmutableList.of())
         onCuesListeners.clear()
         videoPlayer.removeListener(playerListener)
@@ -798,10 +803,11 @@ class Media3VideoPlayer(
 
         contentTypeAttempts.clear()
         resetInitialHlsResponse()
-        currentChannelLine = line
+        currentChannelLine = line.resolveHttpOptions()
         // A new channel/programme must not inherit another playback's authenticated session.
         // Internal reconnects and decoder fallback reuse the current jar.
         playbackCookies = PlaybackCookieJar()
+        redirectHeaders = HttpRedirectHeaders()
         this.playbackRange = playbackRange
         playbackPositionAt = playbackRange?.sourceStartAt
         pendingPlaybackPositionAt = playbackRange?.sourceStartAt

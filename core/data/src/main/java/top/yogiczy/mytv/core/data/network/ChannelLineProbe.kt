@@ -19,7 +19,8 @@ class ChannelLineProbe internal constructor(private val client: OkHttpClient) {
                 headers.forEach { (name, value) -> header(name, value) }
                 userAgent?.let { header("User-Agent", it) }
             }.build()
-            val call = client.newCall(request)
+            // Each measurement owns its redirect headers; the singleton probe must not retain them.
+            val call = client.newBuilder().addNetworkInterceptor(HttpRedirectHeadersInterceptor()).build().newCall(request)
             val startedAt = System.nanoTime()
 
             // Keep cancellation attached through body reading, not just until headers arrive.

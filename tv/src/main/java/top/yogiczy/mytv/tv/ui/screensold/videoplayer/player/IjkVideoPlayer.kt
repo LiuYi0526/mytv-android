@@ -79,7 +79,8 @@ class IjkVideoPlayer(
         prepareLine(line)
     }
 
-    private fun prepareLine(line: ChannelLine, position: Long? = null) {
+    private fun prepareLine(rawLine: ChannelLine, position: Long? = null) {
+        val line = rawLine.resolveHttpOptions()
         endedPositionAt = null
         currentLine = line
         resumePosition = position

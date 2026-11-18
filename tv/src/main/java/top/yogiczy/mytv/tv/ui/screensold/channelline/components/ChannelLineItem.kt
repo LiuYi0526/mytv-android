@@ -98,13 +98,14 @@ private fun rememberLineDelay(line: ChannelLine): Long {
     var elapsedTime by remember(line) { mutableLongStateOf(0) }
 
     LaunchedEffect(line) {
-        val url = line.playableUrl
+        val requestLine = line.resolveHttpOptions()
+        val url = requestLine.playableUrl
         if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
             elapsedTime = -2L
             return@LaunchedEffect
         }
         elapsedTime = try {
-            ChannelLineProbe.Default.measure(line.playableUrl, line.httpUserAgent, line.httpRequestHeaders())
+            ChannelLineProbe.Default.measure(url, requestLine.httpUserAgent, requestLine.httpRequestHeaders())
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

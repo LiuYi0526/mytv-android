@@ -23,6 +23,40 @@ import java.util.concurrent.atomic.AtomicLong
 
 class ChannelLineProbeTest {
     @Test(timeout = 5000)
+    fun redirectSuffixWorksForMeasurementsAndIsNotKeptByTheSingletonProbe() = runBlocking<Unit> {
+        server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "/live|User-Agent=Redirect%2F1&Referer=https%3A%2F%2Fsite.test%2F&X-Token=redirect"))
+        server.enqueue(MockResponse().setBody("live"))
+        server.enqueue(MockResponse().setBody("plain"))
+        probe.measure(server.url("/entry").toString(), "Original")
+        assertEquals("Original", server.takeRequest().getHeader("User-Agent"))
+        val redirected = server.takeRequest()
+        assertEquals("/live", redirected.path)
+        assertEquals("Redirect/1", redirected.getHeader("User-Agent"))
+        assertEquals("https://site.test/", redirected.getHeader("Referer"))
+        assertEquals("redirect", redirected.getHeader("X-Token"))
+        probe.measure(server.url("/plain").toString(), "Next")
+        val plain = server.takeRequest()
+        assertEquals("Next", plain.getHeader("User-Agent"))
+        assertNull(plain.getHeader("X-Token"))
+    }
+
+    @Test(timeout = 5000)
+    fun kodiUrlHeadersAreResolvedBeforeProbeAndDoNotReachTheNextLine() = runBlocking<Unit> {
+        server.enqueue(MockResponse().setBody("one"))
+        server.enqueue(MockResponse().setBody("two"))
+        val line = top.yogiczy.mytv.core.data.entities.channel.ChannelLine(server.url("/entry?token=a%2Bb==").toString() +
+            "|User-Agent=Probe%2F1&Referer=https%3A%2F%2Fsite.test%2F&X-Token=a%3Db%26c").resolveHttpOptions()
+        probe.measure(line.playableUrl, line.httpUserAgent, line.httpRequestHeaders())
+        val request = server.takeRequest()
+        assertEquals("/entry?token=a%2Bb==", request.path)
+        assertEquals("Probe/1", request.getHeader("User-Agent"))
+        assertEquals("https://site.test/", request.getHeader("Referer"))
+        assertEquals("a=b&c", request.getHeader("X-Token"))
+        probe.measure(server.url("/plain").toString())
+        assertNull(server.takeRequest().getHeader("X-Token"))
+    }
+
+    @Test(timeout = 5000)
     fun perLineHeadersReachRedirectAndDoNotLeakToFollowingProbe() = runBlocking<Unit> {
         server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", server.url("/live")))
         server.enqueue(MockResponse().setBody("#EXTM3U"))

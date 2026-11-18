@@ -45,7 +45,7 @@ object ChannelPlayback {
         val target = targetAt.coerceIn(programme.startAt, if (continuous) now else minOf(programme.endAt, now))
         if ((!continuous && target >= programme.endAt) || target >= now) return null
         val url = playbackUrl(originalLine, target, now, now, timeZone) ?: return null
-        return ReloadRequest(originalLine.copy(url = url), PlaybackRange(programme.startAt, programme.endAt, target, continuous))
+        return ReloadRequest(originalLine.resolveHttpOptions().copy(url = url), PlaybackRange(programme.startAt, programme.endAt, target, continuous))
     }
 
     /** Returns null on malformed templates, without changing the live line or its DRM/UA. */
