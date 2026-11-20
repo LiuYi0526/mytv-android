@@ -252,6 +252,7 @@ class Media3VideoPlayer(
 
             C.CONTENT_TYPE_DASH -> {
                 val factory = DashMediaSource.Factory(dataSourceFactory)
+                    .setSubtitleParserFactory(DashSubtitleParserFactory())
                 var dashMediaItem = mediaItem
                 if (ClearKeyLicense.isSupported(currentChannelLine.licenseType)) {
                     lateinit var manifestKeyIds: () -> List<UUID>
