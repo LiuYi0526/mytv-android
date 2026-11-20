@@ -19,26 +19,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
-import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
 import top.yogiczy.mytv.core.data.entities.channel.Channel
-import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
+import top.yogiczy.mytv.core.data.entities.epg.EpgDisplaySchedule
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme.Companion.progress
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme.Companion.remainingMinutes
@@ -60,6 +56,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LiveChannelsChannelInfo(
     modifier: Modifier = Modifier,
@@ -69,13 +66,39 @@ fun LiveChannelsChannelInfo(
     isInTimeShiftProvider: () -> Boolean = { false },
     currentPlaybackEpgProgrammeProvider: () -> EpgProgramme? = { null },
     playerMetadataProvider: () -> VideoPlayer.Metadata = { VideoPlayer.Metadata() },
-    dense: Boolean = false,
     showChannelLogo: Boolean = settingsVM.uiShowChannelLogo,
     showProgrammeDescription: Boolean = false,
+    showNetSpeed: Boolean = true,
+    channelNameFirst: Boolean = false,
 ) {
+    val channel = channelProvider()
     val currentPlaybackEpgProgramme = currentPlaybackEpgProgrammeProvider()
     val recentProgramme = recentEpgProgrammeProvider()
-    val hasProgramme = currentPlaybackEpgProgramme != null || recentProgramme?.now != null || recentProgramme?.next != null
+    val displayedProgramme = currentPlaybackEpgProgramme ?: recentProgramme?.now
+    val programmeTitle = displayedProgramme?.title?.takeIf { it.isNotBlank() }
+        ?: EpgDisplaySchedule.UNKNOWN_TITLE
+    val channelIsHeadline = channelNameFirst || displayedProgramme == null
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val secondaryColor = LocalContentColor.current.copy(alpha = 0.75f)
+    val channelIdentity: @Composable (TextStyle, Modifier) -> Unit = { style, titleModifier ->
+        Text(
+            channel.name,
+            modifier = titleModifier,
+            style = style,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        LiveChannelsChannelInfoTags(
+            channelProvider = { channel },
+            channelLineIdxProvider = channelLineIdxProvider,
+            isInTimeShiftProvider = isInTimeShiftProvider,
+            currentPlaybackEpgProgrammeProvider = { currentPlaybackEpgProgramme },
+            playerMetadataProvider = playerMetadataProvider,
+        )
+        if (showNetSpeed) {
+            LiveChannelsChannelInfoNetSpeed()
+        }
+    }
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -85,7 +108,7 @@ fun LiveChannelsChannelInfo(
         if (showChannelLogo) {
             ChannelsChannelItemLogo(
                 modifier = Modifier
-                    .height(if (hasProgramme) 94.dp else 52.dp)
+                    .height(76.dp)
                     .aspectRatio(16 / 9f),
                 channelProvider = channelProvider,
             ) {
@@ -97,31 +120,87 @@ fun LiveChannelsChannelInfo(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            LiveChannelsChannelInfoTitle(
-                channelProvider = channelProvider,
-                channelLineIdxProvider = channelLineIdxProvider,
-                isInTimeShiftProvider = isInTimeShiftProvider,
-                currentPlaybackEpgProgrammeProvider = currentPlaybackEpgProgrammeProvider,
-                playerMetadataProvider = playerMetadataProvider,
-                dense = dense,
-            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                val headlineStyle = MaterialTheme.typography.headlineSmall
+                if (channelIsHeadline) {
+                    channelIdentity(headlineStyle, Modifier)
+                } else {
+                    Text(
+                        programmeTitle,
+                        style = headlineStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
 
-            val displayedProgramme = currentPlaybackEpgProgramme ?: recentProgramme?.now
-            LiveChannelsChannelInfoEpgProgramme(
-                programmeProvider = { displayedProgramme },
-                showProgress = currentPlaybackEpgProgramme == null,
-                isCurrent = true,
-            )
+            if (channelNameFirst || displayedProgramme != null) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                    displayedProgramme?.let { programme ->
+                        Text(
+                            programme.formatTimeRange(timeFormat),
+                            modifier = Modifier.alignByBaseline(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = secondaryColor,
+                            maxLines = 1,
+                        )
+                        if (currentPlaybackEpgProgramme == null) {
+                            ProgrammeProgress(programme, secondaryColor)
+                        }
+                    }
+                    val supportingStyle = MaterialTheme.typography.titleMedium
+                    val titleModifier = Modifier.alignByBaseline().sizeIn(maxWidth = 280.dp)
+                    if (channelNameFirst) {
+                        Text(
+                            programmeTitle,
+                            modifier = titleModifier,
+                            style = supportingStyle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    } else {
+                        channelIdentity(supportingStyle, titleModifier)
+                    }
+                }
+            }
             if (showProgrammeDescription) {
                 LiveChannelsChannelInfoDescription(displayedProgramme)
             }
-            LiveChannelsChannelInfoEpgProgramme(
-                programmeProvider = { recentProgramme?.next },
-                showProgress = false,
-            )
+            recentProgramme?.next?.let { next ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        next.formatTimeRange(timeFormat),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = secondaryColor,
+                        maxLines = 1,
+                    )
+                    Text(
+                        next.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = secondaryColor,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }
+
+private fun EpgProgramme.formatTimeRange(timeFormat: SimpleDateFormat): String =
+    "${timeFormat.format(startAt)} — ${timeFormat.format(endAt)}"
 
 @Composable
 private fun LiveChannelsChannelInfoDescription(programme: EpgProgramme?) {
@@ -158,7 +237,7 @@ private fun LiveChannelsChannelInfoNo(
 }
 
 @Composable
-internal fun LiveChannelsChannelInfoTags(
+private fun LiveChannelsChannelInfoTags(
     modifier: Modifier = Modifier,
     channelProvider: () -> Channel = { Channel() },
     channelLineIdxProvider: () -> Int = { 0 },
@@ -168,7 +247,7 @@ internal fun LiveChannelsChannelInfoTags(
 ) {
     val channel = channelProvider()
     val channelLineIdx = channelLineIdxProvider()
-    val line = channel.lineList[channelLineIdx]
+    val line = channel.lineList.getOrNull(channelLineIdx)
     val isInTimeShift = isInTimeShiftProvider()
     val currentPlaybackEpgProgramme = currentPlaybackEpgProgrammeProvider()
     val playerMetadata = playerMetadataProvider()
@@ -194,10 +273,10 @@ internal fun LiveChannelsChannelInfoTags(
             Tag("${channelLineIdx + 1}/${channel.lineList.size}", colors = tagColors)
         }
 
-        if (line.url.startsWith("webview://")) {
+        if (line?.url?.startsWith("webview://") == true) {
             Tag(ChannelUtil.getHybridWebViewUrlProvider(line.url), colors = tagColors)
         } else {
-            if (line.url.isIPv6()) Tag("IPv6", colors = tagColors)
+            if (line?.url?.isIPv6() == true) Tag("IPv6", colors = tagColors)
         }
 
         playerMetadata.video?.let { nnVideo ->
@@ -235,157 +314,30 @@ internal fun LiveChannelsChannelInfoTags(
 }
 
 @Composable
-private fun LiveChannelsChannelInfoExtra(
-    modifier: Modifier = Modifier,
-    channelProvider: () -> Channel = { Channel() },
-    channelLineIdxProvider: () -> Int = { 0 },
-    isInTimeShiftProvider: () -> Boolean = { false },
-    currentPlaybackEpgProgrammeProvider: () -> EpgProgramme? = { null },
-    playerMetadataProvider: () -> VideoPlayer.Metadata = { VideoPlayer.Metadata() },
-) {
+private fun ProgrammeProgress(programme: EpgProgramme, color: Color) {
     Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        LiveChannelsChannelInfoTags(
-            channelProvider = channelProvider,
-            channelLineIdxProvider = channelLineIdxProvider,
-            isInTimeShiftProvider = isInTimeShiftProvider,
-            currentPlaybackEpgProgrammeProvider = currentPlaybackEpgProgrammeProvider,
-            playerMetadataProvider = playerMetadataProvider,
-        )
-
-        LiveChannelsChannelInfoNetSpeed()
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun LiveChannelsChannelInfoTitle(
-    modifier: Modifier = Modifier,
-    channelProvider: () -> Channel = { Channel() },
-    channelLineIdxProvider: () -> Int = { 0 },
-    isInTimeShiftProvider: () -> Boolean = { false },
-    currentPlaybackEpgProgrammeProvider: () -> EpgProgramme? = { null },
-    playerMetadataProvider: () -> VideoPlayer.Metadata = { VideoPlayer.Metadata() },
-    dense: Boolean = false,
-) {
-    val channel = channelProvider()
-
-    if (dense) {
-        FlowRow(
-            modifier = modifier,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            val density = LocalDensity.current
-            var heightPx by remember { mutableIntStateOf(0) }
-            val heightDp = remember(heightPx) { with(density) { heightPx.toDp() } }
-
-            Text(
-                channel.name,
-                style = MaterialTheme.typography.headlineMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.onSizeChanged { heightPx = it.height },
-            )
-
-            LiveChannelsChannelInfoExtra(
-                modifier = Modifier
-                    .height(heightDp)
-                    .padding(bottom = 5.dp),
-                channelProvider = channelProvider,
-                channelLineIdxProvider = channelLineIdxProvider,
-                isInTimeShiftProvider = isInTimeShiftProvider,
-                currentPlaybackEpgProgrammeProvider = currentPlaybackEpgProgrammeProvider,
-                playerMetadataProvider = playerMetadataProvider,
-            )
-        }
-    } else {
-        Row(
-            modifier = modifier,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Text(
-                channel.name,
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.sizeIn(maxWidth = 5.gridColumns()),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            LiveChannelsChannelInfoExtra(
-                modifier = Modifier.padding(bottom = 5.dp),
-                channelProvider = channelProvider,
-                channelLineIdxProvider = channelLineIdxProvider,
-                isInTimeShiftProvider = isInTimeShiftProvider,
-                currentPlaybackEpgProgrammeProvider = currentPlaybackEpgProgrammeProvider,
-                playerMetadataProvider = playerMetadataProvider,
-            )
-        }
-    }
-}
-
-@Composable
-private fun LiveChannelsChannelInfoEpgProgramme(
-    modifier: Modifier = Modifier,
-    programmeProvider: () -> EpgProgramme? = { null },
-    showProgress: Boolean = false,
-    isCurrent: Boolean = false,
-) {
-    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-    val programme = programmeProvider() ?: return
-    val secondaryColor = LocalContentColor.current.copy(alpha = if (isCurrent) 0.75f else 0.6f)
-
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            "${timeFormat.format(programme.startAt)} — ${timeFormat.format(programme.endAt)}",
-            style = MaterialTheme.typography.labelLarge,
-            color = secondaryColor,
-            maxLines = 1,
+        ProgressBar(
+            process = programme.progress().takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f,
+            modifier = Modifier.size(44.dp, 4.dp),
+            colors = ProgressBarColors(
+                barColor = MaterialTheme.colorScheme.onSurface.copy(0.2f),
+                progressColor = MaterialTheme.colorScheme.onSurface,
+            ),
         )
-
-        if (showProgress) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ProgressBar(
-                    process = programme.progress().takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f,
-                    modifier = Modifier.size(60.dp, 5.dp),
-                    colors = ProgressBarColors(
-                        barColor = MaterialTheme.colorScheme.onSurface.copy(0.2f),
-                        progressColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                )
-
-                Text(
-                    "剩余 ${programme.remainingMinutes().coerceAtLeast(0)} 分钟",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = secondaryColor,
-                    maxLines = 1,
-                )
-            }
-        }
-
         Text(
-            programme.title,
-            style = if (isCurrent) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
-            color = LocalContentColor.current.copy(alpha = if (isCurrent) 0.95f else 0.6f),
-            modifier = Modifier.weight(1f),
+            "剩余 ${programme.remainingMinutes().coerceAtLeast(0)} 分钟",
+            style = MaterialTheme.typography.bodyMedium,
+            color = color,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
 @Composable
-fun LiveChannelsChannelInfoNetSpeed(
+private fun LiveChannelsChannelInfoNetSpeed(
     modifier: Modifier = Modifier,
     netSpeed: Long = rememberNetSpeed(),
 ) {
@@ -489,7 +441,6 @@ private fun LiveChannelsChannelInfoNoLogoPreview() {
                     ),
                 )
             },
-            dense = true,
         )
     }
 }

@@ -207,7 +207,7 @@ private fun QuickOpScreenBottom(
                     )
                 )
                 .padding(bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             LiveChannelsChannelInfo(
                 modifier = Modifier.padding(start = childPadding.start, end = childPadding.end),
@@ -219,6 +219,8 @@ private fun QuickOpScreenBottom(
                 isInTimeShiftProvider = isInTimeShiftProvider,
                 currentPlaybackEpgProgrammeProvider = currentPlaybackEpgProgrammeProvider,
                 playerMetadataProvider = videoPlayerMetadataProvider,
+                showProgrammeDescription = true,
+                channelNameFirst = true,
             )
 
             QuickOpBtnList(

@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,7 +29,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.LocalContentColor
@@ -42,8 +39,7 @@ import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeRecent
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
-import top.yogiczy.mytv.tv.ui.screen.channels.components.ChannelsChannelItemLogo
-import top.yogiczy.mytv.tv.ui.screen.live.channels.components.LiveChannelsChannelInfoTags
+import top.yogiczy.mytv.tv.ui.screen.live.channels.components.LiveChannelsChannelInfo
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.VideoPlayer
 import top.yogiczy.mytv.tv.ui.screensold.videoplayercontroller.components.VideoPlayerControllerBtn
 import top.yogiczy.mytv.tv.ui.screensold.videoplayercontroller.components.VideoPlayerControllerPositionCtrl
@@ -52,10 +48,7 @@ import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.backHandler
 import top.yogiczy.mytv.tv.ui.utils.clickableNoIndication
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
-import java.text.SimpleDateFormat
-import java.util.Locale
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun VideoPlayerControllerScreen(
     modifier: Modifier = Modifier,
@@ -106,9 +99,15 @@ fun VideoPlayerControllerScreen(
                     .padding(start = padding.start, end = padding.end, top = 32.dp, bottom = padding.bottom),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                PlaybackControllerInfo(
-                    channelProvider, channelLineIdxProvider, recentEpgProgrammeProvider,
-                    currentPlaybackEpgProgrammeProvider, playerMetadataProvider, showChannelLogo,
+                LiveChannelsChannelInfo(
+                    channelProvider = channelProvider,
+                    channelLineIdxProvider = channelLineIdxProvider,
+                    recentEpgProgrammeProvider = recentEpgProgrammeProvider,
+                    currentPlaybackEpgProgrammeProvider = currentPlaybackEpgProgrammeProvider,
+                    playerMetadataProvider = playerMetadataProvider,
+                    showChannelLogo = showChannelLogo,
+                    showProgrammeDescription = true,
+                    showNetSpeed = false,
                 )
                 VideoPlayerControllerPositionCtrl(
                     modifier = Modifier.fillMaxWidth().focusRequester(progressFocus),
@@ -217,61 +216,6 @@ private fun PlaybackControllerFooter(
                     style = MaterialTheme.typography.bodyLarge, maxLines = 1)
                 Box(Modifier.align(Alignment.Center)) { transport() }
                 Box(Modifier.align(Alignment.CenterEnd)) { tools() }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun PlaybackControllerInfo(
-    channelProvider: () -> Channel,
-    channelLineIdxProvider: () -> Int,
-    recentProvider: () -> EpgProgrammeRecent?,
-    replayProvider: () -> EpgProgramme?,
-    metadataProvider: () -> VideoPlayer.Metadata,
-    showLogo: Boolean,
-) {
-    val channel = channelProvider()
-    val recent = recentProvider()
-    val programme = replayProvider() ?: recent?.now
-    val clock = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-    Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (showLogo) ChannelsChannelItemLogo(
-            modifier = Modifier.size(112.dp, 72.dp),
-            channelProvider = channelProvider,
-        )
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                programme?.title ?: channel.name,
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                itemVerticalAlignment = Alignment.CenterVertically,
-            ) {
-                programme?.let {
-                    Text(clock.format(it.startAt) + " — " + clock.format(it.endAt),
-                        modifier = Modifier.alignByBaseline(),
-                        style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(0.75f))
-                    Text(channel.name, style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.alignByBaseline().widthIn(max = 280.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                LiveChannelsChannelInfoTags(
-                    channelProvider = channelProvider, channelLineIdxProvider = channelLineIdxProvider,
-                    currentPlaybackEpgProgrammeProvider = replayProvider, playerMetadataProvider = metadataProvider,
-                )
-            }
-            programme?.description?.trim()?.takeIf { it.isNotEmpty() && it != programme.title.trim() }?.let {
-                Text(it, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(0.7f),
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            recent?.next?.let {
-                Text(clock.format(it.startAt) + " — " + clock.format(it.endAt) + "   " + it.title,
-                    style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(0.65f),
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

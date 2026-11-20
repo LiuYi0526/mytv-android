@@ -63,6 +63,7 @@ fun ChannelTempScreen(
             currentPlaybackEpgProgrammeProvider = currentPlaybackEpgProgrammeProvider,
             playerMetadataProvider = playerMetadataProvider,
             showProgrammeDescription = true,
+            channelNameFirst = true,
         )
     }
 }
