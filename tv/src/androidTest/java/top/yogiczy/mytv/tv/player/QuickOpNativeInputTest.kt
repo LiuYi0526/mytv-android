@@ -250,7 +250,7 @@ class QuickOpNativeInputTest {
             await("Touch-opened line picker changed the viewport") {
                 viewport() == lineViewport && kotlin.math.abs(node("线路 B")!!.boundsInRoot.left - lineLeft) < 1f
             }
-            key(KeyEvent.KEYCODE_DPAD_RIGHT, 6)
+            key(KeyEvent.KEYCODE_DPAD_RIGHT, 4)
             await("Audio button not reachable") { node("音轨，${audio.shortLabel}")?.isFocused == true }
             settled()
             val audioViewport = viewport()
@@ -263,6 +263,10 @@ class QuickOpNativeInputTest {
             await("Returning from audio reset the scrolled viewport") {
                 viewport() == audioViewport && kotlin.math.abs(node("音轨，${audio.shortLabel}")!!.boundsInRoot.left - audioLeft) < 1f
             }
+            key(KeyEvent.KEYCODE_DPAD_RIGHT)
+            await("Display mode must follow the track buttons") { node("原始")?.isFocused == true }
+            key(KeyEvent.KEYCODE_DPAD_RIGHT)
+            await("Sleep timer must follow display mode") { node("定时关闭")?.isFocused == true }
             key(KeyEvent.KEYCODE_BACK)
             await("Second Back did not close toolbar") { !toolbar.value && node("节目单") == null }
             main { navigation.leaveToolbar(); child.value = "line" }
@@ -334,13 +338,13 @@ class QuickOpNativeInputTest {
                 ready.value = true
             }
             await("Loaded tracks moved existing focus") { node("主界面")?.isFocused == true && node("字幕，关闭")?.isEnabled == true }
-            key(KeyEvent.KEYCODE_DPAD_LEFT)
+            key(KeyEvent.KEYCODE_DPAD_LEFT, 3)
             await("Subtitle cannot receive focus after discovery") { node("字幕，关闭")?.isFocused == true }
             key(KeyEvent.KEYCODE_DPAD_CENTER)
             assertEquals(listOf("dashboard", "subtitle"), actions.toList())
             main { metadata.value = VideoPlayer.Metadata(); ready.value = true }
             await("Removing a focused track lost toolbar focus") { node("节目单")?.isFocused == true }
-            key(KeyEvent.KEYCODE_DPAD_RIGHT, 6)
+            key(KeyEvent.KEYCODE_DPAD_RIGHT, 4)
             await("Decode button focus missing") { node("硬解优先")?.isFocused == true }
             val missing = node("视频轨道，无视轨")!!
             assertFalse(missing.isEnabled)
@@ -356,7 +360,7 @@ class QuickOpNativeInputTest {
             SystemClock.sleep(200)
             assertEquals("Disabled touch invoked an action", listOf("dashboard", "subtitle"), actions.toList())
             key(KeyEvent.KEYCODE_DPAD_RIGHT)
-            await("Absent tracks were not skipped") { node("主界面")?.isFocused == true }
+            await("Absent tracks were not skipped") { node("原始")?.isFocused == true }
             assertNotNull(node("音轨，无音轨"))
             assertNotNull(node("字幕，无字幕"))
             assertNull(node("清除缓存"))

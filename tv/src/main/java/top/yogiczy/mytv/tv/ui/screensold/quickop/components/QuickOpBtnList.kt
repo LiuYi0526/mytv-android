@@ -86,7 +86,7 @@ fun QuickOpBtnList(
     val knowsAudio = hasAudio || playerMetadata.audio?.let { (it.channels ?: 0) > 0 || !it.mimeType.isNullOrBlank() } == true
     var focusedAction by remember { mutableStateOf("") }
     val firstFocus = remember { FocusRequester() }
-    val keys = remember { listOf("epg", "line", "controller", "timing", "display", "engine", "decode", "video", "audio", "subtitle", "dashboard", "settings") }
+    val keys = remember { listOf("epg", "line", "controller", "engine", "decode", "video", "audio", "subtitle", "display", "timing", "dashboard", "settings") }
     val initialFocusKey = remember {
         initialFocusKeyProvider().takeIf { it in keys && when (it) {
             "video" -> hasVideo
@@ -176,24 +176,6 @@ fun QuickOpBtnList(
             )
         }
 
-        item(key = "timing") {
-            QuickOpBtn(
-                title = if (timingCloseStatus.isActive) "定时关闭\n${timingCloseStatus.remainingMinutes} 分钟" else "定时关闭",
-                modifier = focusKey("timing"),
-                imageVector = Icons.Outlined.Alarm,
-                onSelect = onShowTimingClose,
-            )
-        }
-
-        item(key = "display") {
-            QuickOpBtn(
-                title = playerDisplayModeProvider().label,
-                modifier = focusKey("display"),
-                imageVector = Icons.Outlined.AspectRatio,
-                onSelect = onShowVideoPlayerDisplayMode,
-            )
-        }
-
         item(key = "engine") {
             val settingsViewModel = settingsVM
 
@@ -264,6 +246,24 @@ fun QuickOpBtnList(
                 description = "字幕，${if (hasSubtitle) playerMetadata.subtitle?.shortLabel ?: "关闭" else unavailable}",
                 imageVector = Icons.Outlined.Subtitles,
                 onSelect = onShowSubtitleTracks,
+            )
+        }
+
+        item(key = "display") {
+            QuickOpBtn(
+                title = playerDisplayModeProvider().label,
+                modifier = focusKey("display"),
+                imageVector = Icons.Outlined.AspectRatio,
+                onSelect = onShowVideoPlayerDisplayMode,
+            )
+        }
+
+        item(key = "timing") {
+            QuickOpBtn(
+                title = if (timingCloseStatus.isActive) "定时关闭\n${timingCloseStatus.remainingMinutes} 分钟" else "定时关闭",
+                modifier = focusKey("timing"),
+                imageVector = Icons.Outlined.Alarm,
+                onSelect = onShowTimingClose,
             )
         }
 

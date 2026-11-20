@@ -169,7 +169,7 @@ class QuickOpToolbarTest {
 
     @Test fun aFocusedTrackThatDisappearsReturnsFocusToTheFirstAction() {
         show()
-        press(Key.DirectionRight, 9)
+        press(Key.DirectionRight, 7)
         compose.onNodeWithContentDescription("字幕，关闭").assertIsFocused()
         compose.runOnIdle { metadata.value = VideoPlayer.Metadata(); tracksReady.value = false }
         compose.waitForIdle()
