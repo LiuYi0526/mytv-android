@@ -150,7 +150,7 @@ fun LiveChannelsChannelInfo(
                         }
                     }
                     val supportingStyle = MaterialTheme.typography.titleMedium
-                    val titleModifier = titleWidth.alignByBaseline().sizeIn(maxWidth = 280.dp)
+                    val titleModifier = titleWidth.alignByBaseline()
                     if (channelNameFirst) {
                         Text(
                             programmeTitle,
@@ -160,7 +160,7 @@ fun LiveChannelsChannelInfo(
                             overflow = TextOverflow.Ellipsis,
                         )
                     } else {
-                        channelIdentity(supportingStyle, titleModifier)
+                        channelIdentity(supportingStyle, titleModifier.sizeIn(maxWidth = 280.dp))
                     }
                 }
             }

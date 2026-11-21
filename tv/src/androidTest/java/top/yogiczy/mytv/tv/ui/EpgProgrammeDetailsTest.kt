@@ -29,6 +29,7 @@ import org.junit.Test
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeList
+import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeRecent
 import top.yogiczy.mytv.core.data.entities.epg.Epg
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
@@ -238,6 +239,34 @@ class EpgProgrammeDetailsTest {
         assertEquals(0, liveCount)
         assertEquals(0, replayCount)
         assertEquals(0, reserveCount)
+    }
+
+    @Test fun liveProgrammeTitleUsesTheSpaceAfterTheProgress() {
+        val title = "LIVE HBL 北市成功 VS 光復高中 11/21 男生預賽(普)"
+        val current = live.copy(title = title, endAt = now + 100 * 60_000)
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                MyTvTheme {
+                    LiveChannelsChannelInfo(
+                        modifier = Modifier.width(680.dp),
+                        channelProvider = { Channel(name = "愛爾達體育1台") },
+                        recentEpgProgrammeProvider = { EpgProgrammeRecent(current, next) },
+                        showChannelLogo = false,
+                        showNetSpeed = false,
+                        channelNameFirst = true,
+                    )
+                }
+            }
+        }
+
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText(title).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        assertEquals(1, layout.lineCount)
+        assertTrue("The wide info row should fit the whole programme title", !layout.hasVisualOverflow)
+        assertTrue("The title should be able to use more than 280 dp", layout.size.width > 280)
+        compose.onNodeWithText("剩余", substring = true).assertIsDisplayed()
+        compose.onNodeWithText(next.title).assertIsDisplayed()
     }
 
     @Test fun missingGuideOnlyShowsChannelInformation() {
