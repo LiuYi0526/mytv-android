@@ -230,6 +230,60 @@ class Media3VideoPlayer(
         )
     }
 
+    private data class ClearKeyPlayback(
+        val sessionManager: DefaultDrmSessionManager,
+        val keyIds: () -> List<UUID>,
+    )
+
+    private fun createClearKeyPlayback(): ClearKeyPlayback? {
+        val licenseKey = currentChannelLine.licenseKey
+        val keyIds: () -> List<UUID>
+        val callback = try {
+            val licenseUrl = ClearKeyLicense.remoteUrl(licenseKey)
+            if (licenseUrl == null) {
+                val response = ClearKeyLicense.response(licenseKey)
+                keyIds = { ClearKeyLicense.keyIds(response) }
+                LocalMediaDrmCallback(response)
+            } else {
+                val headers = currentChannelLine.httpRequestHeaders(Configs.videoPlayerHeaders.toHeaders()).toMutableMap()
+                if (headers.keys.none { it.equals("User-Agent", true) }) {
+                    headers["User-Agent"] = currentChannelLine.httpUserAgent ?: Configs.videoPlayerUserAgent
+                }
+                val client = OkHttpClient.Builder()
+                    .addInterceptor(HttpBasicAuthInterceptor())
+                    .connectTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
+                    .readTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
+                    .build()
+                val fetcher = ClearKeyLicenseFetcher(client, headers)
+                keyIds = {
+                    ClearKeyLicense.keyIds(fetcher.load(licenseUrl,
+                        """{"kids":[],"type":"temporary"}""".toByteArray(Charsets.UTF_8)))
+                }
+                // Keep provisioning independent of media cookies.
+                val provisionCallback = HttpMediaDrmCallback(licenseUrl, getDataSourceFactory(false))
+                object : MediaDrmCallback {
+                    override fun executeProvisionRequest(uuid: UUID, request: ExoMediaDrm.ProvisionRequest) =
+                        provisionCallback.executeProvisionRequest(uuid, request)
+
+                    override fun executeKeyRequest(uuid: UUID, request: ExoMediaDrm.KeyRequest) =
+                        MediaDrmCallback.Response(fetcher.load(licenseUrl, request.data))
+                }
+            }
+        } catch (ex: IllegalArgumentException) {
+            triggerError(PlaybackException.fromCause(
+                "Invalid ClearKey license configuration",
+                androidx.media3.common.PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR,
+                ex,
+            ))
+            return null
+        }
+        val manager = DefaultDrmSessionManager.Builder()
+            .setMultiSession(true)
+            .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
+            .build(callback)
+        return ClearKeyPlayback(manager, keyIds)
+    }
+
     private fun getMediaSource(contentType: Int): MediaSource? {
         val playableUrl = currentChannelLine.playableUrl
         val uri = Uri.parse(HttpBasicAuth.parse(playableUrl)?.url?.toString() ?: playableUrl)
@@ -242,12 +296,17 @@ class Media3VideoPlayer(
         val dataSourceFactory = getDataSourceFactory()
         return when (contentType) {
             C.CONTENT_TYPE_HLS -> {
-                HlsMediaSource.Factory(initialHlsResponse.replayingFactory(dataSourceFactory))
+                val factory = HlsMediaSource.Factory(initialHlsResponse.replayingFactory(dataSourceFactory))
                     .setPlaylistParserFactory(HlsPlaylistParserFactoryCompat())
                     .setExtractorFactory(Av3aHlsExtractorFactory())
                     // Some playlists omit AV3A from CODECS; discover all tracks from the TS PMT.
                     .setAllowChunklessPreparation(false)
-                    .createMediaSource(mediaItem)
+                if (ClearKeyLicense.isSupported(currentChannelLine.licenseType)) {
+                    val clearKey = createClearKeyPlayback() ?: return null
+                    // The fMP4 extractor supplies the real Common PSSH from the init segment.
+                    factory.setDrmSessionManagerProvider { clearKey.sessionManager }
+                }
+                factory.createMediaSource(mediaItem)
             }
 
             C.CONTENT_TYPE_DASH -> {
@@ -255,52 +314,9 @@ class Media3VideoPlayer(
                     .setSubtitleParserFactory(DashSubtitleParserFactory())
                 var dashMediaItem = mediaItem
                 if (ClearKeyLicense.isSupported(currentChannelLine.licenseType)) {
-                    lateinit var manifestKeyIds: () -> List<UUID>
-                    val licenseKey = currentChannelLine.licenseKey
-                    val drmCallback = try {
-                        val licenseUrl = ClearKeyLicense.remoteUrl(licenseKey)
-                        if (licenseUrl == null) {
-                            manifestKeyIds = { ClearKeyLicense.keyIds(ClearKeyLicense.response(licenseKey)) }
-                            LocalMediaDrmCallback(ClearKeyLicense.response(licenseKey))
-                        } else {
-                            val headers = currentChannelLine.httpRequestHeaders(Configs.videoPlayerHeaders.toHeaders()).toMutableMap()
-                            if (headers.keys.none { it.equals("User-Agent", true) }) {
-                                headers["User-Agent"] = currentChannelLine.httpUserAgent ?: Configs.videoPlayerUserAgent
-                            }
-                            val client = OkHttpClient.Builder()
-                                .addInterceptor(HttpBasicAuthInterceptor())
-                                .connectTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
-                                .readTimeout(Configs.videoPlayerLoadTimeout, TimeUnit.MILLISECONDS)
-                                .build()
-                            val fetcher = ClearKeyLicenseFetcher(client, headers)
-                            manifestKeyIds = {
-                                ClearKeyLicense.keyIds(fetcher.load(licenseUrl,
-                                    """{"kids":[],"type":"temporary"}""".toByteArray(Charsets.UTF_8)))
-                            }
-                            // Keep the existing provisioning POST/redirect behavior independent of media cookies.
-                            val provisionCallback = HttpMediaDrmCallback(licenseUrl, getDataSourceFactory(false))
-                            object : MediaDrmCallback {
-                                override fun executeProvisionRequest(uuid: UUID, request: ExoMediaDrm.ProvisionRequest) =
-                                    provisionCallback.executeProvisionRequest(uuid, request)
-
-                                override fun executeKeyRequest(uuid: UUID, request: ExoMediaDrm.KeyRequest) =
-                                    MediaDrmCallback.Response(fetcher.load(licenseUrl, request.data))
-                            }
-                        }
-                    } catch (ex: IllegalArgumentException) {
-                        triggerError(PlaybackException.fromCause(
-                            "Invalid ClearKey license configuration",
-                            androidx.media3.common.PlaybackException.ERROR_CODE_DRM_CONTENT_ERROR,
-                            ex,
-                        ))
-                        return null
-                    }
-                    val drmSessionManager = DefaultDrmSessionManager.Builder()
-                        .setMultiSession(true)
-                        .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
-                        .build(drmCallback)
-                    factory.setManifestParser(ClearKeyDashManifestParser(manifestKeyIds))
-                    factory.setDrmSessionManagerProvider { drmSessionManager }
+                    val clearKey = createClearKeyPlayback() ?: return null
+                    factory.setManifestParser(ClearKeyDashManifestParser(clearKey.keyIds))
+                    factory.setDrmSessionManagerProvider { clearKey.sessionManager }
                 } else if (WidevineDrm.isSupported(currentChannelLine.licenseType)) {
                     val headers = currentChannelLine.httpRequestHeaders(Configs.videoPlayerHeaders.toHeaders())
                     val configuration = try {
