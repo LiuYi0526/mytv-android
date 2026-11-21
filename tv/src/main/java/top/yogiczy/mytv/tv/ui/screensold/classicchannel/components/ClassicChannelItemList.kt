@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -47,9 +48,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Icon
@@ -63,6 +68,7 @@ import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroup
 import top.yogiczy.mytv.core.data.entities.channel.ChannelList
+import top.yogiczy.mytv.core.data.entities.epg.EpgDisplaySchedule
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme.Companion.progress
@@ -100,6 +106,7 @@ fun ClassicChannelItemList(
     val channelGroup = channelGroupProvider()
     val channelList = channelListProvider()
     val initialChannel = initialChannelProvider()
+    val textMeasurer = rememberTextMeasurer()
     val itemFocusRequesterList =
         remember(channelList) { List(channelList.size) { FocusRequester() } }
     val emptyFocusRequester = remember { FocusRequester() }
@@ -134,6 +141,8 @@ fun ClassicChannelItemList(
                 val item = layout.visibleItemsInfo.first { it.index == initialIndex }
                 val centeredOffset =
                     (layout.viewportStartOffset + layout.viewportEndOffset - item.size) / 2f
+                // The layout observer can run before the list finishes its measure pass.
+                withFrameNanos { }
                 listState.scrollBy(item.offset - centeredOffset)
                 // Let the popup finish attaching/restoring its own focus before
                 // requesting the row, including a one-item list that cannot scroll.
@@ -230,6 +239,8 @@ fun ClassicChannelItemList(
                                 .handleKeyEvents(onDown = { scrollToFirst() })
                         ),
                     channelProvider = { channel },
+                    textMeasurer = textMeasurer,
+                    isPlaying = channel == initialChannel && channel.groupName == initialChannel.groupName,
                     onChannelSelected = { onChannelSelected(channel) },
                     onChannelFavoriteToggle = {
                         if (inFavoriteModeProvider()) {
@@ -271,8 +282,10 @@ private object CenteredChannelScrollSpec : BringIntoViewSpec {
 
 @Composable
 private fun ClassicChannelItem(
+    textMeasurer: TextMeasurer,
     modifier: Modifier = Modifier,
     channelProvider: () -> Channel = { Channel() },
+    isPlaying: Boolean = false,
     showChannelLogoProvider: () -> Boolean = { false },
     onChannelSelected: () -> Unit = {},
     onChannelFavoriteToggle: () -> Unit = {},
@@ -286,9 +299,7 @@ private fun ClassicChannelItem(
     val channel = channelProvider()
     val recentEpgProgramme = rememberEpgProgrammeRecent(recentEpgProgrammeProvider)
     val currentProgramme = recentEpgProgramme?.now
-    val hasCurrentProgramme = currentProgramme != null
-    val showEpgProgrammeProgress = showEpgProgrammeProgressProvider()
-    val showProgress = showEpgProgrammeProgress && hasCurrentProgramme
+    val hasNamedProgramme = currentProgramme != null && currentProgramme.title != EpgDisplaySchedule.UNKNOWN_TITLE
     val focusRequester = focusRequesterProvider()
     val isSelected = isSelectedProvider()
 
@@ -348,7 +359,24 @@ private fun ClassicChannelItem(
             }
         }
 
-        Box(modifier = modifier.clip(ListItemDefaults.shape().shape)) {
+        BoxWithConstraints(modifier = modifier.clip(ListItemDefaults.shape().shape)) {
+            val horizontalPadding = 12.dp
+            val favorite = isFavoriteProvider()
+            val favoriteIconSize = 18.dp
+            val nameStyle = MaterialTheme.typography.titleSmall
+            val reservedWidth = with(LocalDensity.current) {
+                2 * horizontalPadding.roundToPx() + if (favorite) favoriteIconSize.roundToPx() else 0
+            }
+            val nameWidth = (constraints.maxWidth - reservedWidth).coerceAtLeast(0)
+            val nameLayout = if (hasNamedProgramme) null else {
+                remember(channel.name, textMeasurer, nameStyle, nameWidth) {
+                    textMeasurer.measure(channel.name, style = nameStyle, maxLines = 2,
+                        constraints = Constraints(maxWidth = nameWidth))
+                }
+            }
+            val scrollPlayingName = isPlaying && nameLayout?.hasVisualOverflow == true
+            val displayedProgramme = currentProgramme?.takeIf { hasNamedProgramme || nameLayout?.lineCount == 1 }
+            val showProgress = showEpgProgrammeProgressProvider() && displayedProgramme != null
             Row(
                 modifier = Modifier
                     .focusRequester(focusRequester)
@@ -361,8 +389,8 @@ private fun ClassicChannelItem(
                     .background(containerColor, MaterialTheme.shapes.small)
                     .defaultMinSize(minHeight = 48.dp)
                     .padding(
-                        start = 12.dp,
-                        end = 12.dp,
+                        start = horizontalPadding,
+                        end = horizontalPadding,
                         top = if (showProgress) 2.dp else 4.dp,
                         bottom = if (showProgress) 10.dp else 4.dp,
                     )
@@ -376,14 +404,15 @@ private fun ClassicChannelItem(
                     Column(Modifier.weight(1f)) {
                         Text(
                             channel.name,
-                            maxLines = if (hasCurrentProgramme) 1 else 2,
+                            maxLines = if (hasNamedProgramme || scrollPlayingName) 1 else 2,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.ifElse(isFocused && hasCurrentProgramme, Modifier.basicMarquee()),
-                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.ifElse(scrollPlayingName || (isFocused && hasNamedProgramme),
+                                Modifier.basicMarquee()),
+                            style = nameStyle,
                         )
 
-                        if (currentProgramme != null) Text(
-                            text = currentProgramme.title,
+                        if (displayedProgramme != null) Text(
+                            text = displayedProgramme.title,
                             maxLines = 1,
                             modifier = Modifier.ifElse(isFocused, Modifier.basicMarquee()),
                             style = MaterialTheme.typography.bodySmall.copy(
@@ -393,19 +422,19 @@ private fun ClassicChannelItem(
                             ),
                         )
                     }
-                    if (isFavoriteProvider()) {
+                    if (favorite) {
                         Icon(
                             Icons.Default.Star,
                             contentDescription = "已收藏",
                             tint = Color(0xFFFFB300),
-                            modifier = Modifier.width(18.dp).height(18.dp),
+                            modifier = Modifier.width(favoriteIconSize).height(favoriteIconSize),
                         )
                     }
                 }
             }
 
             if (showProgress) {
-                currentProgramme?.let { programme ->
+                displayedProgramme?.let { programme ->
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomStart)

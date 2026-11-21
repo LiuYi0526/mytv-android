@@ -11,6 +11,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -31,6 +32,7 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelGroup
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.epg.Epg
+import top.yogiczy.mytv.core.data.entities.epg.EpgDisplaySchedule
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeList
@@ -47,13 +49,13 @@ class ClassicChannelLongNameTest {
     })
     private val current = channels[10]
     private val short = Channel(name = "CCTV-1", index = 20)
-    private val groups = ChannelGroupList(listOf(
-        ChannelGroup("热门比赛", channels), ChannelGroup("短名称", ChannelList(listOf(short))),
-    ))
-
-    private fun showScreen(withGuide: Boolean = false) {
+    private fun showScreen(withGuide: Boolean = false, entries: ChannelList = channels) {
+        val playing = entries[10]
+        val groups = ChannelGroupList(listOf(
+            ChannelGroup("热门比赛", entries), ChannelGroup("短名称", ChannelList(listOf(short))),
+        ))
         val now = System.currentTimeMillis()
-        val epgs = if (withGuide) EpgList(channels.map {
+        val epgs = if (withGuide) EpgList(entries.map {
             Epg(listOf(it.name), programmeList = EpgProgrammeList(listOf(
                 EpgProgramme(now - 60_000, now + 3_600_000, "正在直播的比赛"),
             )))
@@ -65,7 +67,7 @@ class ClassicChannelLongNameTest {
                         PopupContent(visibleProvider = { true }) {
                             ClassicChannelScreen(
                                 channelGroupListProvider = { groups },
-                                currentChannelProvider = { current },
+                                currentChannelProvider = { playing },
                                 epgListProvider = { epgs },
                             )
                         }
@@ -73,7 +75,7 @@ class ClassicChannelLongNameTest {
                 }
             }
         }
-        awaitFocus(current.name)
+        awaitFocus(playing.name)
     }
 
     private fun awaitFocus(name: String) = compose.waitUntil(5_000) {
@@ -100,6 +102,7 @@ class ClassicChannelLongNameTest {
         assertEquals(2, textLayout(current.name).lineCount)
         assertTrue(!textLayout(current.name).hasVisualOverflow)
         assertEquals(2, textLayout(channels[11].name).lineCount)
+        compose.onNodeWithText(EpgDisplaySchedule.UNKNOWN_TITLE).assertDoesNotExist()
         val before = compose.onAllNodes(isFocused(), useUnmergedTree = true).fetchSemanticsNodes()
             .minBy { it.boundsInRoot.width * it.boundsInRoot.height }.boundsInRoot.center.y
         press(Key.DirectionDown)
@@ -120,8 +123,26 @@ class ClassicChannelLongNameTest {
         awaitFocus("短名称")
         press(Key.DirectionRight)
         awaitFocus(short.name)
+        compose.onNodeWithText(EpgDisplaySchedule.UNKNOWN_TITLE).assertIsDisplayed()
         val compact = compose.onNodeWithText("短名称").fetchSemanticsNode().boundsInRoot.width
         assertTrue("Short group should not inherit the wide panel: $compact", compact <= 380f && compact < wide)
+    }
+
+    @Test fun onlyPlayingChannelScrollsWhenTheNameExceedsTwoLines() {
+        val entries = ChannelList(channels.map { it.copy(name = "${it.name} ".repeat(3).trimEnd()) })
+        val playingName = entries[10].name
+        val nextName = entries[11].name
+        showScreen(entries = entries)
+
+        assertEquals(1, textLayout(playingName).lineCount)
+        assertTrue("The marquee must lay out the full name", !textLayout(playingName).hasVisualOverflow)
+        assertEquals(2, textLayout(nextName).lineCount)
+        assertTrue(textLayout(nextName).hasVisualOverflow)
+
+        press(Key.DirectionDown)
+        awaitFocus(nextName)
+        assertEquals(1, textLayout(playingName).lineCount)
+        assertEquals(2, textLayout(nextName).lineCount)
     }
 
     @Test fun currentProgrammeKeepsTheNameToOneLine() {
