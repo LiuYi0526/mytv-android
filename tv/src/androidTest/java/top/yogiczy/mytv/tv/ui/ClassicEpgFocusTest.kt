@@ -151,6 +151,49 @@ class ClassicEpgFocusTest {
         }
     }
 
+    @Test fun directionalPanelsSlideDuringOpeningAndClosing() {
+        showScreen(listOf(live, next))
+
+        fun channelsHeaderX() = compose.onAllNodesWithText(group.name, useUnmergedTree = true)
+            .fetchSemanticsNodes().maxOf { it.boundsInRoot.left }
+        fun guideHeaderX() = compose.onAllNodesWithText(current.name, useUnmergedTree = true)
+            .fetchSemanticsNodes().map { it.boundsInRoot }.filter { it.width > 0f }
+            .minBy { it.top }.left
+
+        val channelsX = channelsHeaderX()
+        compose.mainClock.autoAdvance = false
+        press(Key.DirectionLeft)
+        compose.mainClock.advanceTimeBy(128)
+        val groupsOpeningX = channelsHeaderX()
+        compose.mainClock.advanceTimeBy(400)
+        val groupsOpenX = channelsHeaderX()
+        assertTrue("Channel panel should slide right as groups open",
+            groupsOpeningX > channelsX && groupsOpeningX < groupsOpenX)
+
+        press(Key.DirectionLeft)
+        compose.mainClock.advanceTimeBy(128)
+        val groupsClosingX = channelsHeaderX()
+        assertTrue("Channel panel should slide back as groups close",
+            groupsClosingX > channelsX && groupsClosingX < groupsOpenX)
+        compose.mainClock.advanceTimeBy(400)
+        assertTrue("Focus should return to the current channel", isTextFocused(current.name))
+
+        press(Key.DirectionRight)
+        compose.mainClock.advanceTimeBy(128)
+        val guideOpeningX = guideHeaderX()
+        compose.mainClock.advanceTimeBy(400)
+        val guideOpenX = guideHeaderX()
+        assertTrue("The programme guide should slide left on entry", guideOpeningX > guideOpenX)
+        assertTrue("Focus should reach the live programme", isTextFocused(live.title))
+
+        press(Key.DirectionLeft)
+        compose.mainClock.advanceTimeBy(128)
+        assertTrue("The programme guide should remain visible and slide right on exit",
+            guideHeaderX() > guideOpenX)
+        compose.mainClock.advanceTimeBy(400)
+        assertTrue("Focus should return to the current channel", isTextFocused(current.name))
+    }
+
     @Test fun enteringFromChannelsFocusesLiveProgramme() {
         val earlier = List(12) { index ->
             val start = now - (13 - index) * 1_800_000L
