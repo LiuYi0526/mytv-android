@@ -4,10 +4,12 @@ import android.net.TrafficStats
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,7 +58,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LiveChannelsChannelInfo(
     modifier: Modifier = Modifier,
@@ -120,14 +121,10 @@ fun LiveChannelsChannelInfo(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                itemVerticalAlignment = Alignment.CenterVertically,
-            ) {
+            ChannelInfoLine { titleWidth ->
                 val headlineStyle = MaterialTheme.typography.headlineSmall
                 if (channelIsHeadline) {
-                    channelIdentity(headlineStyle, Modifier)
+                    channelIdentity(headlineStyle, titleWidth)
                 } else {
                     Text(
                         programmeTitle,
@@ -139,11 +136,7 @@ fun LiveChannelsChannelInfo(
             }
 
             if (channelNameFirst || displayedProgramme != null) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    itemVerticalAlignment = Alignment.CenterVertically,
-                ) {
+                ChannelInfoLine { titleWidth ->
                     displayedProgramme?.let { programme ->
                         Text(
                             programme.formatTimeRange(timeFormat),
@@ -157,7 +150,7 @@ fun LiveChannelsChannelInfo(
                         }
                     }
                     val supportingStyle = MaterialTheme.typography.titleMedium
-                    val titleModifier = Modifier.alignByBaseline().sizeIn(maxWidth = 280.dp)
+                    val titleModifier = titleWidth.alignByBaseline().sizeIn(maxWidth = 280.dp)
                     if (channelNameFirst) {
                         Text(
                             programmeTitle,
@@ -194,6 +187,29 @@ fun LiveChannelsChannelInfo(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChannelInfoLine(content: @Composable RowScope.(titleWidth: Modifier) -> Unit) {
+    BoxWithConstraints {
+        val spacing = Arrangement.spacedBy(12.dp)
+        if (maxWidth >= 420.dp) {
+            Row(horizontalArrangement = spacing, verticalAlignment = Alignment.CenterVertically) {
+                // Measure the labels first and give the title the remaining space.
+                content(Modifier.weight(1f, fill = false))
+            }
+        } else {
+            // A small multiview tile may not have room for all the metadata on one line.
+            FlowRow(
+                horizontalArrangement = spacing,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                content(Modifier)
             }
         }
     }
