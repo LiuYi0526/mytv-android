@@ -46,6 +46,7 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelGroup
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.epg.Epg
+import top.yogiczy.mytv.core.data.entities.epg.EpgDisplaySchedule
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeList
@@ -53,7 +54,9 @@ import top.yogiczy.mytv.tv.ui.material.PopupContent
 import top.yogiczy.mytv.tv.ui.material.PopupHandleableApplication
 import top.yogiczy.mytv.tv.ui.screensold.classicchannel.ClassicChannelScreen
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 
 /** Uses the real channel -> EPG transition, including its focus exit handler. */
 @OptIn(ExperimentalTestApi::class)
@@ -151,6 +154,28 @@ class ClassicEpgFocusTest {
         }
     }
 
+    private fun currentPlaceholderRow(): SemanticsMatcher {
+        val hourStart = Calendar.getInstance().apply { set(Calendar.MINUTE, 0) }.time
+        val hour = SimpleDateFormat("HH:mm", Locale.getDefault()).format(hourStart)
+        return hasText(EpgDisplaySchedule.UNKNOWN_TITLE) and hasText(hour)
+    }
+
+    private fun awaitCurrentPlaceholderFocus() {
+        compose.waitUntil(5_000) {
+            compose.onAllNodes(currentPlaceholderRow() and isFocused()).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun dayLabel(at: Long) = SimpleDateFormat("MM-dd", Locale.getDefault()).format(at)
+
+    private fun focusDate(label: String) {
+        compose.onNode(
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.Focused) and hasAnyChild(hasText(label)),
+            useUnmergedTree = true,
+        ).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        awaitFocused(label)
+    }
+
     @Test fun directionalPanelsSlideDuringOpeningAndClosing() {
         showScreen(listOf(live, next))
 
@@ -244,52 +269,72 @@ class ClassicEpgFocusTest {
         awaitFocused(label(live))
     }
 
-    @Test fun absentTodayAndLiveProgrammeFallBackToFirstAvailableProgramme() {
-        showScreen(listOf(replay))
+    @Test fun historicalOnlyGuideOpensOnTodayAndKeepsYesterdaysProgramme() {
+        val dayStart = Calendar.getInstance().apply {
+            timeInMillis = yesterday
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val historical = replay.copy(startAt = dayStart, endAt = dayStart + 1_800_000)
+        showScreen(listOf(historical))
         press(Key.DirectionRight)
-        awaitFocused(label(replay))
+        awaitCurrentPlaceholderFocus()
+        compose.onNodeWithText(label(historical)).assertDoesNotExist()
+
+        focusDate(dayLabel(historical.startAt))
+        compose.onNodeWithText(label(historical)).assertIsDisplayed()
     }
 
-    @Test fun unmatchedGuideShowsAnInertEmptyStateAndCanReturnToChannels() {
+    @Test fun unmatchedGuideOpensOnCurrentHourAndCanReturnToChannels() {
         showScreen(null)
         press(Key.DirectionRight)
-        awaitFocused("暂无节目单")
+        awaitCurrentPlaceholderFocus()
         press(Key.Enter)
+        assertEquals(current, selectedLiveChannel)
         assertEquals(0, playbackCount)
         assertEquals(0, reserveCount)
-        compose.onNodeWithText("00:00    精彩节目").assertDoesNotExist()
         press(Key.DirectionLeft)
         focusChannels()
         press(Key.DirectionRight)
-        awaitFocused("暂无节目单")
-        compose.onNodeWithText("暂无节目单").performTouchInput {
+        awaitCurrentPlaceholderFocus()
+        compose.onNode(currentPlaceholderRow()).performTouchInput {
             swipe(Offset(width * .1f, centerY), Offset(width * .9f, centerY), 150)
         }
         focusChannels()
-        compose.onNodeWithText("暂无节目单").assertDoesNotExist()
+        compose.onNode(currentPlaceholderRow()).assertDoesNotExist()
     }
 
-    @Test fun emptyGuideUpdatesToLiveProgrammeAndBackWithoutFakeRows() {
+    @Test fun emptyGuideUpdatesBetweenCurrentHourPlaceholderAndLiveProgramme() {
         showScreen(emptyList())
         press(Key.DirectionRight)
-        awaitFocused("暂无节目单")
+        awaitCurrentPlaceholderFocus()
         compose.runOnIdle { guideProgrammes = listOf(live, next) }
         awaitFocused(label(live))
-        compose.onNodeWithText("暂无节目单").assertDoesNotExist()
         compose.runOnIdle { guideProgrammes = emptyList() }
-        awaitFocused("暂无节目单")
+        awaitCurrentPlaceholderFocus()
         compose.onNodeWithText(label(live)).assertDoesNotExist()
+        compose.onNodeWithText(label(next)).assertDoesNotExist()
         press(Key.DirectionLeft)
         focusChannels()
     }
 
-    @Test fun refreshRemovingTheSelectedDateFallsBackToAvailableLiveProgramme() {
-        showScreen(listOf(replay))
+    @Test fun refreshRemovingADateOutsideThePlaceholderWindowFocusesLiveProgramme() {
+        val olderStart = Calendar.getInstance().apply {
+            timeInMillis = replay.startAt
+            add(Calendar.DAY_OF_YEAR, -1)
+        }.timeInMillis
+        val olderReplay = replay.copy(startAt = olderStart, endAt = olderStart + 1_800_000)
+        showScreen(listOf(olderReplay), playback = olderReplay)
         press(Key.DirectionRight)
-        awaitFocused(label(replay))
+        awaitFocused(label(olderReplay))
+        compose.onNodeWithText(dayLabel(olderStart)).assertIsDisplayed()
+
         compose.runOnIdle { guideProgrammes = listOf(live, next) }
         awaitFocused(label(live))
-        compose.onNodeWithText("00:00    精彩节目").assertDoesNotExist()
+        compose.onNodeWithText(label(olderReplay)).assertDoesNotExist()
+        compose.onNodeWithText(dayLabel(olderStart)).assertDoesNotExist()
     }
 
     @Test fun dateColumnRemainsFullyVisibleWhenProgrammeListTakesFocus() {
@@ -309,14 +354,9 @@ class ClassicEpgFocusTest {
         showScreen(listOf(replay, live, next, tomorrow))
         press(Key.DirectionRight)
         awaitFocused(label(live))
-        val format = java.text.SimpleDateFormat("MM-dd", java.util.Locale.getDefault())
-        val todayLabel = format.format(live.startAt)
-        val tomorrowLabel = format.format(tomorrow.startAt)
-        compose.onNode(
-            SemanticsMatcher.keyIsDefined(SemanticsProperties.Focused) and hasAnyChild(hasText(todayLabel)),
-            useUnmergedTree = true,
-        ).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-        awaitFocused(todayLabel)
+        val todayLabel = dayLabel(live.startAt)
+        val tomorrowLabel = dayLabel(tomorrow.startAt)
+        focusDate(todayLabel)
         repeat(2) {
             press(Key.DirectionDown)
             awaitFocused(tomorrowLabel)
@@ -347,7 +387,7 @@ class ClassicEpgFocusTest {
     }
 
     private fun assertDateFitsOnOneLine() {
-        val date = java.text.SimpleDateFormat("MM-dd", java.util.Locale.getDefault()).format(live.startAt)
+        val date = dayLabel(live.startAt)
         val node = compose.onNodeWithText(date, useUnmergedTree = true)
         node.assertIsDisplayed()
         val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
