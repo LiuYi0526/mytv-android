@@ -375,6 +375,8 @@ fun SettingsScreen(
                 composable(SettingsSubCategories.UI_TIME_SHOW_MODE.name) {
                     SettingsUiTimeShowModeScreen(
                         timeShowModeProvider = { settingsViewModel.uiTimeShowMode },
+                        showSeconds = settingsViewModel.uiTimeShowSeconds,
+                        onShowSecondsChanged = { settingsViewModel.uiTimeShowSeconds = it },
                         onTimeShowModeChanged = {
                             settingsViewModel.uiTimeShowMode = it
                             navigateBack()

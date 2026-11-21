@@ -1,30 +1,21 @@
 package top.yogiczy.mytv.tv.ui.screen.dashboard.components
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.tv.material3.Text
-import kotlinx.coroutines.delay
+import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
-import java.text.SimpleDateFormat
-import java.util.Locale
+import top.yogiczy.mytv.tv.ui.utils.rememberWallClockFormat
+import top.yogiczy.mytv.tv.ui.utils.rememberWallClockTimestamp
 
 @Composable
-fun DashboardTime(modifier: Modifier = Modifier) {
-    var timestamp by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            timestamp = System.currentTimeMillis()
-        }
-    }
-
-    val timeFormat = SimpleDateFormat("MM/dd EEE HH:mm:ss", Locale.getDefault())
+fun DashboardTime(
+    modifier: Modifier = Modifier,
+    showSeconds: Boolean = settingsVM.uiTimeShowSeconds,
+) {
+    val timestamp = rememberWallClockTimestamp()
+    val timeFormat = rememberWallClockFormat(showSeconds, includeDate = true)
     Text(timeFormat.format(timestamp), modifier = modifier)
 }
 
@@ -32,6 +23,6 @@ fun DashboardTime(modifier: Modifier = Modifier) {
 @Composable
 private fun DashboardTimePreview() {
     MyTvTheme {
-        DashboardTime()
+        DashboardTime(showSeconds = true)
     }
 }

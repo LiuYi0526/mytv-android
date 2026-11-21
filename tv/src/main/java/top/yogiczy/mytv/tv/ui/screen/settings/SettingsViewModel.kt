@@ -412,6 +412,15 @@ class SettingsViewModel : ViewModel() {
             afterSetWhenCloudSyncAutoPull()
         }
 
+    private var _uiTimeShowSeconds by mutableStateOf(true)
+    var uiTimeShowSeconds: Boolean
+        get() = _uiTimeShowSeconds
+        set(value) {
+            _uiTimeShowSeconds = value
+            Configs.uiTimeShowSeconds = value
+            afterSetWhenCloudSyncAutoPull()
+        }
+
     private var _uiFocusOptimize by mutableStateOf(false)
     var uiFocusOptimize: Boolean
         get() = _uiFocusOptimize
@@ -704,6 +713,7 @@ class SettingsViewModel : ViewModel() {
         _uiDensityScaleRatio = Configs.uiDensityScaleRatio
         _uiFontScaleRatio = Configs.uiFontScaleRatio
         _uiTimeShowMode = Configs.uiTimeShowMode
+        _uiTimeShowSeconds = Configs.uiTimeShowSeconds
         _uiFocusOptimize = Configs.uiFocusOptimize
         _uiScreenAutoCloseDelay = Configs.uiScreenAutoCloseDelay
         _updateForceRemind = Configs.updateForceRemind

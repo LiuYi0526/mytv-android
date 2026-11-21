@@ -184,7 +184,10 @@ fun MainContent(
                 && !mainContentState.isVideoPlayerControllerScreenVisible
                 && channelNumberSelectState.channelNumber.isEmpty()
     }) {
-        DatetimeScreen(showModeProvider = { settingsViewModel.uiTimeShowMode })
+        DatetimeScreen(
+            showModeProvider = { settingsViewModel.uiTimeShowMode },
+            showSeconds = settingsViewModel.uiTimeShowSeconds,
+        )
     }
 
     ChannelNumberSelectScreen(channelNumberProvider = { channelNumberSelectState.channelNumber })

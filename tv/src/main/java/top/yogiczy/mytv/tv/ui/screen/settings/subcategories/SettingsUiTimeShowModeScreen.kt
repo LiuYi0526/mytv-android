@@ -3,6 +3,7 @@ package top.yogiczy.mytv.tv.ui.screen.settings.subcategories
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.Icons
@@ -14,11 +15,13 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Switch
 import androidx.tv.material3.Text
 import top.yogiczy.mytv.core.data.utils.Constants
 import top.yogiczy.mytv.tv.ui.material.PaddedLazyVerticalGrid
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
+import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsListItem
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.Configs
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
@@ -28,6 +31,8 @@ fun SettingsUiTimeShowModeScreen(
     modifier: Modifier = Modifier,
     timeShowModeProvider: () -> Configs.UiTimeShowMode = { Configs.UiTimeShowMode.HIDDEN },
     onTimeShowModeChanged: (Configs.UiTimeShowMode) -> Unit = {},
+    showSeconds: Boolean = true,
+    onShowSecondsChanged: (Boolean) -> Unit = {},
     onBackPressed: () -> Unit = {},
 ) {
     val currentTimeShowMode = timeShowModeProvider()
@@ -75,6 +80,14 @@ fun SettingsUiTimeShowModeScreen(
                     ),
                     selected = false,
                     onClick = {},
+                )
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                SettingsListItem(
+                    headlineContent = "显示秒",
+                    supportingContent = if (showSeconds) "12:34:56" else "12:34",
+                    trailingContent = { Switch(checked = showSeconds, onCheckedChange = null) },
+                    onSelect = { onShowSecondsChanged(!showSeconds) },
                 )
             }
         }

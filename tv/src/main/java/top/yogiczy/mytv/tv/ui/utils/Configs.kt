@@ -157,6 +157,9 @@ object Configs {
         /** 时间显示模式 */
         UI_TIME_SHOW_MODE,
 
+        /** 时钟显示秒 */
+        UI_TIME_SHOW_SECONDS,
+
         /** 焦点优化 */
         UI_FOCUS_OPTIMIZE,
 
@@ -534,6 +537,10 @@ object Configs {
         )
         set(value) = SP.putInt(KEY.UI_TIME_SHOW_MODE.name, value.value)
 
+    var uiTimeShowSeconds: Boolean
+        get() = SP.getBoolean(KEY.UI_TIME_SHOW_SECONDS.name, true)
+        set(value) = SP.putBoolean(KEY.UI_TIME_SHOW_SECONDS.name, value)
+
     /** 焦点优化 */
     var uiFocusOptimize: Boolean
         get() = SP.getBoolean(KEY.UI_FOCUS_OPTIMIZE.name, true)
@@ -802,6 +809,7 @@ object Configs {
             uiDensityScaleRatio = uiDensityScaleRatio,
             uiFontScaleRatio = uiFontScaleRatio,
             uiTimeShowMode = uiTimeShowMode,
+            uiTimeShowSeconds = uiTimeShowSeconds,
             uiFocusOptimize = uiFocusOptimize,
             uiScreenAutoCloseDelay = uiScreenAutoCloseDelay,
             updateForceRemind = updateForceRemind,
@@ -876,6 +884,7 @@ object Configs {
         configs.uiDensityScaleRatio?.let { uiDensityScaleRatio = it }
         configs.uiFontScaleRatio?.let { uiFontScaleRatio = it }
         configs.uiTimeShowMode?.let { uiTimeShowMode = it }
+        configs.uiTimeShowSeconds?.let { uiTimeShowSeconds = it }
         configs.uiFocusOptimize?.let { uiFocusOptimize = it }
         configs.uiScreenAutoCloseDelay?.let { uiScreenAutoCloseDelay = it }
         configs.updateForceRemind?.let { updateForceRemind = it }
@@ -949,6 +958,7 @@ object Configs {
         val uiDensityScaleRatio: Float? = null,
         val uiFontScaleRatio: Float? = null,
         val uiTimeShowMode: UiTimeShowMode? = null,
+        val uiTimeShowSeconds: Boolean? = null,
         val uiFocusOptimize: Boolean? = null,
         val uiScreenAutoCloseDelay: Long? = null,
         val updateForceRemind: Boolean? = null,
