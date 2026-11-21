@@ -1,18 +1,18 @@
 {
-  "tag_name": "v1.1.0",
-  "body": "# 流光 TV 1.1.0\n\n本次更新重点改善节目单浏览、回看稳定性与遥控/触摸操作。可覆盖升级流光 TV 1.0.0，保留已有配置和观看记录。\n\n## 新增与优化\n\n- 节目单展示节目简介，长按确认键或触摸长按可查看完整节目名、播出时间和简介。\n- 有简介的节目标题在获得焦点后横向滚动；无简介的标题最多显示两行，超长内容可在详情中查看。\n- 日期焦点移动时即时切换节目单，节目条目上下切换时尽量保持居中；统一节目单与频道列表的背景透明度，优化日期列、标题间距及状态标签布局。\n- 播放快捷栏支持“硬解优先 / 软解优先”切换，支持 Media3 和 IJK，并保留切换时的播放状态。\n- 默认开启“经典选台界面”，短按左上角、左中央和左下角默认打开频道列表；已保存的对应设置继续沿用。\n- 首页与设置相关入口统一使用“订阅源”名称，添加订阅后复用预加载缓存，减少重复下载。\n\n## 问题修复\n\n- 修复大节目单缓存加载时的内存溢出，使用流式读写并减少刷新过程中的重复数据加载。\n- 修复部分 gzip HLS 清单被截断引起的回看起播偏移与短时间后卡顿。\n- 修复回看时选择当前直播节目未切回直播，以及回放与直播状态同时突出显示的问题。\n- 修复同名但不同时段的节目被误标为已预约。\n- 修复多个分组含相同播放链接时，打开频道列表定位到其他分组的问题。\n- 修复最近观看顺序变化后，从直播返回首页丢失焦点的问题。\n- 修复 MMT TTML 字幕字号与区域对齐，精简时间继承兼容处理；Widevine 播放改用 Media3 标准配置路径，移除无效的“跳过多帧渲染”开关。\n\n## 安装与已知事项\n\n- 提供 ARM32、ARM64 和四架构通用包；Android 6.0 及以上可安装。\n- 不内置个人订阅源；请自行添加订阅。旧测试应用与正式版使用不同包名，数据不自动共享。\n- RTSP/RTMP 暂不支持线路测速；通过 MPEG-TS ID3 传输的 ARIB 字幕暂不支持。\n- 未显式识别为 HLS 的无扩展名入口仍可能在解析回退时重复请求，相关优化留待后续版本。\n- 实际播放表现取决于直播源、网络、服务端鉴权和设备解码能力；软解优先可能增加设备负载。\n",
+  "tag_name": "v1.2.0",
+  "body": "# 流光 TV 1.2.0\n\n本次更新改善直播、时移和回看的操作体验，也让订阅源刷新与节目单显示更稳定。正式版可从 1.1.0 覆盖升级，保留设置和观看记录。\n\n## 播放控制\n\n- 重整播放快捷工具栏。关闭线路等子菜单后，恢复原来的焦点和滚动位置。视轨、音轨和字幕入口会随加载状态更新。\n- 进度条支持触摸拖动，遥控左右每次跳 10 分钟。工具栏提供前后 10 秒、上一档、下一档、从头观看和返回直播。\n- 回看定位可按订阅源规则重载地址。时移可以续接后面的片段，回看可以续播后续节目，定位到直播点时自动切回直播。\n- 支持按频道记忆显示模式，也可设置为跟随全局。播放失败时，在提示窗显示可用的底层错误原因。\n\n## 直播源与解码兼容性\n\n- 支持显式指定 HLS。无扩展名的 HLS 入口可自动识别并复用首次清单响应，减少重复请求。\n- 支持按频道配置 Referer、Origin 和 Kodi 链接请求头后缀。Media3 与线路测速也能读取重定向地址中的请求头后缀。\n- Media3 支持 ID3 封装的 ARIB STD-B24 字幕、MPEG-TS 杜比视界识别与动态元数据传递，以及带 Common PSSH 的 HLS `cenc` ClearKey。\n- 修复部分 HLS WebVTT 字幕引起的播放失败，以及部分 DASH TTML 字幕字号异常。\n\n## 界面与订阅源\n\n- 订阅源过期时先显示旧缓存，再在后台刷新。单次刷新只请求一次，失败时保留旧数据。优化首页启动和节目信息首次加载。\n- 节目单空档显示「无信息」。没有 EPG 的频道按小时显示占位，方便浏览时间和定位。\n- 统一经典频道列表左右转场，改善节目进度条对比度、长频道名与长节目名显示，加载台标时裁掉外围透明留白。\n- 播放器设置可直接编辑 User-Agent 和自定义请求头。时钟「显示秒」默认开启，可在界面设置里关闭。\n\n## 安装与兼容性\n\n- 提供 ARM32、ARM64 和通用包，支持 Android 6.0 及以上。请按设备架构选择安装包。\n- 解码、字幕和时移取决于直播源与设备能力。HLS ClearKey 适用于符合上述条件的 `cenc` 流。使用 `cbcs` 的受保护源需要播放器和设备支持的 DRM 与有效授权。\n",
   "assets": [
     {
-      "name": "liuguang-tv-1.1.0-armeabi-v7a.apk",
-      "browser_download_url": "https://github.com/LiuYi0526/mytv-android/releases/download/v1.1.0/liuguang-tv-1.1.0-armeabi-v7a.apk"
+      "name": "liuguang-tv-1.2.0-armeabi-v7a.apk",
+      "browser_download_url": "https://github.com/LiuYi0526/mytv-android/releases/download/v1.2.0/liuguang-tv-1.2.0-armeabi-v7a.apk"
     },
     {
-      "name": "liuguang-tv-1.1.0-arm64-v8a.apk",
-      "browser_download_url": "https://github.com/LiuYi0526/mytv-android/releases/download/v1.1.0/liuguang-tv-1.1.0-arm64-v8a.apk"
+      "name": "liuguang-tv-1.2.0-arm64-v8a.apk",
+      "browser_download_url": "https://github.com/LiuYi0526/mytv-android/releases/download/v1.2.0/liuguang-tv-1.2.0-arm64-v8a.apk"
     },
     {
-      "name": "liuguang-tv-1.1.0-universal.apk",
-      "browser_download_url": "https://github.com/LiuYi0526/mytv-android/releases/download/v1.1.0/liuguang-tv-1.1.0-universal.apk"
+      "name": "liuguang-tv-1.2.0-universal.apk",
+      "browser_download_url": "https://github.com/LiuYi0526/mytv-android/releases/download/v1.2.0/liuguang-tv-1.2.0-universal.apk"
     }
   ]
 }
