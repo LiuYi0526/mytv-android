@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.TextUnit
@@ -198,6 +199,7 @@ fun ChannelsChannelItemLogo(
     placeholder: @Composable () -> Unit = {},
 ) {
     val channel = channelProvider()
+    val context = LocalContext.current
 
     val logo = if (settingsVM.iptvChannelLogoOverride || channel.logo.isNullOrBlank()) {
         settingsVM.iptvChannelLogoProvider
@@ -206,16 +208,21 @@ fun ChannelsChannelItemLogo(
             .replace("{name|uppercase}", channel.epgName.uppercase())
     } else channel.logo
 
+    val request = remember(context, logo) { channelLogoRequest(context, logo) }
     SubcomposeAsyncImage(
         modifier = modifier,
-        model = logo,
+        model = request,
         contentDescription = null,
+        contentScale = ContentScale.Fit,
         loading = { placeholder() },
         error = {
-            if (channel.logo != null) {
+            val channelLogo = channel.logo
+            if (channelLogo != null) {
+                val fallback = remember(context, channelLogo) { channelLogoRequest(context, channelLogo) }
                 SubcomposeAsyncImage(
-                    model = channel.logo,
+                    model = fallback,
                     contentDescription = null,
+                    contentScale = ContentScale.Fit,
                     loading = { placeholder() },
                     error = { placeholder() },
                 )
