@@ -47,6 +47,8 @@ fun ClassicEpgItemList(
     onLive: () -> Unit = {},
     onEpgProgrammeReserve: (EpgProgramme) -> Unit = {},
     onUserAction: () -> Unit = {},
+    focusOnEntry: Boolean = true,
+    awaitDirection: Boolean = false,
 ) {
     val epg = epgProvider()
     val programmes = epg?.programmeList ?: EpgProgrammeList()
@@ -91,7 +93,8 @@ fun ClassicEpgItemList(
                 epgProgrammeReserveListProvider = epgProgrammeReserveListProvider,
                 supportPlaybackProvider = supportPlaybackProvider,
                 currentPlaybackProvider = currentPlaybackEpgProgrammeProvider,
-                focusOnInitialProgramme = focusOnInitialProgramme,
+                focusOnInitialProgramme = focusOnEntry && focusOnInitialProgramme,
+                awaitDirection = awaitDirection,
                 onPlayback = onEpgProgrammePlayback,
                 onLive = onLive,
                 onReserve = onEpgProgrammeReserve,

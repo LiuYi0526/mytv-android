@@ -34,9 +34,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.style.TextOverflow
@@ -93,7 +95,10 @@ fun ClassicChannelScreen(
     channelFavoriteListVisibleProvider: () -> Boolean = { false },
     onChannelFavoriteListVisibleChange: (Boolean) -> Unit = {},
     onClose: () -> Unit = {},
+    focusOptimize: Boolean = true,
 ) {
+    val inputModeManager = LocalInputModeManager.current
+    val focusOnEntry = remember { focusOptimize || inputModeManager.inputMode == InputMode.Keyboard }
     val screenAutoCloseState = rememberScreenAutoCloseState(onTimeout = onClose)
     val channelGroupList = channelGroupListProvider()
     val channelFavoriteListVisible = remember { channelFavoriteListVisibleProvider() }
@@ -128,16 +133,20 @@ fun ClassicChannelScreen(
     var channelFocusRequest by remember { mutableIntStateOf(0) }
     var groupFocusRequest by remember { mutableIntStateOf(0) }
     var epgOpenCount by remember { mutableIntStateOf(0) }
+    var focusOnGroupEntry by remember { mutableStateOf(true) }
+    var focusOnEpgEntry by remember { mutableStateOf(true) }
     LaunchedEffect(groupListVisible, groupFocusRequest) {
-        if (groupListVisible) groupFocusRequester.saveRequestFocus()
+        if (groupListVisible && focusOnGroupEntry) groupFocusRequester.saveRequestFocus()
     }
-    fun showGroups() {
+    fun showGroups(byDirectionKey: Boolean = false) {
+        focusOnGroupEntry = focusOptimize || byDirectionKey
         panel = ClassicChannelPanel.Groups
         groupFocusRequest++
         screenAutoCloseState.active()
     }
-    fun showEpg() {
+    fun showEpg(byDirectionKey: Boolean = false) {
         if (!epgListVisible && visibleChannels.isNotEmpty()) {
+            focusOnEpgEntry = focusOptimize || byDirectionKey
             epgOpenCount++
             panel = ClassicChannelPanel.ProgrammeGuide
             screenAutoCloseState.active()
@@ -192,6 +201,8 @@ fun ClassicChannelScreen(
                             else
                                 channelGroupList
                         },
+                        focusOnEntry = groupListVisible && focusOnGroupEntry,
+                        awaitDirection = groupListVisible && !focusOnGroupEntry,
                         initialChannelGroupProvider = {
                             focusedChannelGroup
                         },
@@ -235,8 +246,8 @@ fun ClassicChannelScreen(
                         modifier = Modifier
                             .weight(1f)
                             .classicPanelDirections(
-                                onLeft = { if (epgListVisible) returnToChannels() else showGroups() },
-                                onRight = { showEpg() },
+                                onLeft = { if (epgListVisible) returnToChannels() else showGroups(byDirectionKey = true) },
+                                onRight = { showEpg(byDirectionKey = true) },
                             ),
                         channelGroupProvider = { focusedChannelGroup },
                         channelListProvider = { visibleChannels },
@@ -246,6 +257,8 @@ fun ClassicChannelScreen(
                         onChannelFavoriteToggle = onChannelFavoriteToggle,
                         isChannelFavoriteProvider = { channelFavoriteEnabledProvider() && it in favoriteChannelListProvider() },
                         focusEmptyList = !groupListVisible,
+                        focusOnEntry = focusOnEntry,
+                        awaitDirection = !focusOnEntry && panel == ClassicChannelPanel.Channels && channelFocusRequest == 0,
                         focusRequestKey = channelFocusRequest,
                         onChannelFocused = { channel -> focusedChannel = channel },
                         showEpgProgrammeProgressProvider = showEpgProgrammeProgressProvider,
@@ -276,6 +289,8 @@ fun ClassicChannelScreen(
                         programmeListModifier = Modifier
                             .classicPanelDirections(onLeft = { returnToChannels() }),
                         epgProvider = { epgListProvider().displayGuide(focusedChannel) },
+                        focusOnEntry = epgListVisible && focusOnEpgEntry,
+                        awaitDirection = epgListVisible && !focusOnEpgEntry,
                         channelNameProvider = { focusedChannel.name },
                         epgProgrammeReserveListProvider = {
                             EpgProgrammeReserveList(

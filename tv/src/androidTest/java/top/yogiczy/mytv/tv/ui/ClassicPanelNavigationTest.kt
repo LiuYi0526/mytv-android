@@ -1,13 +1,16 @@
 package top.yogiczy.mytv.tv.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -25,7 +28,9 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Text
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import top.yogiczy.mytv.core.data.entities.channel.Channel
@@ -39,8 +44,6 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeList
 import top.yogiczy.mytv.tv.ui.material.PopupContent
 import top.yogiczy.mytv.tv.ui.screensold.classicchannel.ClassicChannelScreen
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
-import java.text.SimpleDateFormat
-import java.util.Locale
 
 @OptIn(ExperimentalTestApi::class)
 class ClassicPanelNavigationTest {
@@ -82,14 +85,10 @@ class ClassicPanelNavigationTest {
         focus(if (favoriteMode) favorites.firstOrNull()?.name ?: "暂无频道" else current.name)
     }
 
-    private fun focus(text: String) {
+    private fun focus(text: String, inProgrammeList: Boolean = false) {
         try {
             compose.waitUntil(5_000) {
-                compose.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().any { node ->
-                    generateSequence(node) { it.parent }
-                        .firstOrNull { it.config.contains(SemanticsProperties.Focused) }
-                        ?.config?.getOrNull(SemanticsProperties.Focused) == true
-                }
+                isTextFocused(text, inProgrammeList)
             }
         } catch (failure: Throwable) {
             val focused = compose.onAllNodes(isFocused(), useUnmergedTree = true)
@@ -98,13 +97,76 @@ class ClassicPanelNavigationTest {
         }
     }
 
+    private fun isTextFocused(text: String, inProgrammeList: Boolean = false): Boolean =
+        compose.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().any { node ->
+            val target = generateSequence(node) { it.parent }
+                .firstOrNull { it.config.contains(SemanticsProperties.Focused) }
+            target?.config?.getOrNull(SemanticsProperties.Focused) == true &&
+                (!inProgrammeList || target.config.getOrNull(SemanticsActions.OnLongClick)?.label == "查看节目详情")
+        }
+
     private fun press(key: Key) {
         compose.onRoot().performKeyInput { pressKey(key) }
         compose.waitForIdle()
     }
 
-    private fun programme(channel: Channel) =
-        "${SimpleDateFormat("HH:mm", Locale.getDefault()).format(start)}    Live ${channel.name}"
+    private fun focusProgramme(channel: Channel) =
+        focus("Live ${channel.name}", inProgrammeList = true)
+
+    private fun openByTouchWithOptimizationOff() {
+        val opened = mutableStateOf(false)
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                MyTvTheme {
+                    Box(Modifier.width(960.dp).height(540.dp)) {
+                        if (!opened.value) {
+                            Text("打开选台", Modifier.clickable { opened.value = true })
+                        }
+                        PopupContent(visibleProvider = { opened.value }) {
+                            ClassicChannelScreen(
+                                channelGroupListProvider = { groups },
+                                currentChannelProvider = { current },
+                                epgListProvider = { epgs },
+                                focusOptimize = false,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("打开选台").performTouchInput { click() }
+        compose.onNodeWithText(current.name).assertIsDisplayed()
+    }
+
+    @Test fun touchEntryWithoutOptimizationLeavesRowsForDirectionalNavigation() {
+        openByTouchWithOptimizationOff()
+        assertFalse(first.any { isTextFocused(it.name) })
+
+        press(Key.DirectionDown)
+        focus(current.name)
+        press(Key.DirectionRight)
+        focusProgramme(current)
+        press(Key.DirectionLeft)
+        focus(current.name)
+    }
+
+    @Test fun touchEntryToGuideWaitsForDirectionWhenOptimizationIsOff() {
+        openByTouchWithOptimizationOff()
+        compose.onNodeWithText("向").performTouchInput { click() }
+        compose.onNodeWithText("长按确认 / 触摸长按查看节目详情").assertIsDisplayed()
+        assertFalse(isTextFocused("Live ${current.name}", inProgrammeList = true))
+        press(Key.DirectionDown)
+        focusProgramme(current)
+    }
+
+    @Test fun touchEntryToGroupsWaitsForDirectionWhenOptimizationIsOff() {
+        openByTouchWithOptimizationOff()
+        compose.onNodeWithText("分组一").performTouchInput { click() }
+        compose.onNodeWithText("频道分组").assertIsDisplayed()
+        assertFalse(isTextFocused("分组一"))
+        press(Key.DirectionDown)
+        focus("分组一")
+    }
 
     @Test fun openingDuplicateStreamRestoresTheSelectedSourceGroup() {
         val sameStream = Channel(name = "中视购物")
@@ -146,7 +208,7 @@ class ClassicPanelNavigationTest {
         press(Key.DirectionDown)
         focus(first[2].name)
         press(Key.DirectionRight)
-        focus(programme(first[2]))
+        focusProgramme(first[2])
         press(Key.DirectionLeft)
         focus(first[2].name)
         compose.onNodeWithText("频道分组").assertDoesNotExist()
@@ -220,6 +282,6 @@ class ClassicPanelNavigationTest {
     @Test fun favoriteModeCanStartOnAChannelOtherThanThePlayingChannel() {
         showScreen(favorites = ChannelList(listOf(second.first())), favoriteMode = true)
         press(Key.DirectionRight)
-        focus(programme(second.first()))
+        focusProgramme(second.first())
     }
 }

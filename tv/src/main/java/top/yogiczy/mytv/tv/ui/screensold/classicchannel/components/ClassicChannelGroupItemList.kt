@@ -40,6 +40,8 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.tv.ui.material.rememberDebounceState
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
+import top.yogiczy.mytv.tv.ui.screensold.components.awaitPanelDirection
+import top.yogiczy.mytv.tv.ui.screensold.components.focusVisibleItem
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
 import top.yogiczy.mytv.tv.ui.utils.ifElse
@@ -55,6 +57,8 @@ fun ClassicChannelGroupItemList(
     onChannelGroupFocused: (ChannelGroup) -> Unit = {},
     onChannelGroupSelected: (ChannelGroup) -> Unit = {},
     onUserAction: () -> Unit = {},
+    focusOnEntry: Boolean = true,
+    awaitDirection: Boolean = false,
 ) {
     val channelGroupList = channelGroupListProvider()
     val initialChannelGroup = remember { initialChannelGroupProvider() }
@@ -95,7 +99,11 @@ fun ClassicChannelGroupItemList(
     }
 
     LazyColumn(
-        modifier = modifier
+        modifier = Modifier
+            .awaitPanelDirection(awaitDirection) {
+                listState.focusVisibleItem(channelGroupList.indexOf(focusedChannelGroup), itemFocusRequesterList)
+            }
+            .then(modifier)
             .width(140.dp)
             .fillMaxHeight()
             .ifElse(
@@ -113,7 +121,7 @@ fun ClassicChannelGroupItemList(
 
             ClassicChannelGroupItem(
                 modifier = Modifier
-                    .ifElse(channelGroup == initialChannelGroup, Modifier.focusOnLaunchedSaveable())
+                    .ifElse(focusOnEntry && channelGroup == initialChannelGroup, Modifier.focusOnLaunchedSaveable())
                     .focusRequester(itemFocusRequesterList[index])
                     .ifElse(
                         index == 0,

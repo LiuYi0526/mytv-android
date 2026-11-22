@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
@@ -28,6 +30,7 @@ import top.yogiczy.mytv.tv.ui.tooling.PreviewWithLayoutGrids
 import top.yogiczy.mytv.tv.ui.utils.backHandler
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunched
 import top.yogiczy.mytv.tv.ui.utils.gridColumns
+import top.yogiczy.mytv.tv.ui.utils.ifElse
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -42,7 +45,10 @@ fun EpgScreen(
     onLive: () -> Unit = {},
     onEpgProgrammeReserve: (EpgProgramme) -> Unit = {},
     onClose: () -> Unit = {},
+    focusOptimize: Boolean = true,
 ) {
+    val inputModeManager = LocalInputModeManager.current
+    val focusOnEntry = remember { focusOptimize || inputModeManager.inputMode == InputMode.Keyboard }
     val screenAutoCloseState = rememberScreenAutoCloseState(onTimeout = onClose)
 
     val dateFormat = SimpleDateFormat("E MM-dd", Locale.getDefault())
@@ -54,7 +60,7 @@ fun EpgScreen(
     Drawer(
         modifier = modifier
             .backHandler { onClose() }
-            .focusOnLaunched(),
+            .ifElse(focusOnEntry, Modifier.focusOnLaunched()),
         onDismissRequest = onClose,
         position = DrawerPosition.Start,
         header = { Text("节目单") },
@@ -70,7 +76,8 @@ fun EpgScreen(
                 epgProgrammeReserveListProvider = epgProgrammeReserveListProvider,
                 supportPlaybackProvider = supportPlaybackProvider,
                 currentPlaybackProvider = currentPlaybackEpgProgrammeProvider,
-                focusOnInitialProgramme = focusOnInitialProgramme,
+                focusOnInitialProgramme = focusOnEntry && focusOnInitialProgramme,
+                awaitDirection = !focusOnEntry,
                 onPlayback = onEpgProgrammePlayback,
                 onLive = onLive,
                 onReserve = onEpgProgrammeReserve,

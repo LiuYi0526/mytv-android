@@ -43,6 +43,8 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme.Companion.isLive
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeList
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
+import top.yogiczy.mytv.tv.ui.screensold.components.awaitPanelDirection
+import top.yogiczy.mytv.tv.ui.screensold.components.focusVisibleItem
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
 import top.yogiczy.mytv.tv.ui.utils.ifElse
@@ -60,13 +62,18 @@ fun EpgProgrammeItemList(
     onLive: () -> Unit = {},
     onReserve: (EpgProgramme) -> Unit = {},
     focusOnInitialProgramme: Boolean = true,
+    awaitDirection: Boolean = false,
     onUserAction: () -> Unit = {},
 ) {
     val epgProgrammeList = epgProgrammeListProvider()
     if (epgProgrammeList.isEmpty()) {
         // YYKM uses an empty-state view, never a fake programme with replay/reserve actions.
+        val emptyFocusRequester = remember { FocusRequester() }
         Box(
-            modifier = modifier.fillMaxHeight().fillMaxWidth()
+            modifier = Modifier.awaitPanelDirection(awaitDirection) {
+                emptyFocusRequester.saveRequestFocus().getOrDefault(false)
+            }.then(modifier).fillMaxHeight().fillMaxWidth()
+                .focusRequester(emptyFocusRequester)
                 .ifElse(focusOnInitialProgramme, Modifier.focusOnLaunchedSaveable())
                 .focusable(),
             contentAlignment = Alignment.TopCenter,
@@ -117,7 +124,11 @@ fun EpgProgrammeItemList(
             .collect { _ -> onUserAction() }
     }
 
-    Column(modifier = modifier.fillMaxHeight()) {
+    Column(
+        modifier = Modifier.awaitPanelDirection(awaitDirection) {
+            listState.focusVisibleItem(initialIndex, itemFocusRequesterList)
+        }.then(modifier).fillMaxHeight(),
+    ) {
         CompositionLocalProvider(LocalBringIntoViewSpec provides CenteredProgrammeScrollSpec) {
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth()

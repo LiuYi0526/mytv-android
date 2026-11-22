@@ -34,6 +34,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -78,6 +79,8 @@ import top.yogiczy.mytv.tv.ui.screen.channels.components.rememberEpgProgrammeRec
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
+import top.yogiczy.mytv.tv.ui.screensold.components.awaitPanelDirection
+import top.yogiczy.mytv.tv.ui.screensold.components.focusVisibleItem
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
 import top.yogiczy.mytv.tv.ui.utils.ifElse
 import top.yogiczy.mytv.tv.ui.utils.saveFocusRestorer
@@ -95,6 +98,8 @@ fun ClassicChannelItemList(
     onChannelFavoriteToggle: (Channel) -> Unit = {},
     isChannelFavoriteProvider: (Channel) -> Boolean = { false },
     focusEmptyList: Boolean = true,
+    focusOnEntry: Boolean = true,
+    awaitDirection: Boolean = false,
     focusRequestKey: Int = 0,
     onChannelFocused: (Channel) -> Unit = { },
     epgListProvider: () -> EpgList = { EpgList() },
@@ -128,6 +133,7 @@ fun ClassicChannelItemList(
         )
     }
     var initiallyPositioned by remember(listState) { mutableStateOf(hasFocused) }
+    val shouldFocusOnEntry by rememberUpdatedState(focusOnEntry)
     LaunchedEffect(listState) {
         if (!initiallyPositioned) {
             val initialIndex = channelList.indexOf(initialFocusChannel)
@@ -148,7 +154,7 @@ fun ClassicChannelItemList(
                 // requesting the row, including a one-item list that cannot scroll.
                 withFrameNanos { }
                 hasFocused = true
-                itemFocusRequesterList[initialIndex].saveRequestFocus()
+                if (shouldFocusOnEntry) itemFocusRequesterList[initialIndex].saveRequestFocus()
             }
             initiallyPositioned = true
         }
@@ -157,14 +163,17 @@ fun ClassicChannelItemList(
         if (focusRequestKey <= 0 || !focusEmptyList) return@LaunchedEffect
         // A panel container may have several focusable descendants. Restore the
         // exact channel after a group/EPG transition, once its lazy item is attached.
+        if (channelList.isEmpty()) {
+            emptyFocusRequester.saveRequestFocus()
+            return@LaunchedEffect
+        }
         val index = channelList.indexOf(focusedChannel).coerceAtLeast(0)
         if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
             listState.scrollToItem(index)
         }
         snapshotFlow { listState.layoutInfo.visibleItemsInfo }
             .first { items -> items.any { it.index == index } }
-        if (channelList.isEmpty()) emptyFocusRequester.saveRequestFocus()
-        else itemFocusRequesterList[index].saveRequestFocus()
+        itemFocusRequesterList[index].saveRequestFocus()
     }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
@@ -193,7 +202,12 @@ fun ClassicChannelItemList(
 
     CompositionLocalProvider(LocalBringIntoViewSpec provides CenteredChannelScrollSpec) {
         LazyColumn(
-            modifier = modifier
+            modifier = Modifier
+                .awaitPanelDirection(awaitDirection) {
+                    if (channelList.isEmpty()) emptyFocusRequester.saveRequestFocus().getOrDefault(false)
+                    else listState.focusVisibleItem(channelList.indexOf(focusedChannel), itemFocusRequesterList)
+                }
+                .then(modifier)
                 .fillMaxHeight()
                 .width(if (showChannelLogoProvider()) 280.dp else 220.dp)
                 .drawWithContent { if (initiallyPositioned) drawContent() }
@@ -215,7 +229,7 @@ fun ClassicChannelItemList(
                         "暂无频道",
                         modifier = Modifier.fillMaxWidth()
                             .focusRequester(emptyFocusRequester)
-                            .ifElse(focusEmptyList, Modifier.focusOnLaunchedSaveable())
+                            .ifElse(focusEmptyList && focusOnEntry, Modifier.focusOnLaunchedSaveable())
                             .focusable()
                             .padding(12.dp),
                     )

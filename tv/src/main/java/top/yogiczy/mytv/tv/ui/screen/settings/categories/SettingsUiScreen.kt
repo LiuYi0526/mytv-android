@@ -156,7 +156,7 @@ fun SettingsUiScreen(
 
             SettingsListItem(
                 headlineContent = "焦点优化",
-                supportingContent = "关闭后可解决触摸设备在部分场景下闪退",
+                supportingContent = "开启后记住列表焦点，触摸打开选台或节目单时也会自动聚焦",
                 trailingContent = {
                     Switch(focusOptimize, null)
                 },

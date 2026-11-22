@@ -217,6 +217,7 @@ fun MainContent(
         onDismissRequest = { closeToolbarChild("epg") { mainContentState.isEpgScreenVisible = false } },
     ) {
         EpgScreen(
+            focusOptimize = settingsViewModel.uiFocusOptimize,
             epgProvider = {
                 epgListProvider().displayGuide(mainContentState.currentChannel)
             },
@@ -489,6 +490,7 @@ fun MainContent(
         onDismissRequest = { mainContentState.isChannelScreenVisible = false },
     ) {
         ClassicChannelScreen(
+            focusOptimize = settingsViewModel.uiFocusOptimize,
             channelGroupListProvider = filteredChannelGroupListProvider,
             favoriteChannelListProvider = favoriteChannelListProvider,
             currentChannelProvider = { mainContentState.currentChannel },
