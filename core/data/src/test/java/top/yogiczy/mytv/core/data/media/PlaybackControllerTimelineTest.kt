@@ -54,4 +54,22 @@ class PlaybackControllerTimelineTest {
         assertFalse(resolve(now = start - 1).epgFallback)
         assertTrue(resolve(duration = Long.MIN_VALUE + 1).epgFallback)
     }
+
+    @Test fun absoluteProgressUsesProgrammeStartAndStopsAtTheLiveEdge() {
+        val now = start + 120_000
+        val live = resolve(now = now)
+        assertEquals(PlaybackControllerTimeline.Progress(120_000, 600_000), live.progressAt(now))
+
+        val replay = resolve(absolute = true, replay = programme).copy(position = start + 200_000)
+        assertEquals(PlaybackControllerTimeline.Progress(120_000, 600_000), replay.progressAt(now))
+        assertEquals(PlaybackControllerTimeline.Progress(200_000, 600_000), replay.progressAt(programme.endAt))
+    }
+
+    @Test fun relativeProgressKeepsNativeDurationAndClampsToMediaBounds() {
+        val timeline = resolve(duration = 60_000)
+        assertEquals(PlaybackControllerTimeline.Progress(12_000, 60_000), timeline.progressAt(0))
+        assertEquals(PlaybackControllerTimeline.Progress(60_000, 60_000), timeline.copy(position = 70_000).progressAt(0))
+        assertEquals(PlaybackControllerTimeline.Progress(0, 60_000), timeline.copy(position = -1).progressAt(0))
+        assertNull(resolve(live = null).progressAt(0))
+    }
 }

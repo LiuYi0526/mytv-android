@@ -1,6 +1,5 @@
 package top.yogiczy.mytv.tv
 
-import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.content.BroadcastReceiver
@@ -10,7 +9,7 @@ import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.graphics.drawable.Icon
+import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
@@ -22,6 +21,7 @@ import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -31,8 +31,13 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.doOnPreDraw
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
+import top.yogiczy.mytv.core.data.media.PlaybackControllerTimeline
 import top.yogiczy.mytv.tv.ui.App
 import top.yogiczy.mytv.tv.ui.screen.timingclose.LocalTimingCloseViewModel
 import top.yogiczy.mytv.tv.ui.screen.timingclose.TimingCloseViewModel
@@ -40,35 +45,44 @@ import top.yogiczy.mytv.tv.ui.screensold.videoplayer.VideoPlayerState
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.Configs
 import top.yogiczy.mytv.tv.utlis.HttpServer
+import top.yogiczy.mytv.tv.utlis.MediaPlaybackAction
+import top.yogiczy.mytv.tv.utlis.SystemMediaControls
 import kotlin.system.exitProcess
 
 internal val LocalPictureInPictureHost = staticCompositionLocalOf<MainActivity?> { null }
 
-internal class PictureInPicturePlayback(
+internal class ChannelPlaybackControls(
     val player: VideoPlayerState,
     val isCurrentDestination: () -> Boolean,
+    val channelName: () -> String,
+    val programmeTimelineAt: (Long) -> Pair<EpgProgramme?, PlaybackControllerTimeline>,
+    val logoUrls: () -> List<String>,
 )
-
-private const val ACTION_PIP_PLAY = "top.yogiczy.mytv.tv.pip.PLAY"
-private const val ACTION_PIP_PAUSE = "top.yogiczy.mytv.tv.pip.PAUSE"
 
 class MainActivity : ComponentActivity() {
     private val timingCloseViewModel: TimingCloseViewModel by viewModels()
-    internal var pictureInPicturePlayback by mutableStateOf<PictureInPicturePlayback?>(null)
+    private val systemMediaControls by lazy(LazyThreadSafetyMode.NONE) {
+        SystemMediaControls(this, lifecycleScope, ::handleMediaAction)
+    }
+    internal var channelPlaybackControls by mutableStateOf<ChannelPlaybackControls?>(null)
     internal var playbackInPictureInPicture by mutableStateOf(false)
         private set
 
-    private val pictureInPictureReceiver = object : BroadcastReceiver() {
+    private val mediaActionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !isInPictureInPictureMode) return
-            val playback = pictureInPicturePlayback ?: return
-            if (!playback.isCurrentDestination()) return
+            MediaPlaybackAction.entries.firstOrNull { it.broadcastAction == intent.action }
+                ?.let(::handleMediaAction)
+        }
+    }
 
-            val player = playback.player
-            when (intent.action) {
-                ACTION_PIP_PLAY -> if (!player.playRequested) player.play()
-                ACTION_PIP_PAUSE -> if (player.playRequested) player.pause()
-            }
+    private fun handleMediaAction(action: MediaPlaybackAction) {
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
+        val playback = channelPlaybackControls ?: return
+        val player = playback.player
+        if (!playback.isCurrentDestination() || (!player.hasControllableMedia && !playbackInPictureInPicture)) return
+        when (action) {
+            MediaPlaybackAction.PLAY -> if (!player.playRequested) player.play()
+            MediaPlaybackAction.PAUSE -> if (player.playRequested) player.pause()
         }
     }
 
@@ -77,19 +91,18 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 
+        ContextCompat.registerReceiver(
+            this,
+            mediaActionReceiver,
+            IntentFilter().apply { MediaPlaybackAction.entries.forEach { addAction(it.broadcastAction) } },
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        observeSystemMediaControls()
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            ContextCompat.registerReceiver(
-                this,
-                pictureInPictureReceiver,
-                IntentFilter().apply {
-                    addAction(ACTION_PIP_PLAY)
-                    addAction(ACTION_PIP_PAUSE)
-                },
-                ContextCompat.RECEIVER_NOT_EXPORTED,
-            )
             lifecycleScope.launch {
                 snapshotFlow {
-                    if (playbackInPictureInPicture) pictureInPicturePlayback?.player?.playRequested else null
+                    if (playbackInPictureInPicture) channelPlaybackControls?.player?.playRequested else null
                 }.collect { playRequested ->
                     if (playRequested != null && isInPictureInPictureMode) {
                         setPictureInPictureParams(pictureInPictureParams(playRequested))
@@ -134,13 +147,57 @@ class MainActivity : ComponentActivity() {
         HttpServer.startService(applicationContext)
     }
 
+    private fun observeSystemMediaControls() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                var now by mutableLongStateOf(System.currentTimeMillis())
+                val clock = launch {
+                    while (true) {
+                        // Guide-based playback still advances when there is no native position.
+                        delay(1_000 - now % 1_000)
+                        now = System.currentTimeMillis()
+                    }
+                }
+                try {
+                    snapshotFlow {
+                        val playback = channelPlaybackControls ?: return@snapshotFlow null
+                        val player = playback.player
+                        if (!playback.isCurrentDestination() || !player.hasControllableMedia) {
+                            return@snapshotFlow null
+                        }
+                        val state = when {
+                            !player.playRequested -> PlaybackState.STATE_PAUSED
+                            player.isPlaying -> PlaybackState.STATE_PLAYING
+                            else -> PlaybackState.STATE_BUFFERING
+                        }
+                        val (programme, timeline) = playback.programmeTimelineAt(now)
+                        val progress = timeline.progressAt(now)
+                        SystemMediaControls.State(
+                            channelName = playback.channelName(),
+                            programme = programme,
+                            logoUrls = playback.logoUrls(),
+                            playbackState = state,
+                            progress = progress?.copy(elapsedMs = progress.elapsedMs / 1_000 * 1_000),
+                        )
+                    }.collect { state ->
+                        if (state == null) systemMediaControls.clear() else systemMediaControls.publish(state)
+                    }
+                } finally {
+                    clock.cancel()
+                    systemMediaControls.clear()
+                }
+            }
+        }
+    }
+
     private fun closeApp() {
+        systemMediaControls.clear()
         finish()
         exitProcess(0)
     }
 
     override fun onDestroy() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) unregisterReceiver(pictureInPictureReceiver)
+        unregisterReceiver(mediaActionReceiver)
         HttpServer.stopService(applicationContext)
         super.onDestroy()
     }
@@ -148,7 +205,7 @@ class MainActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
 
-        val playback = pictureInPicturePlayback ?: return
+        val playback = channelPlaybackControls ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             Configs.appPipEnable &&
             playback.isCurrentDestination() &&
@@ -162,18 +219,10 @@ class MainActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun pictureInPictureParams(playRequested: Boolean): PictureInPictureParams {
-        val action = if (playRequested) ACTION_PIP_PAUSE else ACTION_PIP_PLAY
-        val icon = if (playRequested) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
-        val label = if (playRequested) "暂停" else "播放"
-        val intent = PendingIntent.getBroadcast(
-            this,
-            0,
-            Intent(action).setPackage(packageName),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
+        val action = MediaPlaybackAction.forPlayback(playRequested)
         return PictureInPictureParams.Builder()
             .setAspectRatio(Rational(16, 9))
-            .setActions(listOf(RemoteAction(Icon.createWithResource("android", icon), label, label, intent)))
+            .setActions(listOf(RemoteAction(action.icon, action.label, action.label, action.pendingIntent(this))))
             .build()
     }
 

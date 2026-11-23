@@ -63,6 +63,9 @@ class VideoPlayerState(
     var playRequested by mutableStateOf(false)
         private set
     private var hasRenderedFirstFrame by mutableStateOf(false)
+    internal val hasControllableMedia: Boolean
+        get() = error == null && (hasRenderedFirstFrame || (tracksReady && metadata.audio != null))
+
     internal val canEnterPictureInPicture: Boolean
         get() = hasRenderedFirstFrame && playRequested && error == null && (isPlaying || isBuffering)
 

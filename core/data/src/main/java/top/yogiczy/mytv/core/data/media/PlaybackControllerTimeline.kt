@@ -10,6 +10,15 @@ data class PlaybackControllerTimeline(
     val epgFallback: Boolean = false,
     val seekEnabled: Boolean = true,
 ) {
+    data class Progress(val elapsedMs: Long, val durationMs: Long)
+
+    fun progressAt(now: Long): Progress? {
+        val (start, end) = range
+        if (end <= start) return null
+        val availableEnd = if (absolute) minOf(now, end).coerceAtLeast(start) else end
+        return Progress(position.coerceIn(start, availableEnd) - start, end - start)
+    }
+
     companion object {
         fun resolve(
             position: Long,

@@ -201,12 +201,7 @@ fun ChannelsChannelItemLogo(
     val channel = channelProvider()
     val context = LocalContext.current
 
-    val logo = if (settingsVM.iptvChannelLogoOverride || channel.logo.isNullOrBlank()) {
-        settingsVM.iptvChannelLogoProvider
-            .replace("{name}", channel.epgName)
-            .replace("{name|lowercase}", channel.epgName.lowercase())
-            .replace("{name|uppercase}", channel.epgName.uppercase())
-    } else channel.logo
+    val logo = channel.resolveLogo(settingsVM.iptvChannelLogoOverride, settingsVM.iptvChannelLogoProvider)
 
     val request = remember(context, logo) { channelLogoRequest(context, logo) }
     SubcomposeAsyncImage(

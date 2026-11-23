@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.delay
@@ -262,11 +263,15 @@ fun MainScreen(
 
             composable(Screens.Live()) { backStackEntry ->
                 val doubleBackPressedExitState = rememberDoubleBackPressedExitState()
+                val currentBackStackEntry by navController.currentBackStackEntryAsState()
 
                 key(settingsViewModel.videoPlayerCore) {
                     top.yogiczy.mytv.tv.ui.screensold.main.components.MainContent(
                         videoSurfaceVisible = transition.targetState != EnterExitState.PostExit,
-                        isPlaybackDestination = { navController.currentBackStackEntry === backStackEntry },
+                        isPlaybackDestination = {
+                            currentBackStackEntry === backStackEntry &&
+                                navController.currentBackStackEntry === backStackEntry
+                        },
                         filteredChannelGroupListProvider = filteredChannelGroupListProvider,
                         favoriteChannelListProvider = favoriteChannelListProvider,
                         epgListProvider = epgListProvider,

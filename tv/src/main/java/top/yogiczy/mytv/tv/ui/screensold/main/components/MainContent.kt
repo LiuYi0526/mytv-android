@@ -10,8 +10,8 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.delay
+import top.yogiczy.mytv.tv.ChannelPlaybackControls
 import top.yogiczy.mytv.tv.LocalPictureInPictureHost
-import top.yogiczy.mytv.tv.PictureInPicturePlayback
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.channelList
@@ -20,9 +20,11 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelList
 import top.yogiczy.mytv.core.data.entities.control.ControlAction
 import top.yogiczy.mytv.core.data.entities.control.ControlKey
 import top.yogiczy.mytv.core.data.entities.control.ControlKeyActions
+import top.yogiczy.mytv.core.data.entities.epg.EpgDisplaySchedule
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.displayGuide
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
+import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeReserveList
 import top.yogiczy.mytv.core.data.media.PlaybackProgrammeNavigation
 import top.yogiczy.mytv.core.data.media.PlaybackControllerTimeline
@@ -31,6 +33,7 @@ import top.yogiczy.mytv.tv.ui.material.PopupContent
 import top.yogiczy.mytv.tv.ui.material.Snackbar
 import top.yogiczy.mytv.tv.ui.material.Visibility
 import top.yogiczy.mytv.tv.ui.material.popupable
+import top.yogiczy.mytv.tv.ui.screen.channels.components.resolveLogo
 import top.yogiczy.mytv.tv.ui.screen.settings.SettingsSubCategories
 import top.yogiczy.mytv.tv.ui.screen.settings.SettingsViewModel
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
@@ -80,22 +83,60 @@ fun MainContent(
 
     val videoPlayerState =
         rememberVideoPlayerState(defaultDisplayModeProvider = { settingsViewModel.videoPlayerDisplayMode })
-    val currentPlaybackDestination by rememberUpdatedState(isPlaybackDestination)
-    DisposableEffect(pictureInPictureHost, videoPlayerState) {
-        val playback = PictureInPicturePlayback(videoPlayerState) { currentPlaybackDestination() }
-        pictureInPictureHost?.pictureInPicturePlayback = playback
-        onDispose {
-            if (pictureInPictureHost?.pictureInPicturePlayback === playback) {
-                pictureInPictureHost.pictureInPicturePlayback = null
-            }
-        }
-    }
     val mainContentState = rememberMainContentState(
         videoPlayerState = videoPlayerState,
         channelGroupListProvider = filteredChannelGroupListProvider,
         favoriteChannelListProvider = favoriteChannelListProvider,
         epgListProvider = epgListProvider,
     )
+    val currentPlaybackDestination by rememberUpdatedState(isPlaybackDestination)
+    val currentEpgListProvider by rememberUpdatedState(epgListProvider)
+
+    fun liveProgrammeAt(now: Long) = EpgDisplaySchedule.recent(
+        currentEpgListProvider().displayGuide(mainContentState.currentChannel, now).programmeList,
+        now,
+    ).now
+
+    fun playbackTimeline(live: EpgProgramme?, now: Long) = PlaybackControllerTimeline.resolve(
+        position = videoPlayerState.currentPosition,
+        duration = videoPlayerState.duration,
+        nativeAbsolute = videoPlayerState.positionIsAbsolute,
+        replay = mainContentState.currentPlaybackEpgProgramme,
+        live = live,
+        supportsReplay = ChannelPlayback.isSupported(mainContentState.currentChannelLine),
+        now = now,
+    )
+
+    DisposableEffect(pictureInPictureHost, mainContentState, videoPlayerState, settingsViewModel) {
+        val playback = ChannelPlaybackControls(
+            player = videoPlayerState,
+            isCurrentDestination = { currentPlaybackDestination() },
+            channelName = { mainContentState.currentChannel.name },
+            programmeTimelineAt = { now ->
+                val live = liveProgrammeAt(now)
+                val programme = (mainContentState.currentPlaybackEpgProgramme ?: live)?.takeIf {
+                    it.title.isNotBlank() && it.title != EpgDisplaySchedule.UNKNOWN_TITLE
+                }
+                programme to playbackTimeline(live, now)
+            },
+            logoUrls = {
+                val channel = mainContentState.currentChannel
+                if (settingsViewModel.uiShowChannelLogo) {
+                    val preferred = channel.resolveLogo(
+                        settingsViewModel.iptvChannelLogoOverride,
+                        settingsViewModel.iptvChannelLogoProvider,
+                    )
+                    listOfNotNull(preferred, channel.logo).filter(String::isNotBlank).distinct()
+                } else emptyList()
+            },
+        )
+        pictureInPictureHost?.channelPlaybackControls = playback
+        onDispose {
+            if (pictureInPictureHost?.channelPlaybackControls === playback) {
+                pictureInPictureHost.channelPlaybackControls = null
+            }
+        }
+    }
     val channelNumberSelectState = rememberChannelNumberSelectState {
         val idx = it.toInt() - 1
         filteredChannelGroupListProvider().channelList.getOrNull(idx)?.let { channel ->
@@ -296,16 +337,8 @@ fun MainContent(
         val controllerNow by produceState(System.currentTimeMillis()) {
             while (true) { value = System.currentTimeMillis(); delay(1_000) }
         }
-        val liveProgramme = epgListProvider().recentProgramme(mainContentState.currentChannel)?.now
-        val timeline = PlaybackControllerTimeline.resolve(
-            position = videoPlayerState.currentPosition,
-            duration = videoPlayerState.duration,
-            nativeAbsolute = videoPlayerState.positionIsAbsolute,
-            replay = mainContentState.currentPlaybackEpgProgramme,
-            live = liveProgramme,
-            supportsReplay = ChannelPlayback.isSupported(mainContentState.currentChannelLine),
-            now = controllerNow,
-        )
+        val liveProgramme = liveProgrammeAt(controllerNow)
+        val timeline = playbackTimeline(liveProgramme, controllerNow)
         VideoPlayerControllerScreen(
             previousProgrammeProvider = {
                 PlaybackProgrammeNavigation.adjacent(

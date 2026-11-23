@@ -5,6 +5,13 @@ import android.graphics.Bitmap
 import coil.request.ImageRequest
 import coil.size.Size
 import coil.transform.Transformation
+import top.yogiczy.mytv.core.data.entities.channel.Channel
+
+internal fun Channel.resolveLogo(overrideSourceLogo: Boolean, provider: String): String? =
+    if (!overrideSourceLogo && !logo.isNullOrBlank()) logo else provider
+        .replace("{name}", epgName)
+        .replace("{name|lowercase}", epgName.lowercase())
+        .replace("{name|uppercase}", epgName.uppercase())
 
 internal fun channelLogoRequest(context: Context, logo: String?): ImageRequest =
     ImageRequest.Builder(context)
