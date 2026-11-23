@@ -57,6 +57,11 @@ internal class ChannelPlaybackControls(
     val channelName: () -> String,
     val programmeTimelineAt: (Long) -> Pair<EpgProgramme?, PlaybackControllerTimeline>,
     val logoUrls: () -> List<String>,
+    val previousChannel: () -> Unit,
+    val nextChannel: () -> Unit,
+    val isFavorite: () -> Boolean?,
+    val toggleFavorite: () -> Unit,
+    val stopPlayback: () -> Unit,
 )
 
 class MainActivity : ComponentActivity() {
@@ -83,6 +88,15 @@ class MainActivity : ComponentActivity() {
         when (action) {
             MediaPlaybackAction.PLAY -> if (!player.playRequested) player.play()
             MediaPlaybackAction.PAUSE -> if (player.playRequested) player.pause()
+            MediaPlaybackAction.PREVIOUS_CHANNEL -> playback.previousChannel()
+            MediaPlaybackAction.NEXT_CHANNEL -> playback.nextChannel()
+            MediaPlaybackAction.ADD_FAVORITE -> if (playback.isFavorite() == false) playback.toggleFavorite()
+            MediaPlaybackAction.REMOVE_FAVORITE -> if (playback.isFavorite() == true) playback.toggleFavorite()
+            MediaPlaybackAction.OPEN_PLAYER -> systemMediaControls.openPlayer()
+            MediaPlaybackAction.STOP -> {
+                playback.stopPlayback()
+                systemMediaControls.clear()
+            }
         }
     }
 
@@ -178,6 +192,7 @@ class MainActivity : ComponentActivity() {
                             logoUrls = playback.logoUrls(),
                             playbackState = state,
                             progress = progress?.copy(elapsedMs = progress.elapsedMs / 1_000 * 1_000),
+                            isFavorite = playback.isFavorite(),
                         )
                     }.collect { state ->
                         if (state == null) systemMediaControls.clear() else systemMediaControls.publish(state)
@@ -222,7 +237,7 @@ class MainActivity : ComponentActivity() {
         val action = MediaPlaybackAction.forPlayback(playRequested)
         return PictureInPictureParams.Builder()
             .setAspectRatio(Rational(16, 9))
-            .setActions(listOf(RemoteAction(action.icon, action.label, action.label, action.pendingIntent(this))))
+            .setActions(listOf(RemoteAction(action.icon(this), action.label, action.label, action.pendingIntent(this))))
             .build()
     }
 

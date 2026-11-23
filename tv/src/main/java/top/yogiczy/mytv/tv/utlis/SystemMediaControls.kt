@@ -16,7 +16,9 @@ import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
+import android.os.Bundle
 import androidx.core.graphics.drawable.toBitmap
+import androidx.media3.ui.R as Media3UiResources
 import coil.imageLoader
 import coil.request.SuccessResult
 import coil.size.Scale
@@ -27,17 +29,30 @@ import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.media.PlaybackControllerTimeline
 import top.yogiczy.mytv.tv.MainActivity
+import top.yogiczy.mytv.tv.R
 import top.yogiczy.mytv.tv.ui.screen.channels.components.channelLogoRequest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-internal enum class MediaPlaybackAction(val label: String, private val iconId: Int) {
+internal enum class MediaPlaybackAction(
+    val label: String,
+    val iconId: Int,
+    private val isFrameworkIcon: Boolean = true,
+) {
     PLAY("播放", android.R.drawable.ic_media_play),
-    PAUSE("暂停", android.R.drawable.ic_media_pause);
+    PAUSE("暂停", android.R.drawable.ic_media_pause),
+    PREVIOUS_CHANNEL("上一频道", android.R.drawable.ic_media_previous),
+    NEXT_CHANNEL("下一频道", android.R.drawable.ic_media_next),
+    ADD_FAVORITE("收藏频道", R.drawable.ic_media_favorite_outline, isFrameworkIcon = false),
+    REMOVE_FAVORITE("取消收藏", R.drawable.ic_media_favorite, isFrameworkIcon = false),
+    OPEN_PLAYER("打开播放页", R.drawable.ic_media_open_player, isFrameworkIcon = false),
+    STOP("终止播放", Media3UiResources.drawable.exo_icon_stop, isFrameworkIcon = false);
 
     val broadcastAction = "top.yogiczy.mytv.tv.media.$name"
-    val icon: Icon get() = Icon.createWithResource("android", iconId)
+
+    fun icon(context: Context): Icon =
+        Icon.createWithResource(if (isFrameworkIcon) "android" else context.packageName, iconId)
 
     fun pendingIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
         context,
@@ -63,18 +78,22 @@ internal class SystemMediaControls(
         val logoUrls: List<String>,
         val playbackState: Int,
         val progress: PlaybackControllerTimeline.Progress?,
-    )
+        val isFavorite: Boolean?,
+    ) {
+        val leadingAction: MediaPlaybackAction
+            get() = when (isFavorite) {
+                true -> MediaPlaybackAction.REMOVE_FAVORITE
+                false -> MediaPlaybackAction.ADD_FAVORITE
+                null -> MediaPlaybackAction.OPEN_PLAYER
+            }
+    }
 
     private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    private val openPlayer = PendingIntent.getActivity(
-        context,
-        0,
-        Intent(context, MainActivity::class.java)
-            .setAction(Intent.ACTION_MAIN)
-            .addCategory(Intent.CATEGORY_LAUNCHER)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-        PendingIntent.FLAG_IMMUTABLE,
-    )
+    private val openPlayerIntent = Intent(context, MainActivity::class.java)
+        .setAction(Intent.ACTION_MAIN)
+        .addCategory(Intent.CATEGORY_LAUNCHER)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    private val openPlayer = PendingIntent.getActivity(context, 0, openPlayerIntent, PendingIntent.FLAG_IMMUTABLE)
     private var session: MediaSession? = null
     private var state: State? = null
     private var artwork: Bitmap? = null
@@ -94,7 +113,9 @@ internal class SystemMediaControls(
         if (metadataChanged) updateMetadata(session, state)
         updatePlaybackState(session, state)
         if (!session.isActive) session.isActive = true
-        if (metadataChanged || previous?.playbackState != state.playbackState) publishNotification(session, state)
+        if (metadataChanged || previous?.playbackState != state.playbackState || previous?.isFavorite != state.isFavorite) {
+            publishNotification(session, state)
+        }
         if (artworkChanged && state.logoUrls.isNotEmpty()) {
             artworkJob = scope.launch {
                 for (url in state.logoUrls) {
@@ -149,9 +170,17 @@ internal class SystemMediaControls(
     }
 
     private fun updatePlaybackState(session: MediaSession, state: State) {
+        val leading = state.leadingAction
+        val stop = MediaPlaybackAction.STOP
         session.setPlaybackState(
             PlaybackState.Builder()
-                .setActions(PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE)
+                .setActions(
+                    PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE or
+                        PlaybackState.ACTION_SKIP_TO_PREVIOUS or PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_STOP,
+                )
+                // HyperOS places the first custom action on the left and the second on the right.
+                .addCustomAction(leading.broadcastAction, leading.label, leading.iconId)
+                .addCustomAction(stop.broadcastAction, stop.label, stop.iconId)
                 .setState(
                     state.playbackState,
                     state.progress?.elapsedMs ?: PlaybackState.PLAYBACK_POSITION_UNKNOWN,
@@ -181,8 +210,22 @@ internal class SystemMediaControls(
                 .setCategory(Notification.CATEGORY_TRANSPORT)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
-                .setStyle(Notification.MediaStyle().setMediaSession(session.sessionToken).setShowActionsInCompactView(0))
-                .addAction(Notification.Action.Builder(action.icon, action.label, action.pendingIntent(context)).build())
+                .setStyle(Notification.MediaStyle().setMediaSession(session.sessionToken).setShowActionsInCompactView(1, 2, 3))
+                .apply {
+                    val actions = listOf(
+                        state.leadingAction,
+                        MediaPlaybackAction.PREVIOUS_CHANNEL,
+                        action,
+                        MediaPlaybackAction.NEXT_CHANNEL,
+                        MediaPlaybackAction.STOP,
+                    )
+                    for (control in actions) {
+                        val intent = if (control == MediaPlaybackAction.OPEN_PLAYER) openPlayer else control.pendingIntent(context)
+                        addAction(Notification.Action.Builder(
+                            control.icon(context), control.label, intent,
+                        ).build())
+                    }
+                }
                 .build(),
         )
     }
@@ -213,9 +256,22 @@ internal class SystemMediaControls(
             setCallback(object : MediaSession.Callback() {
                 override fun onPlay() = onAction(MediaPlaybackAction.PLAY)
                 override fun onPause() = onAction(MediaPlaybackAction.PAUSE)
+                override fun onSkipToPrevious() = onAction(MediaPlaybackAction.PREVIOUS_CHANNEL)
+                override fun onSkipToNext() = onAction(MediaPlaybackAction.NEXT_CHANNEL)
+                override fun onStop() = onAction(MediaPlaybackAction.STOP)
+
+                override fun onCustomAction(action: String, extras: Bundle?) {
+                    val leading = state?.leadingAction
+                    when {
+                        action == MediaPlaybackAction.STOP.broadcastAction -> onStop()
+                        leading != null && action == leading.broadcastAction -> onAction(leading)
+                    }
+                }
             })
         }
     }
+
+    fun openPlayer() = context.startActivity(openPlayerIntent)
 
     @Suppress("DEPRECATION") // Notification channels were added in Android 8.
     private fun notificationBuilder(): Notification.Builder =

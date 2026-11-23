@@ -482,6 +482,11 @@ class MainContentState(
         changeCurrentChannel(getNextChannel())
     }
 
+    fun stopPlayback() {
+        cancelContinuation()
+        videoPlayerState.stop()
+    }
+
     fun reverseEpgProgrammeOrNot(channel: Channel, programme: EpgProgramme) {
         val reverse = settingsViewModel.epgChannelReserveList.firstOrNull {
             it.test(channel, programme)

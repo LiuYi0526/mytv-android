@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -14,6 +15,7 @@ import top.yogiczy.mytv.tv.ChannelPlaybackControls
 import top.yogiczy.mytv.tv.LocalPictureInPictureHost
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
+import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.channelGroupIdx
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.channelList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
 import top.yogiczy.mytv.core.data.entities.channel.ChannelList
@@ -90,7 +92,21 @@ fun MainContent(
         epgListProvider = epgListProvider,
     )
     val currentPlaybackDestination by rememberUpdatedState(isPlaybackDestination)
+    val currentChannelGroups by rememberUpdatedState(filteredChannelGroupListProvider)
     val currentEpgListProvider by rememberUpdatedState(epgListProvider)
+    val currentToDashboardScreen by rememberUpdatedState(toDashboardScreen)
+    val currentOnChannelFavoriteToggle by rememberUpdatedState(onChannelFavoriteToggle)
+    val isCurrentChannelFavorite by remember(mainContentState, settingsViewModel) {
+        derivedStateOf {
+            val channel = mainContentState.currentChannel
+            when {
+                !settingsViewModel.iptvChannelFavoriteEnable -> null
+                settingsViewModel.iptvChannelFavoriteList.any { it.channel == channel } -> true
+                currentChannelGroups().channelGroupIdx(channel) >= 0 -> false
+                else -> null
+            }
+        }
+    }
 
     fun liveProgrammeAt(now: Long) = EpgDisplaySchedule.recent(
         currentEpgListProvider().displayGuide(mainContentState.currentChannel, now).programmeList,
@@ -128,6 +144,18 @@ fun MainContent(
                     )
                     listOfNotNull(preferred, channel.logo).filter(String::isNotBlank).distinct()
                 } else emptyList()
+            },
+            previousChannel = mainContentState::changeCurrentChannelToPrev,
+            nextChannel = mainContentState::changeCurrentChannelToNext,
+            isFavorite = { isCurrentChannelFavorite },
+            toggleFavorite = { currentOnChannelFavoriteToggle(mainContentState.currentChannel) },
+            stopPlayback = {
+                mainContentState.stopPlayback()
+                if (pictureInPictureHost?.playbackInPictureInPicture == true) {
+                    pictureInPictureHost.finish()
+                } else {
+                    currentToDashboardScreen()
+                }
             },
         )
         pictureInPictureHost?.channelPlaybackControls = playback
