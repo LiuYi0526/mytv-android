@@ -28,7 +28,9 @@ import top.yogiczy.mytv.tv.ui.material.*
 import top.yogiczy.mytv.tv.ui.material.PaddedLazyColumn
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
+import top.yogiczy.mytv.tv.ui.screen.components.LAN_SERVER_UNAVAILABLE
 import top.yogiczy.mytv.tv.ui.screen.components.Qrcode
+import top.yogiczy.mytv.tv.ui.screen.components.rememberLanServerUrl
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsCategoryScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsListItem
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsTextEditor
@@ -36,7 +38,6 @@ import top.yogiczy.mytv.tv.ui.utils.clickableNoIndication
 import top.yogiczy.mytv.tv.ui.utils.Configs
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunched
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
-import top.yogiczy.mytv.tv.utlis.HttpServer
 
 @Composable
 fun SettingsIptvSourceDetailScreen(
@@ -194,7 +195,7 @@ internal fun SourceDetailLayout(
     showBackButton: Boolean = true,
     addTitle: String = "添加订阅源",
     editTitle: String = "订阅源",
-    qrUrl: String = HttpServer.serverUrl,
+    qrUrlSuffix: String = "",
     qrDescription: String = "使用手机扫码配置订阅源",
     content: LazyListScope.(FocusRequester) -> Unit,
 ) {
@@ -205,6 +206,7 @@ internal fun SourceDetailLayout(
     }
     val padding = rememberChildPadding()
     val firstFocus = remember { FocusRequester() }
+    val qrUrl = rememberLanServerUrl()?.plus(qrUrlSuffix)
     AppScreen(header = { Text(addTitle) }, canBack = showBackButton, onBackPressed = onBackPressed) {
         Row(
             Modifier.fillMaxSize().padding(padding.copy(top = 10.dp).paddingValues),
@@ -214,9 +216,13 @@ internal fun SourceDetailLayout(
                 val qrSize = minOf(maxWidth - 24.dp, maxHeight - 110.dp, 250.dp).coerceAtLeast(64.dp)
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("扫码添加", style = MaterialTheme.typography.titleMedium)
-                    Qrcode(Modifier.size(qrSize), text = qrUrl)
-                    Text(qrDescription, style = MaterialTheme.typography.bodyMedium)
-                    Text(qrUrl, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
+                    if (qrUrl == null) {
+                        Text(LAN_SERVER_UNAVAILABLE, textAlign = TextAlign.Center)
+                    } else {
+                        Qrcode(Modifier.size(qrSize), text = qrUrl)
+                        Text(qrDescription, style = MaterialTheme.typography.bodyMedium)
+                        Text(qrUrl, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
             Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)))

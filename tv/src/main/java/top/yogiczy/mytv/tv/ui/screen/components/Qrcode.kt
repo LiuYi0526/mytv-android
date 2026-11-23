@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,7 +33,16 @@ import top.yogiczy.mytv.tv.ui.material.PopupHandleableApplication
 import top.yogiczy.mytv.tv.ui.material.SimplePopup
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.clickableNoIndication
+import top.yogiczy.mytv.tv.utlis.HttpServer
 
+internal const val LAN_SERVER_UNAVAILABLE = "未获取到局域网 IPv4 地址，请检查 Wi-Fi 或有线网络"
+
+@Composable
+internal fun rememberLanServerUrl(): String? {
+    val context = LocalContext.current.applicationContext
+    val urls = remember(context) { HttpServer.observeLanUrl(context) }
+    return urls.collectAsState(initial = null).value
+}
 
 @Composable
 fun Qrcode(
@@ -45,14 +57,16 @@ fun Qrcode(
                 .fillMaxSize()
                 .align(Alignment.Center)
                 .padding(10.dp),
-            painter = rememberQrCodePainter(
-                data = text,
-                shapes = QrShapes(
-                    ball = QrBallShape.circle(),
-                    darkPixel = QrPixelShape.roundCorners(),
-                    frame = QrFrameShape.roundCorners(.25f),
-                ),
-            ),
+            painter = key(text) {
+                rememberQrCodePainter(
+                    data = text,
+                    shapes = QrShapes(
+                        ball = QrBallShape.circle(),
+                        darkPixel = QrPixelShape.roundCorners(),
+                        frame = QrFrameShape.roundCorners(.25f),
+                    ),
+                )
+            },
             contentDescription = text,
         )
     }

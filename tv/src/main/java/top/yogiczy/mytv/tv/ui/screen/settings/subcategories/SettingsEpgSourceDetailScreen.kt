@@ -17,7 +17,6 @@ import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCatalog
 import top.yogiczy.mytv.tv.ui.material.*
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsListItem
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunched
-import top.yogiczy.mytv.tv.utlis.HttpServer
 
 @Composable
 internal fun SettingsEpgSourceDetailScreen(
@@ -35,7 +34,7 @@ internal fun SettingsEpgSourceDetailScreen(
     val scope = rememberCoroutineScope()
     SourceDetailLayout(
         adding = original == null, headerExtra = null, onBackPressed = onBackPressed,
-        addTitle = "添加节目单", editTitle = "节目单", qrUrl = "${HttpServer.serverUrl}/#epg",
+        addTitle = "添加节目单", editTitle = "节目单", qrUrlSuffix = "/#epg",
         qrDescription = "使用手机扫码配置节目单",
     ) { firstFocus ->
         item {

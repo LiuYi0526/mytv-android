@@ -11,6 +11,8 @@ import com.koushikdutta.async.http.server.AsyncHttpServerRequest
 import com.koushikdutta.async.http.server.AsyncHttpServerResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
@@ -36,9 +38,6 @@ import top.yogiczy.mytv.tv.ui.material.Snackbar
 import top.yogiczy.mytv.tv.ui.material.SnackbarType
 import top.yogiczy.mytv.tv.ui.utils.Configs
 import java.io.File
-import java.net.Inet4Address
-import java.net.NetworkInterface
-import java.net.SocketException
 
 
 object HttpServer : Loggable("HttpServer") {
@@ -47,7 +46,8 @@ object HttpServer : Loggable("HttpServer") {
         File(Globals.cacheDir, "uploaded_apk.apk").apply { deleteOnExit() }
     }
 
-    val serverUrl by lazy { "http://${getLocalIpAddress()}:${SERVER_PORT}" }
+    internal fun observeLanUrl(context: Context): Flow<String?> =
+        observeLanAddress(context).map { address -> address?.let { "http://$it:$SERVER_PORT" } }
 
     fun start(context: Context) {
         CoroutineScope(Dispatchers.IO).launch {
@@ -149,7 +149,7 @@ object HttpServer : Loggable("HttpServer") {
                     handleFileContentWithDirPost(request, response)
                 }
 
-                log.i("设置服务已启动: $serverUrl")
+                log.i("设置服务已启动（端口 $SERVER_PORT）")
             } catch (ex: Exception) {
                 log.e("设置服务启动失败: ${ex.message}", ex)
                 launch(Dispatchers.Main) {
@@ -456,42 +456,6 @@ object HttpServer : Loggable("HttpServer") {
         }
 
         wrapResponse(response).send(file.path)
-    }
-
-    private fun getLocalIpAddress(): String {
-        val defaultIp = "127.0.0.1"
-
-        try {
-            val en = NetworkInterface.getNetworkInterfaces()
-            while (en.hasMoreElements()) {
-                val intf = en.nextElement()
-                val enumIpAddr = intf.inetAddresses
-                while (enumIpAddr.hasMoreElements()) {
-                    val inetAddress = enumIpAddr.nextElement()
-                    if (!inetAddress.isLoopbackAddress && inetAddress is Inet4Address) {
-                        val ip = inetAddress.hostAddress ?: defaultIp
-                        val isValid = when {
-                            ip.startsWith("192.168.") -> true
-                            ip.startsWith("10.") -> true
-                            ip.startsWith("172.") -> {
-                                val parts = ip.split(".")
-                                val secondOctet = parts.getOrNull(1)?.toIntOrNull()
-                                secondOctet in 16..31
-                            }
-
-                            else -> false
-                        }
-
-                        if (isValid)
-                            return ip
-                    }
-                }
-            }
-            return defaultIp
-        } catch (ex: SocketException) {
-            log.e("IP Address: ${ex.message}", ex)
-            return defaultIp
-        }
     }
 
     fun startService(context: Context) {

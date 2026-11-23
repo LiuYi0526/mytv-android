@@ -17,12 +17,13 @@ import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
 import top.yogiczy.mytv.core.util.utils.actionView
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
+import top.yogiczy.mytv.tv.ui.screen.components.LAN_SERVER_UNAVAILABLE
 import top.yogiczy.mytv.tv.ui.screen.components.Qrcode
+import top.yogiczy.mytv.tv.ui.screen.components.rememberLanServerUrl
 import top.yogiczy.mytv.tv.ui.screen.settings.SettingsViewModel
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.clickableNoIndication
-import top.yogiczy.mytv.tv.utlis.HttpServer
 
 @Composable
 fun PushScreen(
@@ -49,7 +50,7 @@ fun PushScreen(
 
 @Composable
 fun PushContent(modifier: Modifier = Modifier) {
-    val serverUrl = HttpServer.serverUrl
+    val serverUrl = rememberLanServerUrl()
     val context = LocalContext.current
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -57,17 +58,21 @@ fun PushContent(modifier: Modifier = Modifier) {
             modifier = Modifier.align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Qrcode(
-                modifier = Modifier
-                    .width(200.dp)
-                    .height(200.dp)
-                    .clickableNoIndication { context.actionView(serverUrl) },
-                text = serverUrl,
-            )
+            if (serverUrl == null) {
+                Text(LAN_SERVER_UNAVAILABLE)
+            } else {
+                Qrcode(
+                    modifier = Modifier
+                        .width(200.dp)
+                        .height(200.dp)
+                        .clickableNoIndication { context.actionView(serverUrl) },
+                    text = serverUrl,
+                )
 
-            Spacer(Modifier.height(20.dp))
-            Text("服务已启动：${serverUrl}")
-            Text("请扫描二维码或输入IP地址进行连接")
+                Spacer(Modifier.height(20.dp))
+                Text(serverUrl)
+                Text("请使用同一局域网的设备扫码或打开链接")
+            }
         }
     }
 }
