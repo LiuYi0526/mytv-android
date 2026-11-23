@@ -260,12 +260,13 @@ fun MainScreen(
                 )
             }
 
-            composable(Screens.Live()) {
+            composable(Screens.Live()) { backStackEntry ->
                 val doubleBackPressedExitState = rememberDoubleBackPressedExitState()
 
                 key(settingsViewModel.videoPlayerCore) {
                     top.yogiczy.mytv.tv.ui.screensold.main.components.MainContent(
                         videoSurfaceVisible = transition.targetState != EnterExitState.PostExit,
+                        isPlaybackDestination = { navController.currentBackStackEntry === backStackEntry },
                         filteredChannelGroupListProvider = filteredChannelGroupListProvider,
                         favoriteChannelListProvider = favoriteChannelListProvider,
                         epgListProvider = epgListProvider,

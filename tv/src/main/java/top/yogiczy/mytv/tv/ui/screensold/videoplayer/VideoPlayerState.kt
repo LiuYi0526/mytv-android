@@ -62,6 +62,10 @@ class VideoPlayerState(
     val positionIsAbsolute: Boolean get() = instance.positionIsAbsolute
     var playRequested by mutableStateOf(false)
         private set
+    private var hasRenderedFirstFrame by mutableStateOf(false)
+    internal val canEnterPictureInPicture: Boolean
+        get() = hasRenderedFirstFrame && playRequested && error == null && (isPlaying || isBuffering)
+
     private var endedWindowAt: Long? = null
 
     /** 当前音量 */
@@ -80,6 +84,7 @@ class VideoPlayerState(
         private set
 
     fun prepare(line: ChannelLine, playbackRange: PlaybackRange? = null) {
+        hasRenderedFirstFrame = false
         playRequested = true
         endedWindowAt = null
         displayMode = defaultDisplayModeProvider()
@@ -114,6 +119,7 @@ class VideoPlayerState(
     }
 
     fun stop() {
+        hasRenderedFirstFrame = false
         playRequested = false
         endedWindowAt = null
         instance.stop()
@@ -187,9 +193,11 @@ class VideoPlayerState(
             onIsBufferingListeners.forEach { cb -> cb(isBuffering) }
         }
         instance.onPrepared {
+            hasRenderedFirstFrame = false
             tracksReady = false
             metadata = VideoPlayer.Metadata()
         }
+        instance.onFirstFrame { hasRenderedFirstFrame = true }
         instance.onIsPlayingChanged { isPlaying = it }
         instance.onDurationChanged { duration = it }
         instance.onCurrentPositionChanged { position ->
@@ -207,6 +215,7 @@ class VideoPlayerState(
     }
 
     fun release() {
+        hasRenderedFirstFrame = false
         playRequested = false
         endedWindowAt = null
         onReadyListeners.clear()
@@ -247,10 +256,15 @@ fun rememberVideoPlayerState(
     }
 
     DisposableEffect(lifecycleOwner, videoPlayerCore) {
+        var pausedForBackground = false
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) state.play()
-            else if (event == Lifecycle.Event.ON_STOP) {
-                if (!Configs.appPipEnable) state.pause()
+            // A visible picture-in-picture window keeps the lifecycle started.
+            if (event == Lifecycle.Event.ON_STOP && state.playRequested) {
+                pausedForBackground = true
+                state.pause()
+            } else if (event == Lifecycle.Event.ON_RESUME && pausedForBackground) {
+                pausedForBackground = false
+                state.play()
             }
         }
 

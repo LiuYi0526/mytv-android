@@ -2,6 +2,8 @@ package top.yogiczy.mytv.tv
 
 import android.app.PictureInPictureParams
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
@@ -11,6 +13,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -25,8 +31,13 @@ import top.yogiczy.mytv.tv.ui.utils.Configs
 import top.yogiczy.mytv.tv.utlis.HttpServer
 import kotlin.system.exitProcess
 
+internal val LocalPictureInPictureHost = staticCompositionLocalOf<MainActivity?> { null }
+
 class MainActivity : ComponentActivity() {
     private val timingCloseViewModel: TimingCloseViewModel by viewModels()
+    internal var canEnterPlaybackPictureInPicture: (() -> Boolean)? = null
+    internal var playbackInPictureInPicture by mutableStateOf(false)
+        private set
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,7 +61,10 @@ class MainActivity : ComponentActivity() {
 
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-            CompositionLocalProvider(LocalTimingCloseViewModel provides timingCloseViewModel) {
+            CompositionLocalProvider(
+                LocalTimingCloseViewModel provides timingCloseViewModel,
+                LocalPictureInPictureHost provides this,
+            ) {
                 MyTvTheme {
                     App(onBackPressed = ::closeApp)
                 }
@@ -79,10 +93,20 @@ class MainActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Configs.appPipEnable) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            Configs.appPipEnable &&
+            canEnterPlaybackPictureInPicture?.invoke() == true &&
+            !isInPictureInPictureMode &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        ) {
             val aspectRatio = Rational(16, 9)
             val params = PictureInPictureParams.Builder().setAspectRatio(aspectRatio).build()
             enterPictureInPictureMode(params)
         }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        playbackInPictureInPicture = isInPictureInPictureMode
     }
 }

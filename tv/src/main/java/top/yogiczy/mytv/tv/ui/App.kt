@@ -23,6 +23,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.debounce
+import top.yogiczy.mytv.tv.LocalPictureInPictureHost
 import top.yogiczy.mytv.core.data.entities.iptvsource.IptvSource.Companion.needExternalStoragePermission
 import top.yogiczy.mytv.tv.ui.material.Padding
 import top.yogiczy.mytv.tv.ui.material.PopupHandleableApplication
@@ -47,6 +48,7 @@ fun App(
     onBackPressed: () -> Unit = {},
 ) {
     val doubleBackPressedExitState = rememberDoubleBackPressedExitState()
+    val inPictureInPicture = LocalPictureInPictureHost.current?.playbackInPictureInPicture == true
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         CompositionLocalProvider(
@@ -69,12 +71,14 @@ fun App(
                         }
                     },
                 )
-                TimingClosePopup()
+                if (!inPictureInPicture) TimingClosePopup()
             }
 
-            SnackbarUI()
-            Visibility({ settingsViewModel.debugShowFps }) { MonitorPopup() }
-            Visibility({ settingsViewModel.debugShowLayoutGrids }) { PreviewWithLayoutGrids { } }
+            if (!inPictureInPicture) {
+                SnackbarUI()
+                Visibility({ settingsViewModel.debugShowFps }) { MonitorPopup() }
+                Visibility({ settingsViewModel.debugShowLayoutGrids }) { PreviewWithLayoutGrids { } }
+            }
         }
     }
 

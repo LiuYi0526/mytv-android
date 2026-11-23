@@ -79,6 +79,7 @@ abstract class VideoPlayer(
     private val onReadyListeners = mutableListOf<() -> Unit>()
     private val onBufferingListeners = mutableListOf<(buffering: Boolean) -> Unit>()
     private val onPreparedListeners = mutableListOf<() -> Unit>()
+    private val onFirstFrameListeners = mutableListOf<() -> Unit>()
     private val onIsPlayingChanged = mutableListOf<(isPlaying: Boolean) -> Unit>()
     private val onDurationChanged = mutableListOf<(duration: Long) -> Unit>()
     private val onCurrentPositionChanged = mutableListOf<(position: Long) -> Unit>()
@@ -97,6 +98,7 @@ abstract class VideoPlayer(
         onReadyListeners.clear()
         onBufferingListeners.clear()
         onPreparedListeners.clear()
+        onFirstFrameListeners.clear()
         onIsPlayingChanged.clear()
         onDurationChanged.clear()
         onCurrentPositionChanged.clear()
@@ -144,6 +146,10 @@ abstract class VideoPlayer(
         onIsPlayingChanged.forEach { it(isPlaying) }
     }
 
+    protected fun triggerFirstFrame() {
+        onFirstFrameListeners.forEach { it() }
+    }
+
     protected fun triggerDuration(duration: Long) {
         onDurationChanged.forEach { it(duration) }
     }
@@ -184,6 +190,10 @@ abstract class VideoPlayer(
 
     fun onPrepared(listener: () -> Unit) {
         onPreparedListeners.add(listener)
+    }
+
+    fun onFirstFrame(listener: () -> Unit) {
+        onFirstFrameListeners.add(listener)
     }
 
     fun onIsPlayingChanged(listener: (isPlaying: Boolean) -> Unit) {

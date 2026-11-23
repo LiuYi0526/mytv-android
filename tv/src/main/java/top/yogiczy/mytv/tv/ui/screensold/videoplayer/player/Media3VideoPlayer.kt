@@ -606,6 +606,10 @@ class Media3VideoPlayer(
             triggerIsPlayingChanged(isPlaying)
         }
 
+        override fun onRenderedFirstFrame() {
+            triggerFirstFrame()
+        }
+
         override fun onTracksChanged(tracks: Tracks) {
             metadata = metadata.copy(
                 videoTracks = emptyList(),

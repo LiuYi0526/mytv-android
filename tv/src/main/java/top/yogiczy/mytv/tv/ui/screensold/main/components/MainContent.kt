@@ -2,12 +2,15 @@ package top.yogiczy.mytv.tv.ui.screensold.main.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.delay
+import top.yogiczy.mytv.tv.LocalPictureInPictureHost
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.channelList
@@ -59,6 +62,7 @@ import top.yogiczy.mytv.tv.ui.utils.handleLiveControls
 fun MainContent(
     modifier: Modifier = Modifier,
     videoSurfaceVisible: Boolean = true,
+    isPlaybackDestination: () -> Boolean = { false },
     filteredChannelGroupListProvider: () -> ChannelGroupList = { ChannelGroupList() },
     favoriteChannelListProvider: () -> ChannelList = { ChannelList() },
     epgListProvider: () -> EpgList = { EpgList() },
@@ -69,10 +73,22 @@ fun MainContent(
     onBackPressed: () -> Unit = {},
 ) {
     val timingCloseViewModel = LocalTimingCloseViewModel.current
+    val pictureInPictureHost = LocalPictureInPictureHost.current
+    val inPictureInPicture = pictureInPictureHost?.playbackInPictureInPicture == true
     val quickOpNavigation = remember { QuickOpNavigationState() }
 
     val videoPlayerState =
         rememberVideoPlayerState(defaultDisplayModeProvider = { settingsViewModel.videoPlayerDisplayMode })
+    val currentPlaybackDestination by rememberUpdatedState(isPlaybackDestination)
+    DisposableEffect(pictureInPictureHost, videoPlayerState) {
+        val eligibility = { currentPlaybackDestination() && videoPlayerState.canEnterPictureInPicture }
+        pictureInPictureHost?.canEnterPlaybackPictureInPicture = eligibility
+        onDispose {
+            if (pictureInPictureHost?.canEnterPlaybackPictureInPicture === eligibility) {
+                pictureInPictureHost.canEnterPlaybackPictureInPicture = null
+            }
+        }
+    }
     val mainContentState = rememberMainContentState(
         videoPlayerState = videoPlayerState,
         channelGroupListProvider = filteredChannelGroupListProvider,
@@ -144,7 +160,7 @@ fun MainContent(
         VideoPlayerScreen(
             state = videoPlayerState,
             surfaceVisible = videoSurfaceVisible,
-            showMetadataProvider = { settingsViewModel.debugShowVideoPlayerMetadata },
+            showMetadataProvider = { !inPictureInPicture && settingsViewModel.debugShowVideoPlayerMetadata },
         )
 
         Visibility({ mainContentState.currentChannelLine.url.startsWith("webview://") }) {
@@ -163,6 +179,8 @@ fun MainContent(
             )
         }
     }
+
+    if (inPictureInPicture) return
 
     Visibility({ settingsViewModel.uiShowEpgProgrammePermanentProgress && !mainContentState.isVideoPlayerControllerScreenVisible }) {
         EpgProgrammeProgressScreen(

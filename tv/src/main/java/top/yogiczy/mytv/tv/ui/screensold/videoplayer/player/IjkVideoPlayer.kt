@@ -193,6 +193,10 @@ class IjkVideoPlayer(
         player.setOnVideoSizeChangedListener(this)
         player.setOnErrorListener(this)
         player.setOnCompletionListener(this)
+        player.setOnInfoListener { _, what, _ ->
+            if (what == IMediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) triggerFirstFrame()
+            false
+        }
     }
 
     override fun release() {
@@ -200,6 +204,7 @@ class IjkVideoPlayer(
         player.setOnVideoSizeChangedListener(null)
         player.setOnErrorListener(null)
         player.setOnCompletionListener(null)
+        player.setOnInfoListener(null)
         player.stop()
         player.release()
         cacheSurfaceTexture?.release()
