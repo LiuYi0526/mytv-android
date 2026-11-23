@@ -29,6 +29,7 @@ import top.yogiczy.mytv.tv.ui.material.PaddedLazyVerticalGrid
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
+import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
 import top.yogiczy.mytv.tv.ui.utils.ifElse
 import top.yogiczy.mytv.tv.ui.utils.saveFocusRestorer
@@ -37,17 +38,18 @@ import top.yogiczy.mytv.tv.ui.utils.saveFocusRestorer
 @Composable
 fun SearchKeyboard(
     modifier: Modifier = Modifier,
+    focusOnEntry: Boolean = false,
     onInput: (String) -> Unit = {},
     onDelete: () -> Unit = {},
 ) {
     val childPadding = rememberChildPadding()
-    val firstItemFocusRequester = remember { FocusRequester() }
+    val firstLetterFocusRequester = remember { FocusRequester() }
 
     PaddedLazyVerticalGrid(
         modifier = modifier
             .ifElse(
                 settingsVM.uiFocusOptimize,
-                Modifier.saveFocusRestorer { firstItemFocusRequester },
+                Modifier.saveFocusRestorer { firstLetterFocusRequester },
             ),
         columns = GridCells.Fixed(6),
         contentPadding = PaddingValues(top = 20.dp, bottom = childPadding.bottom),
@@ -56,7 +58,6 @@ fun SearchKeyboard(
     ) {
         item {
             SearchKeyboardKey(
-                modifier = Modifier.focusRequester(firstItemFocusRequester),
                 imageVector = Icons.AutoMirrored.Outlined.Backspace,
                 onSelected = onDelete,
             )
@@ -64,6 +65,11 @@ fun SearchKeyboard(
 
         items(('A'..'Z').toList()) {
             SearchKeyboardKey(
+                modifier = Modifier.ifElse(
+                    it == 'A',
+                    Modifier.focusRequester(firstLetterFocusRequester)
+                        .ifElse(focusOnEntry, Modifier.focusOnLaunchedSaveable()),
+                ),
                 text = it.toString(),
                 onSelected = { onInput(it.toString()) },
             )

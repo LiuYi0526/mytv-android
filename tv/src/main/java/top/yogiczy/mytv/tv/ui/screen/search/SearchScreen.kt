@@ -47,6 +47,7 @@ fun SearchScreen(
             Text(key.ifEmpty { "关键词..." })
         },
         canBack = true,
+        focusBackOnEntry = false,
         onBackPressed = onBackPressed,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -54,6 +55,7 @@ fun SearchScreen(
                 modifier = Modifier
                     .padding(start = childPadding.start)
                     .width(4.gridColumns()),
+                focusOnEntry = true,
                 onInput = { key += it },
                 onDelete = { key = key.dropLast(1) },
             )
