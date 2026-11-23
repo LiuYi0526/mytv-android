@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -23,6 +24,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -43,6 +49,8 @@ import top.yogiczy.mytv.tv.ui.utils.ifElse
 import top.yogiczy.mytv.tv.ui.utils.saveFocusRestorer
 import top.yogiczy.mytv.tv.ui.utils.saveRequestFocus
 
+private data class FocusedFavorite(val key: String, val index: Int)
+
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun ChannelsChannelGrid(
@@ -53,10 +61,13 @@ fun ChannelsChannelGrid(
     epgListProvider: () -> EpgList = { EpgList() },
     inFavoriteMode: Boolean = false,
     updateTopBarVisibility: (Boolean) -> Unit = {},
+    focusFirstOnEntry: Boolean = false,
+    onFirstRowUp: (() -> Unit)? = null,
 ) {
     val channelList = channelListProvider()
     val focusKeys = channelList.map { "channel/${it.name}/${it.lineList.firstOrNull()?.url.orEmpty()}" }
-    FocusReturnScope(keys = focusKeys) { focus ->
+    val defaultFocusKey = if (focusFirstOnEntry) focusKeys.firstOrNull().orEmpty() else ""
+    FocusReturnScope(defaultKey = defaultFocusKey, keys = focusKeys) { focus ->
 
         val coroutineScope = rememberCoroutineScope()
         val childPadding = rememberChildPadding()
@@ -65,13 +76,29 @@ fun ChannelsChannelGrid(
         val gridState = rememberLazyGridState()
         val firstItemFocusRequester = remember { FocusRequester() }
         var isFirstItemFocused by remember { mutableStateOf(false) }
+        var focusedFavoriteIndex by remember { mutableIntStateOf(-1) }
+        var pendingRemoval by remember { mutableStateOf<FocusedFavorite?>(null) }
 
         // Save only a fingerprint; large playlists must not enter the saved-state Bundle.
         var previousChannels by rememberSaveable { mutableStateOf(focusKeys.hashCode()) }
         LaunchedEffect(focusKeys) {
+            val removal = pendingRemoval
+            pendingRemoval = null
+            val restoreAfterRemoval = removal != null && removal.key !in focusKeys
             if (previousChannels != focusKeys.hashCode()) {
                 previousChannels = focusKeys.hashCode()
-                gridState.scrollToItem(0)
+                if (!restoreAfterRemoval) gridState.scrollToItem(0)
+            }
+            if (removal != null && restoreAfterRemoval) {
+                focus.restore(focusKeys.getOrNull(removal.index.coerceAtMost(focusKeys.lastIndex)).orEmpty())
+            }
+        }
+        LaunchedEffect(focusKeys, focus.target, focus.restoring, focus.leaving) {
+            if (focusFirstOnEntry && focus.restoring && !focus.leaving) {
+                val index = focusKeys.indexOf(focus.target)
+                if (index >= 0 && gridState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
+                    gridState.scrollToItem(index)
+                }
             }
         }
 
@@ -111,7 +138,22 @@ fun ChannelsChannelGrid(
                 itemsIndexed(channelList) { index, channel ->
                     ChannelsChannelItem(
                         modifier = Modifier
+                            .ifElse(
+                                index < columnCount && onFirstRowUp != null,
+                                Modifier.onPreviewKeyEvent { event ->
+                                    if (event.key != Key.DirectionUp) return@onPreviewKeyEvent false
+                                    if (event.type == KeyEventType.KeyDown) onFirstRowUp?.invoke()
+                                    true
+                                },
+                            )
                             .screenFocus(focusKeys[index])
+                            .ifElse(
+                                inFavoriteMode,
+                                Modifier.onFocusChanged {
+                                    if (it.isFocused) focusedFavoriteIndex = index
+                                    else if (focusedFavoriteIndex == index) focusedFavoriteIndex = -1
+                                },
+                            )
                             .ifElse(
                                 index == 0,
                                 Modifier
@@ -121,11 +163,8 @@ fun ChannelsChannelGrid(
                         channelProvider = { channel },
                         onChannelSelected = { focus.selected(focusKeys[index]); onChannelSelected(channel) },
                         onChannelFavoriteToggle = {
-                            if (inFavoriteMode) {
-                                if (index % columnCount == 0 && index == channelList.size - 1)
-                                    focusManager.moveFocus(FocusDirection.Up)
-                            }
-
+                            if (inFavoriteMode && focusedFavoriteIndex == index)
+                                pendingRemoval = FocusedFavorite(focusKeys[index], index)
                             onChannelFavoriteToggle(channel)
                         },
                         recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },

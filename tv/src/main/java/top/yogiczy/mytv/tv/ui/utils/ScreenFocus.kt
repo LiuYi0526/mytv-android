@@ -32,10 +32,14 @@ internal class ScreenFocusState(private val saved: MutableState<String>, initial
         private set
 
     fun selected(key: String) {
+        leaving = true
+        restore(key)
+    }
+
+    fun restore(key: String) {
         saved.value = key
         target = key
-        leaving = true
-        restoring = true
+        restoring = key.isNotEmpty()
     }
 
     fun leave() {

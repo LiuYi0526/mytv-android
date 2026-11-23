@@ -34,6 +34,7 @@ fun ChannelsChannelGroupItem(
     modifier: Modifier = Modifier,
     channelGroupProvider: () -> ChannelGroup = { ChannelGroup() },
     isSelectedProvider: () -> Boolean = { false },
+    selectOnFocus: Boolean = false,
     onChannelGroupSelected: () -> Unit = {},
 ) {
     val channelGroup = channelGroupProvider()
@@ -55,7 +56,11 @@ fun ChannelsChannelGroupItem(
     Box(
         modifier = modifier
             .handleKeyEvents(onSelect = onChannelGroupSelected)
-            .onFocusChanged { isFocused = it.hasFocus || it.isFocused }
+            .onFocusChanged {
+                val gainedFocus = it.isFocused && !isFocused
+                isFocused = it.hasFocus
+                if (selectOnFocus && gainedFocus && !isSelected) onChannelGroupSelected()
+            }
             .focusable()
             .background(containerColor, MaterialTheme.shapes.extraLarge),
     ) {

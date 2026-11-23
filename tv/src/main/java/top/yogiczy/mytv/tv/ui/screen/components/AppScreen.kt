@@ -69,6 +69,8 @@ fun AppScreen(
     headerExtra: @Composable (() -> Unit)? = null,
     canBack: Boolean = false,
     enableTopBarHidden: Boolean = false,
+    focusBackOnEntry: Boolean = true,
+    backButtonModifier: Modifier = Modifier,
     onBackPressed: () -> Unit = {},
     content: @Composable BoxScope.(updateTopBarVisibility: (Boolean) -> Unit) -> Unit,
 ) {
@@ -99,6 +101,8 @@ fun AppScreen(
                 header = header,
                 headerExtra = headerExtra,
                 canBack = canBack,
+                focusBackOnEntry = focusBackOnEntry,
+                backButtonModifier = backButtonModifier,
                 onBackPressed = onBackPressed,
             )
 
@@ -114,6 +118,8 @@ fun AppScreen(
                     header = header,
                     headerExtra = headerExtra,
                     canBack = canBack,
+                    focusBackOnEntry = focusBackOnEntry,
+                    backButtonModifier = backButtonModifier,
                     onBackPressed = onBackPressed,
                 )
 
@@ -131,6 +137,8 @@ private fun AppScaffoldTopBar(
     header: @Composable (() -> Unit)? = null,
     headerExtra: @Composable (() -> Unit)? = null,
     canBack: Boolean = false,
+    focusBackOnEntry: Boolean = true,
+    backButtonModifier: Modifier = Modifier,
     onBackPressed: () -> Unit = {},
 ) {
     val childPadding = rememberChildPadding()
@@ -149,7 +157,7 @@ private fun AppScaffoldTopBar(
             ) {
                 if (canBack) {
                     AppScaffoldHeaderBtn(
-                        modifier = Modifier.focusOnLaunched(),
+                        modifier = if (focusBackOnEntry) backButtonModifier.focusOnLaunched() else backButtonModifier,
                         title = "返回",
                         imageVector = Icons.AutoMirrored.Default.ArrowBack,
                         onSelect = onBackPressed
