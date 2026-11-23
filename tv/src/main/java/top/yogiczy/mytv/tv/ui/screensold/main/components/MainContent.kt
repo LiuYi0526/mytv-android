@@ -11,6 +11,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.delay
 import top.yogiczy.mytv.tv.LocalPictureInPictureHost
+import top.yogiczy.mytv.tv.PictureInPicturePlayback
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.channelList
@@ -81,11 +82,11 @@ fun MainContent(
         rememberVideoPlayerState(defaultDisplayModeProvider = { settingsViewModel.videoPlayerDisplayMode })
     val currentPlaybackDestination by rememberUpdatedState(isPlaybackDestination)
     DisposableEffect(pictureInPictureHost, videoPlayerState) {
-        val eligibility = { currentPlaybackDestination() && videoPlayerState.canEnterPictureInPicture }
-        pictureInPictureHost?.canEnterPlaybackPictureInPicture = eligibility
+        val playback = PictureInPicturePlayback(videoPlayerState) { currentPlaybackDestination() }
+        pictureInPictureHost?.pictureInPicturePlayback = playback
         onDispose {
-            if (pictureInPictureHost?.canEnterPlaybackPictureInPicture === eligibility) {
-                pictureInPictureHost.canEnterPlaybackPictureInPicture = null
+            if (pictureInPictureHost?.pictureInPicturePlayback === playback) {
+                pictureInPictureHost.pictureInPicturePlayback = null
             }
         }
     }
