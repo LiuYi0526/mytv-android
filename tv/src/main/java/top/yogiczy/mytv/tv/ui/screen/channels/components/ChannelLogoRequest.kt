@@ -16,6 +16,8 @@ internal fun Channel.resolveLogo(overrideSourceLogo: Boolean, provider: String):
 internal fun channelLogoRequest(context: Context, logo: String?): ImageRequest =
     ImageRequest.Builder(context)
         .data(logo)
+        // Trim at source resolution, then let the image view fit the cropped logo to its bounds.
+        .size(Size.ORIGINAL)
         .allowHardware(false)
         .transformations(TrimTransparentLogo)
         .build()

@@ -52,7 +52,8 @@ class ChannelLogoTrimTest {
         val fixture = InstrumentationRegistry.getArguments().getString("phoenixLogoFixture")
         assumeTrue("Pass the Phoenix logo fixture URI to exercise the real sample", !fixture.isNullOrBlank())
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val request = channelLogoRequest(context, fixture).newBuilder().size(Size.ORIGINAL).build()
+        val request = channelLogoRequest(context, fixture)
+        assertEquals(Size.ORIGINAL, request.sizeResolver.size())
 
         val first = context.imageLoader.execute(request)
         assertTrue("Logo request should succeed", first is SuccessResult)
