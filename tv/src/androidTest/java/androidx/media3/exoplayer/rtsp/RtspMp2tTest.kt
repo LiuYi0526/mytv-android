@@ -1,5 +1,8 @@
 package androidx.media3.exoplayer.rtsp
 
+import kotlinx.coroutines.runBlocking
+import top.yogiczy.mytv.tv.ui.screensold.channelline.StreamingChannelLineProbe
+
 import android.graphics.SurfaceTexture
 import android.net.Uri
 import android.view.Surface
@@ -294,6 +297,17 @@ class RtspMp2tTest {
         }
     }
     @Test fun mp2tTcpDiscoversSeparateAacAndAv3aTracks() { prepareFixture(true) }
+    @Test fun lineProbeDiscoversMp2tWithTheRequestedTransportAndAgent() = runBlocking {
+        Server(fixture(), redirect = true).use { server ->
+            val latency = StreamingChannelLineProbe.measure(
+                instrumentation.targetContext, Uri.parse(server.url), "MyTV RTSP probe", true,
+            )
+            assertTrue(latency != null && latency > 0)
+            assertTrue(server.sawRedirect)
+            assertTrue(server.sawTcp)
+            assertEquals("MyTV RTSP probe", server.userAgent)
+        }
+    }
     @Test fun mp2tUdpDiscoversSeparateAacAndAv3aTracks() { prepareFixture(false) }
     @Test fun noUdpPacketsFallBackToTcpBeforeTsTracksAreKnown() { prepareFixture(false, fallback = true) }
     @Test fun udpStartupProbeDoesNotWaitForTheFullFifteenSecondTimeout() {

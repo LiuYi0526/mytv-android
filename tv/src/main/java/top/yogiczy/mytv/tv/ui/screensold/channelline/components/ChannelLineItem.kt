@@ -1,5 +1,6 @@
 package top.yogiczy.mytv.tv.ui.screensold.channelline.components
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -27,7 +29,9 @@ import top.yogiczy.mytv.core.data.utils.ChannelUtil
 import top.yogiczy.mytv.core.util.utils.isIPv6
 import top.yogiczy.mytv.tv.ui.material.Tag
 import top.yogiczy.mytv.tv.ui.material.TagDefaults
+import top.yogiczy.mytv.tv.ui.screensold.channelline.StreamingChannelLineProbe
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
+import top.yogiczy.mytv.tv.ui.utils.Configs
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
 import top.yogiczy.mytv.tv.ui.utils.ifElse
@@ -95,17 +99,23 @@ fun ChannelLineItem(
 
 @Composable
 private fun rememberLineDelay(line: ChannelLine): Long {
+    val context = LocalContext.current
     var elapsedTime by remember(line) { mutableLongStateOf(0) }
 
     LaunchedEffect(line) {
         val requestLine = line.resolveHttpOptions()
         val url = requestLine.playableUrl
-        if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
-            elapsedTime = -2L
-            return@LaunchedEffect
-        }
         elapsedTime = try {
-            ChannelLineProbe.Default.measure(url, requestLine.httpUserAgent, requestLine.httpRequestHeaders())
+            if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
+                ChannelLineProbe.Default.measure(url, requestLine.httpUserAgent, requestLine.httpRequestHeaders())
+            } else {
+                StreamingChannelLineProbe.measure(
+                    context,
+                    Uri.parse(url),
+                    requestLine.httpUserAgent ?: Configs.videoPlayerUserAgent,
+                    Configs.videoPlayerRtspTcp,
+                ) ?: -2L
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

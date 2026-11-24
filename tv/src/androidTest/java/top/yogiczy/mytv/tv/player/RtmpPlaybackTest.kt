@@ -16,10 +16,12 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Assume.assumeNotNull
 import org.junit.Test
 import org.junit.runner.RunWith
+import top.yogiczy.mytv.tv.ui.screensold.channelline.StreamingChannelLineProbe
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.mmt.MmtExtractorsFactory
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -50,6 +52,13 @@ class RtmpPlaybackTest {
             }
             assertArrayEquals("FLV".toByteArray(Charsets.US_ASCII), header)
         } finally { source.close() }
+    }
+
+    @Test fun lineProbeReadsRtmp() = runBlocking {
+        val latency = StreamingChannelLineProbe.measure(
+            instrumentation.targetContext, sourceUri(), "MyTV RTMP probe", false,
+        )
+        assertTrue(latency != null && latency > 0)
     }
 
     @Test fun media3DiscoversAudioAndVideoAndContinuesRendering() {
