@@ -13,6 +13,10 @@ import kotlin.coroutines.resumeWithException
 
 /** Measures time to first byte without buffering an entire (possibly endless) live stream. */
 class ChannelLineProbe internal constructor(private val client: OkHttpClient) {
+    class HttpError(val statusCode: Int) : IOException("HTTP $statusCode")
+
+    class EmptyResponse : IOException("Empty response")
+
     suspend fun measure(url: String, userAgent: String? = null, headers: Map<String, String> = emptyMap()): Long =
         suspendCancellableCoroutine { continuation ->
             val request = Request.Builder().url(url).apply {
@@ -34,9 +38,9 @@ class ChannelLineProbe internal constructor(private val client: OkHttpClient) {
                     try {
                         val elapsed = response.use {
                             try {
-                                if (!it.isSuccessful) throw IOException("HTTP ${it.code}")
-                                val body = it.body ?: throw IOException("Empty response")
-                                if (body.byteStream().read() == -1) throw IOException("Empty response")
+                                if (!it.isSuccessful) throw HttpError(it.code)
+                                val body = it.body ?: throw EmptyResponse()
+                                if (body.byteStream().read() == -1) throw EmptyResponse()
                                 TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt)
                                     .coerceAtLeast(1)
                             } finally {

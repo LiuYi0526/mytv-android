@@ -20,8 +20,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import top.yogiczy.mytv.core.data.network.ChannelLineProbe
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.rtsp.RtspSourceFactory
-import java.io.EOFException
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.util.Locale
@@ -103,7 +103,7 @@ internal object StreamingChannelLineProbe {
         client.setReceiveTimeout(TIMEOUT_MS)
         client.open(uri.toString(), false)
         try {
-            if (client.read(ByteArray(1), 0, 1) <= 0) throw EOFException("Empty RTMP stream")
+            if (client.read(ByteArray(1), 0, 1) <= 0) throw ChannelLineProbe.EmptyResponse()
             return elapsedMs(startedAt)
         } finally {
             client.close()
@@ -114,7 +114,7 @@ internal object StreamingChannelLineProbe {
         val source = UdpDataSource(UdpDataSource.DEFAULT_MAX_PACKET_SIZE, TIMEOUT_MS)
         try {
             source.open(DataSpec(uri))
-            if (source.read(ByteArray(1), 0, 1) <= 0) throw EOFException("Empty datagram")
+            if (source.read(ByteArray(1), 0, 1) <= 0) throw ChannelLineProbe.EmptyResponse()
             return elapsedMs(startedAt)
         } finally {
             source.close()

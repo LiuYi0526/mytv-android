@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.media3.common.PlaybackException
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.RadioButton
@@ -36,6 +37,15 @@ import top.yogiczy.mytv.tv.ui.utils.Configs
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
 import top.yogiczy.mytv.tv.ui.utils.ifElse
+import java.io.IOException
+import java.io.InterruptedIOException
+import java.net.SocketTimeoutException
+
+private sealed interface LineProbeStatus {
+    data class Measured(val millis: Long) : LineProbeStatus
+    data object Unsupported : LineProbeStatus
+    data class Failed(val label: String) : LineProbeStatus
+}
 
 @Composable
 fun ChannelLineItem(
@@ -49,7 +59,7 @@ fun ChannelLineItem(
     val lineIdx = lineIdxProvider()
     val isSelected = isSelectedProvider()
 
-    val lineDelay = if (settingsVM.videoPlayerLineProbeEnabled) rememberLineDelay(line) else 0L
+    val probeStatus = if (settingsVM.videoPlayerLineProbeEnabled) rememberProbeStatus(line) else null
 
     ListItem(
         modifier = modifier
@@ -71,22 +81,21 @@ fun ChannelLineItem(
 
                     if (ChannelPlayback.isSupported(line)) Tag("回放")
 
-                    if (lineDelay > 0L) {
-                        if (lineDelay < 500) {
-                            Tag(
-                                "$lineDelay ms",
-                                colors = TagDefaults.colors(containerColor = MaterialTheme.colorScheme.tertiary),
-                            )
-                        } else {
-                            Tag("$lineDelay ms")
+                    when (probeStatus) {
+                        is LineProbeStatus.Measured -> {
+                            val label = "${probeStatus.millis} ms"
+                            if (probeStatus.millis < 500) {
+                                Tag(label, colors = TagDefaults.colors(containerColor = MaterialTheme.colorScheme.tertiary))
+                            } else {
+                                Tag(label)
+                            }
                         }
-                    } else if (lineDelay == -2L) {
-                        Tag("暂不支持测速")
-                    } else if (lineDelay < 0L) {
-                        Tag(
-                            "超时",
+                        LineProbeStatus.Unsupported -> Tag("暂不支持测速")
+                        is LineProbeStatus.Failed -> Tag(
+                            probeStatus.label,
                             colors = TagDefaults.colors(containerColor = MaterialTheme.colorScheme.error),
                         )
+                        null -> Unit
                     }
                 }
             }
@@ -99,15 +108,15 @@ fun ChannelLineItem(
 }
 
 @Composable
-private fun rememberLineDelay(line: ChannelLine): Long {
+private fun rememberProbeStatus(line: ChannelLine): LineProbeStatus? {
     val context = LocalContext.current
-    var elapsedTime by remember(line) { mutableLongStateOf(0) }
+    var status by remember(line) { mutableStateOf<LineProbeStatus?>(null) }
 
     LaunchedEffect(line) {
         val requestLine = line.resolveHttpOptions()
         val url = requestLine.playableUrl
-        elapsedTime = try {
-            if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
+        status = try {
+            val millis = if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
                 ChannelLineProbe.Default.measure(url, requestLine.httpUserAgent, requestLine.httpRequestHeaders())
             } else {
                 StreamingChannelLineProbe.measure(
@@ -115,16 +124,36 @@ private fun rememberLineDelay(line: ChannelLine): Long {
                     Uri.parse(url),
                     requestLine.httpUserAgent ?: Configs.videoPlayerUserAgent,
                     Configs.videoPlayerRtspTcp,
-                ) ?: -2L
+                )
             }
+            millis?.let { LineProbeStatus.Measured(it) } ?: LineProbeStatus.Unsupported
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
-            -1L
+        } catch (e: Exception) {
+            LineProbeStatus.Failed(e.probeFailureLabel())
         }
     }
 
-    return elapsedTime
+    return status
+}
+
+private fun Exception.probeFailureLabel(): String {
+    var connectionFailed = false
+    for (cause in generateSequence<Throwable>(this) { it.cause }) {
+        when {
+            cause is ChannelLineProbe.HttpError -> return "HTTP ${cause.statusCode}"
+            cause is ChannelLineProbe.EmptyResponse -> return "空响应"
+            cause is SocketTimeoutException -> return "超时"
+            // OkHttp's total call deadline uses InterruptedIOException rather than SocketTimeoutException.
+            cause is InterruptedIOException && cause.message == "timeout" -> return "超时"
+            cause is PlaybackException && cause.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                return "超时"
+            cause is IOException ||
+                (cause is PlaybackException && cause.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED) ->
+                connectionFailed = true
+        }
+    }
+    return if (connectionFailed) "连接失败" else "测速失败"
 }
 
 @Preview

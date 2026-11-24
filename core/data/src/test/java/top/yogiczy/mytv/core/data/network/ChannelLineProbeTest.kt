@@ -153,14 +153,14 @@ class ChannelLineProbeTest {
 
     @Test(timeout = 5000)
     fun rejectsHttpErrorsAndEmptyBodies() = runBlocking<Unit> {
-        listOf(MockResponse().setResponseCode(403).setBody("forbidden"), MockResponse().setBody(""))
-            .forEach { response ->
-                server.enqueue(response)
-                try {
-                    probe.measure(server.url("/live").toString())
-                    fail("Expected an unavailable line")
-                } catch (_: IOException) { }
-            }
+        val url = server.url("/live").toString()
+        server.enqueue(MockResponse().setResponseCode(403).setBody("forbidden"))
+        val httpError = runCatching { probe.measure(url) }.exceptionOrNull()
+        assertEquals(403, (httpError as? ChannelLineProbe.HttpError)?.statusCode)
+
+        server.enqueue(MockResponse().setBody(""))
+        val emptyResponse = runCatching { probe.measure(url) }.exceptionOrNull()
+        assertTrue(emptyResponse is ChannelLineProbe.EmptyResponse)
     }
 
     @Test(timeout = 5000)
