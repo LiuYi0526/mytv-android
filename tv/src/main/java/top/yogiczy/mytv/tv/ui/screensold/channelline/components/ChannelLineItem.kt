@@ -29,6 +29,7 @@ import top.yogiczy.mytv.core.data.utils.ChannelUtil
 import top.yogiczy.mytv.core.util.utils.isIPv6
 import top.yogiczy.mytv.tv.ui.material.Tag
 import top.yogiczy.mytv.tv.ui.material.TagDefaults
+import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
 import top.yogiczy.mytv.tv.ui.screensold.channelline.StreamingChannelLineProbe
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.Configs
@@ -48,7 +49,7 @@ fun ChannelLineItem(
     val lineIdx = lineIdxProvider()
     val isSelected = isSelectedProvider()
 
-    val lineDelay = rememberLineDelay(line)
+    val lineDelay = if (settingsVM.videoPlayerLineProbeEnabled) rememberLineDelay(line) else 0L
 
     ListItem(
         modifier = modifier

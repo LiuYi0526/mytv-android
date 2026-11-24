@@ -510,6 +510,15 @@ class SettingsViewModel : ViewModel() {
             afterSetWhenCloudSyncAutoPull()
         }
 
+    private var _videoPlayerLineProbeEnabled by mutableStateOf(true)
+    var videoPlayerLineProbeEnabled: Boolean
+        get() = _videoPlayerLineProbeEnabled
+        set(value) {
+            _videoPlayerLineProbeEnabled = value
+            Configs.videoPlayerLineProbeEnabled = value
+            afterSetWhenCloudSyncAutoPull()
+        }
+
     private var _videoPlayerLoadTimeout by mutableLongStateOf(0)
     var videoPlayerLoadTimeout: Long
         get() = _videoPlayerLoadTimeout
@@ -724,6 +733,7 @@ class SettingsViewModel : ViewModel() {
         _videoPlayerHeaders = Configs.videoPlayerHeaders
         _videoPlayerLoadTimeout = Configs.videoPlayerLoadTimeout
         _videoPlayerRtspTcp = Configs.videoPlayerRtspTcp
+        _videoPlayerLineProbeEnabled = Configs.videoPlayerLineProbeEnabled
         _videoPlayerPlaybackReload = Configs.videoPlayerPlaybackReload
         _videoPlayerDisplayMode = Configs.videoPlayerDisplayMode
         channelDisplayModes = Configs.videoPlayerChannelDisplayModes

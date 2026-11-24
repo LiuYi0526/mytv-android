@@ -96,6 +96,17 @@ fun SettingsVideoPlayerScreen(
         }
 
         item {
+            SettingsListItem(
+                headlineContent = "线路测速",
+                supportingContent = "打开线路列表时自动探测各线路的响应延迟。",
+                trailingContent = { Switch(settingsViewModel.videoPlayerLineProbeEnabled, null) },
+                onSelect = {
+                    settingsViewModel.videoPlayerLineProbeEnabled = !settingsViewModel.videoPlayerLineProbeEnabled
+                },
+            )
+        }
+
+        item {
             SettingsUserAgentItem(
                 value = settingsViewModel.videoPlayerUserAgent,
                 onChange = { settingsViewModel.videoPlayerUserAgent = it },
