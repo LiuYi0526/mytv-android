@@ -83,8 +83,10 @@ fun MainContent(
     val inPictureInPicture = pictureInPictureHost?.playbackInPictureInPicture == true
     val quickOpNavigation = remember { QuickOpNavigationState() }
 
-    val videoPlayerState =
-        rememberVideoPlayerState(defaultDisplayModeProvider = { settingsViewModel.videoPlayerDisplayMode })
+    val videoPlayerState = rememberVideoPlayerState(
+        defaultDisplayModeProvider = { settingsViewModel.videoPlayerDisplayMode },
+        pauseInBackground = pictureInPictureHost == null,
+    )
     val mainContentState = rememberMainContentState(
         videoPlayerState = videoPlayerState,
         channelGroupListProvider = filteredChannelGroupListProvider,

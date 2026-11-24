@@ -234,6 +234,7 @@ class VideoPlayerState(
 @Composable
 fun rememberVideoPlayerState(
     defaultDisplayModeProvider: () -> VideoPlayerDisplayMode = { VideoPlayerDisplayMode.ORIGINAL },
+    pauseInBackground: Boolean = true,
 ): VideoPlayerState {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -258,7 +259,7 @@ fun rememberVideoPlayerState(
         onDispose { state.release() }
     }
 
-    DisposableEffect(lifecycleOwner, videoPlayerCore) {
+    if (pauseInBackground) DisposableEffect(lifecycleOwner, videoPlayerCore) {
         var pausedForBackground = false
         val observer = LifecycleEventObserver { _, event ->
             // A visible picture-in-picture window keeps the lifecycle started.

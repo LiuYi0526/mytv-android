@@ -5,8 +5,10 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -17,6 +19,7 @@ import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import androidx.core.graphics.drawable.toBitmap
 import androidx.media3.ui.R as Media3UiResources
 import coil.imageLoader
@@ -29,6 +32,7 @@ import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.media.PlaybackControllerTimeline
 import top.yogiczy.mytv.tv.MainActivity
+import top.yogiczy.mytv.tv.PlaybackForegroundService
 import top.yogiczy.mytv.tv.R
 import top.yogiczy.mytv.tv.ui.screen.channels.components.channelLogoRequest
 import java.text.SimpleDateFormat
@@ -66,10 +70,11 @@ internal enum class MediaPlaybackAction(
     }
 }
 
-/** Publishes controls for the visible channel player, including while it is in picture-in-picture. */
+/** Publishes controls for the channel player, including picture-in-picture and lock screen playback. */
 internal class SystemMediaControls(
     private val context: Context,
     private val scope: CoroutineScope,
+    private val supportsLockScreenPlayback: Boolean,
     private val onAction: (MediaPlaybackAction) -> Unit,
 ) {
     data class State(
@@ -79,6 +84,7 @@ internal class SystemMediaControls(
         val playbackState: Int,
         val progress: PlaybackControllerTimeline.Progress?,
         val isFavorite: Boolean?,
+        val onLockScreen: Boolean,
     ) {
         val leadingAction: MediaPlaybackAction
             get() = when (isFavorite) {
@@ -98,6 +104,21 @@ internal class SystemMediaControls(
     private var state: State? = null
     private var artwork: Bitmap? = null
     private var artworkJob: Job? = null
+    private var playbackService: PlaybackForegroundService? = null
+    private var serviceBound = false
+    private val playbackConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+            if (!serviceBound) return
+            playbackService = (binder as PlaybackForegroundService.LocalBinder).service
+            val activeSession = session ?: return
+            val activeState = state ?: return
+            publishNotification(activeSession, activeState)
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) {
+            playbackService = null
+        }
+    }
 
     fun publish(state: State) {
         val previous = this.state
@@ -113,7 +134,9 @@ internal class SystemMediaControls(
         if (metadataChanged) updateMetadata(session, state)
         updatePlaybackState(session, state)
         if (!session.isActive) session.isActive = true
-        if (metadataChanged || previous?.playbackState != state.playbackState || previous?.isFavorite != state.isFavorite) {
+        if (metadataChanged || previous?.playbackState != state.playbackState ||
+            previous?.isFavorite != state.isFavorite || previous?.onLockScreen != state.onLockScreen
+        ) {
             publishNotification(session, state)
         }
         if (artworkChanged && state.logoUrls.isNotEmpty()) {
@@ -198,36 +221,59 @@ internal class SystemMediaControls(
     // Notifications attached to a media session are exempt from POST_NOTIFICATIONS.
     @SuppressLint("MissingPermission")
     private fun publishNotification(session: MediaSession, state: State) {
-        val action = MediaPlaybackAction.forPlayback(state.playbackState != PlaybackState.STATE_PAUSED)
-        notificationManager.notify(
-            NOTIFICATION_ID,
-            notificationBuilder()
-                .setSmallIcon(android.R.drawable.ic_media_play)
-                .setContentTitle(state.channelName)
-                .setContentText(programmeSubtitle(state.programme))
-                .setLargeIcon(artwork)
-                .setContentIntent(openPlayer)
-                .setCategory(Notification.CATEGORY_TRANSPORT)
-                .setOnlyAlertOnce(true)
-                .setShowWhen(false)
-                .setStyle(Notification.MediaStyle().setMediaSession(session.sessionToken).setShowActionsInCompactView(1, 2, 3))
-                .apply {
-                    val actions = listOf(
-                        state.leadingAction,
-                        MediaPlaybackAction.PREVIOUS_CHANNEL,
-                        action,
-                        MediaPlaybackAction.NEXT_CHANNEL,
-                        MediaPlaybackAction.STOP,
-                    )
-                    for (control in actions) {
-                        val intent = if (control == MediaPlaybackAction.OPEN_PLAYER) openPlayer else control.pendingIntent(context)
-                        addAction(Notification.Action.Builder(
-                            control.icon(context), control.label, intent,
-                        ).build())
-                    }
+        val playRequested = state.playbackState != PlaybackState.STATE_PAUSED
+        val action = MediaPlaybackAction.forPlayback(playRequested)
+        val notification = notificationBuilder()
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(state.channelName)
+            .setContentText(programmeSubtitle(state.programme))
+            .setLargeIcon(artwork)
+            .setContentIntent(openPlayer)
+            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setStyle(
+                Notification.MediaStyle()
+                    .setMediaSession(session.sessionToken)
+                    .setShowActionsInCompactView(1, 2, 3),
+            )
+            .apply {
+                val actions = listOf(
+                    state.leadingAction,
+                    MediaPlaybackAction.PREVIOUS_CHANNEL,
+                    action,
+                    MediaPlaybackAction.NEXT_CHANNEL,
+                    MediaPlaybackAction.STOP,
+                )
+                for (control in actions) {
+                    val intent = if (control == MediaPlaybackAction.OPEN_PLAYER) openPlayer else control.pendingIntent(context)
+                    addAction(Notification.Action.Builder(
+                        control.icon(context), control.label, intent,
+                    ).build())
                 }
-                .build(),
-        )
+            }
+            .build()
+        if (supportsLockScreenPlayback && (playRequested || state.onLockScreen)) {
+            if (!serviceBound) {
+                serviceBound = context.bindService(
+                    Intent(context, PlaybackForegroundService::class.java),
+                    playbackConnection,
+                    Context.BIND_AUTO_CREATE,
+                )
+            }
+            playbackService?.show(NOTIFICATION_ID, notification, state.onLockScreen && playRequested)
+        } else {
+            disconnectPlaybackService()
+        }
+        notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun disconnectPlaybackService() {
+        if (!serviceBound) return
+        playbackService?.leaveForeground()
+        playbackService = null
+        serviceBound = false
+        context.unbindService(playbackConnection)
     }
 
     fun clear() {
@@ -235,6 +281,7 @@ internal class SystemMediaControls(
         artworkJob = null
         artwork = null
         state = null
+        disconnectPlaybackService()
         val session = session ?: return
         this.session = null
         notificationManager.cancel(NOTIFICATION_ID)

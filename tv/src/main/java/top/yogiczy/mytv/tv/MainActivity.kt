@@ -1,5 +1,6 @@
 package top.yogiczy.mytv.tv
 
+import android.app.KeyguardManager
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.content.BroadcastReceiver
@@ -12,6 +13,7 @@ import android.content.res.Configuration
 import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.util.Rational
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -31,10 +33,10 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.doOnPreDraw
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.media.PlaybackControllerTimeline
@@ -66,12 +68,17 @@ internal class ChannelPlaybackControls(
 
 class MainActivity : ComponentActivity() {
     private val timingCloseViewModel: TimingCloseViewModel by viewModels()
+    private val supportsLockScreenPlayback get() =
+        resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK != Configuration.UI_MODE_TYPE_TELEVISION
     private val systemMediaControls by lazy(LazyThreadSafetyMode.NONE) {
-        SystemMediaControls(this, lifecycleScope, ::handleMediaAction)
+        SystemMediaControls(this, lifecycleScope, supportsLockScreenPlayback, ::handleMediaAction)
     }
     internal var channelPlaybackControls by mutableStateOf<ChannelPlaybackControls?>(null)
     internal var playbackInPictureInPicture by mutableStateOf(false)
         private set
+    private var playbackActivityStarted by mutableStateOf(false)
+    private var lockScreenPlayback by mutableStateOf<ChannelPlaybackControls?>(null)
+    private var pausedInBackground: VideoPlayerState? = null
 
     private val mediaActionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -80,11 +87,29 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (lockScreenPlayback == null) return
+            lifecycleScope.launch {
+                // Let the returning activity resume before handling an unlock to the launcher.
+                delay(250)
+                val playback = lockScreenPlayback ?: return@launch
+                if (!isDeviceLocked()) {
+                    if (!playbackActivityStarted) pauseForBackground(playback.player)
+                    lockScreenPlayback = null
+                }
+            }
+        }
+    }
+
     private fun handleMediaAction(action: MediaPlaybackAction) {
-        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
         val playback = channelPlaybackControls ?: return
         val player = playback.player
-        if (!playback.isCurrentDestination() || (!player.hasControllableMedia && !playbackInPictureInPicture)) return
+        val onLockScreen = lockScreenPlayback === playback
+        if (!playbackActivityStarted && !onLockScreen) return
+        if (!playback.isCurrentDestination() ||
+            (!player.hasControllableMedia && !playbackInPictureInPicture && !onLockScreen)
+        ) return
         when (action) {
             MediaPlaybackAction.PLAY -> if (!player.playRequested) player.play()
             MediaPlaybackAction.PAUSE -> if (player.playRequested) player.pause()
@@ -94,6 +119,7 @@ class MainActivity : ComponentActivity() {
             MediaPlaybackAction.REMOVE_FAVORITE -> if (playback.isFavorite() == true) playback.toggleFavorite()
             MediaPlaybackAction.OPEN_PLAYER -> systemMediaControls.openPlayer()
             MediaPlaybackAction.STOP -> {
+                lockScreenPlayback = null
                 playback.stopPlayback()
                 systemMediaControls.clear()
             }
@@ -110,6 +136,16 @@ class MainActivity : ComponentActivity() {
             mediaActionReceiver,
             IntentFilter().apply { MediaPlaybackAction.entries.forEach { addAction(it.broadcastAction) } },
             ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        ContextCompat.registerReceiver(
+            this,
+            screenReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_USER_PRESENT)
+            },
+            // These protected broadcasts can come from a privileged system process.
+            ContextCompat.RECEIVER_EXPORTED,
         )
         observeSystemMediaControls()
 
@@ -163,20 +199,28 @@ class MainActivity : ComponentActivity() {
 
     private fun observeSystemMediaControls() {
         lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                var now by mutableLongStateOf(System.currentTimeMillis())
-                val clock = launch {
-                    while (true) {
-                        // Guide-based playback still advances when there is no native position.
-                        delay(1_000 - now % 1_000)
-                        now = System.currentTimeMillis()
-                    }
+            snapshotFlow { playbackActivityStarted || lockScreenPlayback != null }.collectLatest { enabled ->
+                if (!enabled) {
+                    systemMediaControls.clear()
+                    return@collectLatest
                 }
-                try {
+                coroutineScope {
+                    var now by mutableLongStateOf(System.currentTimeMillis())
+                    launch {
+                        while (true) {
+                            // Guide-based playback still advances when there is no native position.
+                            delay(1_000 - now % 1_000)
+                            now = System.currentTimeMillis()
+                        }
+                    }
                     snapshotFlow {
                         val playback = channelPlaybackControls ?: return@snapshotFlow null
                         val player = playback.player
-                        if (!playback.isCurrentDestination() || !player.hasControllableMedia) {
+                        val onLockScreen = lockScreenPlayback === playback
+                        if (!playbackActivityStarted && !onLockScreen) return@snapshotFlow null
+                        if (!playback.isCurrentDestination() ||
+                            (!player.hasControllableMedia && (!onLockScreen || player.error != null))
+                        ) {
                             return@snapshotFlow null
                         }
                         val state = when {
@@ -193,17 +237,53 @@ class MainActivity : ComponentActivity() {
                             playbackState = state,
                             progress = progress?.copy(elapsedMs = progress.elapsedMs / 1_000 * 1_000),
                             isFavorite = playback.isFavorite(),
+                            onLockScreen = onLockScreen,
                         )
                     }.collect { state ->
                         if (state == null) systemMediaControls.clear() else systemMediaControls.publish(state)
                     }
-                } finally {
-                    clock.cancel()
-                    systemMediaControls.clear()
                 }
             }
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        playbackActivityStarted = true
+    }
+
+    override fun onResume() {
+        super.onResume()
+        lockScreenPlayback = null
+        val paused = pausedInBackground
+        pausedInBackground = null
+        if (paused != null && channelPlaybackControls?.player === paused) paused.play()
+    }
+
+    override fun onStop() {
+        val playback = channelPlaybackControls
+        if (!isFinishing && supportsLockScreenPlayback && playback != null && playback.isCurrentDestination() &&
+            (playback.player.playRequested || lockScreenPlayback === playback) && isDeviceLocked()
+        ) {
+            lockScreenPlayback = playback
+        } else {
+            lockScreenPlayback = null
+            if (!isFinishing && playback != null) pauseForBackground(playback.player)
+        }
+        playbackActivityStarted = false
+        super.onStop()
+    }
+
+    private fun pauseForBackground(player: VideoPlayerState) {
+        if (player.playRequested) {
+            pausedInBackground = player
+            player.pause()
+        }
+    }
+
+    private fun isDeviceLocked(): Boolean =
+        !getSystemService(PowerManager::class.java).isInteractive ||
+            getSystemService(KeyguardManager::class.java).isKeyguardLocked
 
     private fun closeApp() {
         systemMediaControls.clear()
@@ -212,6 +292,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        systemMediaControls.clear()
+        unregisterReceiver(screenReceiver)
         unregisterReceiver(mediaActionReceiver)
         HttpServer.stopService(applicationContext)
         super.onDestroy()
@@ -225,6 +307,7 @@ class MainActivity : ComponentActivity() {
             Configs.appPipEnable &&
             playback.isCurrentDestination() &&
             playback.player.canEnterPictureInPicture &&
+            !isDeviceLocked() &&
             !isInPictureInPictureMode &&
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
         ) {
