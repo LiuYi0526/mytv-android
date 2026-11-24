@@ -27,7 +27,6 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelLine
 import top.yogiczy.mytv.core.data.network.ChannelLineProbe
 import top.yogiczy.mytv.core.data.utils.ChannelPlayback
 import top.yogiczy.mytv.core.data.utils.ChannelUtil
-import top.yogiczy.mytv.core.util.utils.isIPv6
 import top.yogiczy.mytv.tv.ui.material.Tag
 import top.yogiczy.mytv.tv.ui.material.TagDefaults
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
@@ -77,8 +76,6 @@ fun ChannelLineItem(
                     Tag("混合")
                     Tag(ChannelUtil.getHybridWebViewUrlProvider(line.url))
                 } else {
-                    Tag(if (line.url.isIPv6()) "IPv6" else "IPv4")
-
                     if (ChannelPlayback.isSupported(line)) Tag("回放")
 
                     when (probeStatus) {
