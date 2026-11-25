@@ -10,6 +10,7 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -36,8 +37,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
@@ -50,6 +53,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flowOn
 import top.yogiczy.mytv.core.data.entities.channel.Channel
+import top.yogiczy.mytv.core.data.entities.epg.EpgDisplaySchedule
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme.Companion.progress
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeRecent
@@ -70,6 +74,7 @@ fun ChannelsChannelItem(
     onChannelSelected: () -> Unit = {},
     onChannelFavoriteToggle: () -> Unit = {},
     recentEpgProgrammeProvider: () -> EpgProgrammeRecent? = { null },
+    allowTwoLineName: Boolean = false,
 ) {
     var isFocused by remember { mutableStateOf(false) }
 
@@ -111,6 +116,7 @@ fun ChannelsChannelItem(
                         channelProvider = channelProvider,
                         recentEpgProgrammeProvider = recentEpgProgrammeProvider,
                         isFocusedProvider = { isFocused },
+                        allowTwoLineName = allowTwoLineName,
                     )
 
                     ChannelsChannelItemProgress(
@@ -257,33 +263,51 @@ private fun ChannelsChannelItemContent(
     channelProvider: () -> Channel = { Channel() },
     recentEpgProgrammeProvider: () -> EpgProgrammeRecent? = { null },
     isFocusedProvider: () -> Boolean = { false },
+    allowTwoLineName: Boolean = false,
 ) {
     val isFocused = isFocusedProvider()
+    val name = channelProvider().name
+    val programmeTitle = rememberEpgProgrammeRecent(recentEpgProgrammeProvider)?.now?.title.orEmpty()
+    val nameStyle = MaterialTheme.typography.bodyMedium
 
-    val channel = channelProvider()
-    val recentEpgProgramme = rememberEpgProgrammeRecent(recentEpgProgrammeProvider)
-
-    Column(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalArrangement = Arrangement.SpaceAround,
     ) {
-        Text(
-            channel.name,
-            maxLines = 1,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.ifElse(isFocused, Modifier.basicMarquee()),
-        )
+        val nameLayout = if (allowTwoLineName &&
+            (programmeTitle.isBlank() || programmeTitle == EpgDisplaySchedule.UNKNOWN_TITLE)
+        ) {
+            rememberTextMeasurer(cacheSize = 1).measure(
+                name,
+                style = nameStyle,
+                maxLines = 2,
+                constraints = Constraints(maxWidth = constraints.maxWidth, maxHeight = constraints.maxHeight),
+            )
+        } else null
+        val nameNeedsSecondRow = nameLayout != null && (nameLayout.lineCount > 1 || nameLayout.hasVisualOverflow)
+        val scrollName = isFocused && (!nameNeedsSecondRow || nameLayout?.hasVisualOverflow == true)
+        val wrapName = nameNeedsSecondRow && !scrollName
 
-        Text(
-            recentEpgProgramme?.now?.title ?: "",
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.labelSmall.copy(LocalContentColor.current.copy(0.8f)),
-            modifier = Modifier
-                .ifElse(isFocused, Modifier.basicMarquee()),
-        )
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceAround) {
+            Text(
+                name,
+                maxLines = if (wrapName) 2 else 1,
+                overflow = if (allowTwoLineName) TextOverflow.Ellipsis else TextOverflow.Clip,
+                style = nameStyle,
+                modifier = Modifier.ifElse(scrollName, Modifier.basicMarquee()),
+            )
+
+            if (!wrapName) {
+                Text(
+                    programmeTitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall.copy(LocalContentColor.current.copy(0.8f)),
+                    modifier = Modifier.ifElse(isFocused, Modifier.basicMarquee()),
+                )
+            }
+        }
     }
 }
 

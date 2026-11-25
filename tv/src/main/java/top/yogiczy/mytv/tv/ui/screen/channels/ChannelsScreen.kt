@@ -44,6 +44,7 @@ fun ChannelsScreen(
     onChannelFavoriteToggle: (Channel) -> Unit = {},
     epgListProvider: () -> EpgList = { EpgList() },
     onBackPressed: () -> Unit = {},
+    allowTwoLineName: Boolean = false,
 ) {
     GroupedChannelsScreen(
         modifier = modifier,
@@ -53,6 +54,7 @@ fun ChannelsScreen(
         onChannelFavoriteToggle = onChannelFavoriteToggle,
         epgListProvider = epgListProvider,
         onBackPressed = onBackPressed,
+        allowTwoLineName = allowTwoLineName,
     )
 }
 
@@ -67,6 +69,7 @@ internal fun GroupedChannelsScreen(
     onBackPressed: () -> Unit,
     headerExtra: @Composable (() -> Unit)? = null,
     inFavoriteMode: Boolean = false,
+    allowTwoLineName: Boolean = false,
 ) {
     var selectedGroupKey by rememberSaveable { mutableStateOf<String?>(null) }
     fun groupKey(index: Int): String =
@@ -138,6 +141,7 @@ internal fun GroupedChannelsScreen(
                 updateTopBarVisibility = updateTopBarVisibility,
                 focusFirstOnEntry = true,
                 onFirstRowUp = if (hasGroupBar) ::focusCurrentGroup else null,
+                allowTwoLineName = allowTwoLineName,
             )
         }
     }

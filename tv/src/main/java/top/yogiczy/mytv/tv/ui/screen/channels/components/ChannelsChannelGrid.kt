@@ -63,6 +63,7 @@ fun ChannelsChannelGrid(
     updateTopBarVisibility: (Boolean) -> Unit = {},
     focusFirstOnEntry: Boolean = false,
     onFirstRowUp: (() -> Unit)? = null,
+    allowTwoLineName: Boolean = false,
 ) {
     val channelList = channelListProvider()
     val focusKeys = channelList.map { "channel/${it.name}/${it.lineList.firstOrNull()?.url.orEmpty()}" }
@@ -168,6 +169,7 @@ fun ChannelsChannelGrid(
                             onChannelFavoriteToggle(channel)
                         },
                         recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
+                        allowTwoLineName = allowTwoLineName,
                     )
                 }
             }

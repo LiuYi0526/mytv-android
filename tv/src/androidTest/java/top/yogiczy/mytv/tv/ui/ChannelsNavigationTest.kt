@@ -10,6 +10,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
@@ -24,12 +25,15 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.tv.material3.Text
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import top.yogiczy.mytv.core.data.entities.channel.Channel
@@ -38,6 +42,11 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelFavoriteList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroup
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelList
+import top.yogiczy.mytv.core.data.entities.epg.Epg
+import top.yogiczy.mytv.core.data.entities.epg.EpgDisplaySchedule
+import top.yogiczy.mytv.core.data.entities.epg.EpgList
+import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
+import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeList
 import top.yogiczy.mytv.core.data.utils.SP
 import top.yogiczy.mytv.tv.ui.screen.channels.ChannelsScreen
 import top.yogiczy.mytv.tv.ui.screen.favorites.FavoritesScreen
@@ -102,6 +111,72 @@ class ChannelsNavigationTest {
         press(Key.DirectionDown)
         awaitFocus("分组乙")
         compose.onNodeWithText("乙台一").assertIsDisplayed()
+    }
+
+    @Test fun longChannelNamesUseTwoLinesWhenThereIsNoCurrentProgramme() {
+        val afghanistan = Channel(name = "Afghanistan International")
+        val extraLong = Channel(name = "International Sports Championship and Live Event Coverage Channel")
+        val withProgramme = Channel(name = "International Sports and News")
+        val short = Channel(name = "CCTV-1")
+        val channels = ChannelList(listOf(afghanistan, extraLong, withProgramme, short))
+        val groups = ChannelGroupList(listOf(ChannelGroup("Global", channels)))
+        val now = System.currentTimeMillis()
+        val epg = EpgList(listOf(
+            Epg(listOf(withProgramme.name), programmeList = EpgProgrammeList(listOf(
+                EpgProgramme(now - 60_000, now + 3_600_000, "国际新闻"),
+            ))),
+        ))
+        compose.setContent {
+            MyTvTheme {
+                ChannelsScreen(
+                    channelGroupListProvider = { groups },
+                    epgListProvider = { epg },
+                    allowTwoLineName = true,
+                )
+            }
+        }
+        awaitFocus(afghanistan.name)
+        compose.onNodeWithText("国际新闻").assertIsDisplayed()
+        compose.onNodeWithText(EpgDisplaySchedule.UNKNOWN_TITLE).assertIsDisplayed()
+        val focusedPlaceholder = compose.onNode(
+            hasText(EpgDisplaySchedule.UNKNOWN_TITLE) and hasAnyAncestor(isFocused()),
+            useUnmergedTree = true,
+        )
+        focusedPlaceholder.assertDoesNotExist()
+
+        fun layout(channel: Channel): TextLayoutResult {
+            val results = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(channel.name, useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
+            return results.single()
+        }
+
+        assertEquals(2, layout(afghanistan).lineCount)
+        assertFalse(layout(afghanistan).hasVisualOverflow)
+        assertEquals(2, layout(extraLong).lineCount)
+        assertTrue(layout(extraLong).isLineEllipsized(1))
+        assertEquals(1, layout(withProgramme).lineCount)
+        assertTrue(layout(withProgramme).isLineEllipsized(0))
+
+        press(Key.DirectionRight)
+        awaitFocus(extraLong.name)
+        assertEquals(1, layout(extraLong).lineCount)
+        assertFalse(layout(extraLong).hasVisualOverflow)
+        focusedPlaceholder.assertIsDisplayed()
+        val nameBounds = compose.onNodeWithText(extraLong.name, useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(focusedPlaceholder.fetchSemanticsNode().boundsInRoot.top >= nameBounds.bottom)
+        assertEquals(2, layout(afghanistan).lineCount)
+
+        compose.onNode(
+            SemanticsMatcher.keyIsDefined(SemanticsActions.RequestFocus) and hasAnyDescendant(hasText(withProgramme.name)),
+            useUnmergedTree = true,
+        ).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        awaitFocus(withProgramme.name)
+        assertEquals(2, layout(extraLong).lineCount)
+        assertEquals(1, layout(withProgramme).lineCount)
+        assertFalse(layout(withProgramme).hasVisualOverflow)
+        compose.onNodeWithText("国际新闻").assertIsDisplayed()
     }
 
     @Test fun upFromTheFirstCardUsesTheSelectedGroupInsteadOfThePreviousFocus() {

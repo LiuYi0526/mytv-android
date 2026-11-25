@@ -309,6 +309,7 @@ fun MainScreen(
                     onChannelFavoriteToggle = { onChannelFavoriteToggle(it) },
                     epgListProvider = epgListProvider,
                     onBackPressed = { navController.navigateUp() },
+                    allowTwoLineName = true,
                 )
             }
 
