@@ -1,9 +1,11 @@
 package top.yogiczy.mytv.tv.ui
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
@@ -30,6 +32,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -57,6 +60,7 @@ import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardFavoriteList
 import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardHistoryList
 import top.yogiczy.mytv.tv.ui.screen.favorites.FavoritesScreen
+import top.yogiczy.mytv.tv.ui.screen.search.components.SearchResult
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.Configs
 
@@ -134,12 +138,12 @@ class ChannelsNavigationTest {
         FavoritesScreen(channelFavoriteListProvider = { favorites }, epgListProvider = { epg })
     }
 
-    @Test fun dashboardFavoritesDisplayLongNamesAndCurrentProgrammes() = verifyDashboardLongChannelNames { channels, epg ->
+    @Test fun dashboardFavoritesDisplayLongNamesAndCurrentProgrammes() = verifyLongChannelNamesInAppScreen { channels, epg ->
         val favorites = ChannelFavoriteList(channels.map { ChannelFavorite(it, "订阅甲", "Global") })
         DashboardFavoriteList(channelFavoriteListProvider = { favorites }, epgListProvider = { epg })
     }
 
-    @Test fun dashboardHistoryDisplaysLongNamesAndCurrentProgrammes() = verifyDashboardLongChannelNames { channels, epg ->
+    @Test fun dashboardHistoryDisplaysLongNamesAndCurrentProgrammes() = verifyLongChannelNamesInAppScreen { channels, epg ->
         DashboardHistoryList(
             channels = channels,
             epgListProvider = { epg },
@@ -148,10 +152,18 @@ class ChannelsNavigationTest {
         )
     }
 
-    private fun verifyDashboardLongChannelNames(row: @Composable (ChannelList, EpgList) -> Unit) =
+    @Test fun searchResultsDisplayLongNamesAndCurrentProgrammes() = verifyLongChannelNamesInAppScreen { channels, epg ->
+        SearchResult(
+            modifier = Modifier.width(520.dp),
+            channelListProvider = { channels },
+            epgListProvider = { epg },
+        )
+    }
+
+    private fun verifyLongChannelNamesInAppScreen(content: @Composable (ChannelList, EpgList) -> Unit) =
         verifyLongChannelNames { channels, epg ->
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
-                AppScreen { row(channels, epg) }
+                AppScreen { content(channels, epg) }
             }
         }
 

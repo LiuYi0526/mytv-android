@@ -100,6 +100,7 @@ fun SearchResult(
                     onChannelSelected = { focus.selected(focusKeys[index]); onChannelSelected(channel) },
                     onChannelFavoriteToggle = { onChannelFavoriteToggle(channel) },
                     recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
+                    allowTwoLineName = true,
                 )
             }
         }
