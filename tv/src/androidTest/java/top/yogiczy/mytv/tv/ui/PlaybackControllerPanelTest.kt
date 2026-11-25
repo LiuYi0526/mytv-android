@@ -1,6 +1,7 @@
 package top.yogiczy.mytv.tv.ui
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
@@ -207,6 +208,7 @@ class PlaybackControllerPanelTest {
             EpgProgramme(midnight + (index - 3) * 3_600_000L, midnight + (index - 2) * 3_600_000L, "同名节目")
         }
         val current = mutableStateOf(guide.last())
+        val position = mutableLongStateOf(current.value.startAt + 1_000)
         val targets = mutableListOf<Long>()
         compose.setContent {
             MyTvTheme {
@@ -217,10 +219,15 @@ class PlaybackControllerPanelTest {
                     previousProgrammeProvider = { PlaybackProgrammeNavigation.adjacent(guide, current.value, -1) },
                     nextProgrammeProvider = { PlaybackProgrammeNavigation.adjacent(guide, current.value, 1) },
                     canStartProgramme = { true },
-                    onProgrammePlayback = { targets += it.startAt; current.value = it },
-                    videoPlayerCurrentPositionProvider = { current.value.startAt + 1_000 },
+                    onProgrammePlayback = {
+                        targets += it.startAt
+                        current.value = it
+                        position.longValue = it.startAt + 1_000
+                    },
+                    videoPlayerCurrentPositionProvider = { position.longValue },
                     videoPlayerDurationProvider = { current.value.startAt to current.value.endAt },
                     videoPlayerPositionIsAbsoluteProvider = { true },
+                    onVideoPlayerSeekTo = { seek.set(it); position.longValue = it },
                     showChannelLogo = false,
                 )
             }
@@ -252,5 +259,20 @@ class PlaybackControllerPanelTest {
             compose.runOnIdle { assertEquals(guide[2 - index].startAt, targets.last()) }
             button.assertIsFocused()
         }
+    }
+
+    @Test fun tenSecondButtonsSeekWithinTheNewProgrammeAfterTappingPrevious() {
+        val (guide, _) = showChangingProgrammes()
+        compose.onNodeWithContentDescription("上一节目").performTouchInput { click() }
+        val selected = guide[2]
+        compose.onNodeWithContentDescription("前进10秒").assertIsEnabled().performTouchInput { click() }
+        compose.onNodeWithText("${clock(selected.startAt + 11_000)} / ${clock(selected.endAt)}").assertExists()
+        compose.waitUntil(5_000) { seek.get() != Long.MIN_VALUE }
+        assertEquals(selected.startAt + 11_000, seek.get())
+
+        seek.set(Long.MIN_VALUE)
+        compose.onNodeWithContentDescription("后退10秒").assertIsEnabled().performTouchInput { click() }
+        compose.waitUntil(5_000) { seek.get() != Long.MIN_VALUE }
+        assertEquals(selected.startAt + 1_000, seek.get())
     }
 }

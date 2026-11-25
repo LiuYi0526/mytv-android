@@ -83,10 +83,13 @@ fun VideoPlayerControllerPositionCtrl(
         pending = null
         if (latestSeekEnabled && latestRange.second > latestRange.first) latestSeek(clamp(target))
     }
-    fun adjust(delta: Long) {
-        if (!latestSeekEnabled || latestRange.second <= latestRange.first) return
-        pending = clamp((pending ?: latestPosition()) + delta)
-        revision++
+    // The toolbar callback must capture the new pending state when the programme changes.
+    // A local callable reference compares equal even when its captured state differs.
+    val adjust: (Long) -> Unit = { delta ->
+        if (latestSeekEnabled && latestRange.second > latestRange.first) {
+            pending = clamp((pending ?: latestPosition()) + delta)
+            revision++
+        }
     }
     // Touch commits on release; held remote keys only commit after release/idle.
     LaunchedEffect(pending, revision, dragging, keyHeld, range, absolute) {
@@ -129,7 +132,7 @@ fun VideoPlayerControllerPositionCtrl(
                 absolute -> "${clock.format(position)} / ${clock.format(range.second)}"
                 else -> "${formatElapsed(elapsed.coerceAtMost(total))} / ${formatElapsed(total)}"
             }
-            toolbar(label, ::adjust) { pending = null; dragging = false; keyHeld = false }
+            toolbar(label, adjust) { pending = null; dragging = false; keyHeld = false }
         } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             VideoPlayerControllerBtn(
                 modifier = Modifier.semantics { contentDescription = "后退10分钟" },
