@@ -1,8 +1,11 @@
 package top.yogiczy.mytv.tv.ui
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -26,6 +29,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Density
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -49,6 +53,9 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeList
 import top.yogiczy.mytv.core.data.utils.SP
 import top.yogiczy.mytv.tv.ui.screen.channels.ChannelsScreen
+import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
+import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardFavoriteList
+import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardHistoryList
 import top.yogiczy.mytv.tv.ui.screen.favorites.FavoritesScreen
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.Configs
@@ -113,13 +120,47 @@ class ChannelsNavigationTest {
         compose.onNodeWithText("乙台一").assertIsDisplayed()
     }
 
-    @Test fun longChannelNamesUseTwoLinesWhenThereIsNoCurrentProgramme() {
+    @Test fun allChannelsDisplayLongNamesAndCurrentProgrammes() = verifyLongChannelNames { channels, epg ->
+        val groups = ChannelGroupList(listOf(ChannelGroup("Global", channels)))
+        ChannelsScreen(
+            channelGroupListProvider = { groups },
+            epgListProvider = { epg },
+            allowTwoLineName = true,
+        )
+    }
+
+    @Test fun favoritesDisplayLongNamesAndCurrentProgrammes() = verifyLongChannelNames { channels, epg ->
+        val favorites = ChannelFavoriteList(channels.map { ChannelFavorite(it, "订阅甲", "Global") })
+        FavoritesScreen(channelFavoriteListProvider = { favorites }, epgListProvider = { epg })
+    }
+
+    @Test fun dashboardFavoritesDisplayLongNamesAndCurrentProgrammes() = verifyDashboardLongChannelNames { channels, epg ->
+        val favorites = ChannelFavoriteList(channels.map { ChannelFavorite(it, "订阅甲", "Global") })
+        DashboardFavoriteList(channelFavoriteListProvider = { favorites }, epgListProvider = { epg })
+    }
+
+    @Test fun dashboardHistoryDisplaysLongNamesAndCurrentProgrammes() = verifyDashboardLongChannelNames { channels, epg ->
+        DashboardHistoryList(
+            channels = channels,
+            epgListProvider = { epg },
+            onChannelSelected = {},
+            onChannelFavoriteToggle = {},
+        )
+    }
+
+    private fun verifyDashboardLongChannelNames(row: @Composable (ChannelList, EpgList) -> Unit) =
+        verifyLongChannelNames { channels, epg ->
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                AppScreen { row(channels, epg) }
+            }
+        }
+
+    private fun verifyLongChannelNames(screen: @Composable (ChannelList, EpgList) -> Unit) {
         val afghanistan = Channel(name = "Afghanistan International")
         val extraLong = Channel(name = "International Sports Championship and Live Event Coverage Channel")
         val withProgramme = Channel(name = "International Sports and News")
         val short = Channel(name = "CCTV-1")
         val channels = ChannelList(listOf(afghanistan, extraLong, withProgramme, short))
-        val groups = ChannelGroupList(listOf(ChannelGroup("Global", channels)))
         val now = System.currentTimeMillis()
         val epg = EpgList(listOf(
             Epg(listOf(withProgramme.name), programmeList = EpgProgrammeList(listOf(
@@ -127,15 +168,18 @@ class ChannelsNavigationTest {
             ))),
         ))
         compose.setContent {
-            MyTvTheme {
-                ChannelsScreen(
-                    channelGroupListProvider = { groups },
-                    epgListProvider = { epg },
-                    allowTwoLineName = true,
-                )
-            }
+            MyTvTheme { screen(channels, epg) }
         }
-        awaitFocus(afghanistan.name)
+
+        fun focusChannel(channel: Channel) {
+            compose.onNode(
+                SemanticsMatcher.keyIsDefined(SemanticsActions.RequestFocus) and hasAnyDescendant(hasText(channel.name)),
+                useUnmergedTree = true,
+            ).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            awaitFocus(channel.name)
+        }
+
+        focusChannel(afghanistan)
         compose.onNodeWithText("国际新闻").assertIsDisplayed()
         compose.onNodeWithText(EpgDisplaySchedule.UNKNOWN_TITLE).assertIsDisplayed()
         val focusedPlaceholder = compose.onNode(
@@ -168,11 +212,7 @@ class ChannelsNavigationTest {
         assertTrue(focusedPlaceholder.fetchSemanticsNode().boundsInRoot.top >= nameBounds.bottom)
         assertEquals(2, layout(afghanistan).lineCount)
 
-        compose.onNode(
-            SemanticsMatcher.keyIsDefined(SemanticsActions.RequestFocus) and hasAnyDescendant(hasText(withProgramme.name)),
-            useUnmergedTree = true,
-        ).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-        awaitFocus(withProgramme.name)
+        focusChannel(withProgramme)
         assertEquals(2, layout(extraLong).lineCount)
         assertEquals(1, layout(withProgramme).lineCount)
         assertFalse(layout(withProgramme).hasVisualOverflow)

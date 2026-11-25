@@ -49,6 +49,7 @@ fun FavoritesScreen(
         title = "我的收藏",
         channelGroups = channelFavoriteGroupList,
         inFavoriteMode = true,
+        allowTwoLineName = true,
         onChannelSelected = onChannelSelected,
         onChannelFavoriteToggle = onChannelFavoriteToggle,
         epgListProvider = epgListProvider,

@@ -58,6 +58,7 @@ fun DashboardHistoryList(
                     onChannelSelected = { focus?.selected(focusKey); onChannelSelected(channel) },
                     onChannelFavoriteToggle = { onChannelFavoriteToggle(channel) },
                     recentEpgProgrammeProvider = { epgListProvider().recentProgramme(channel) },
+                    allowTwoLineName = true,
                 )
             }
         }
