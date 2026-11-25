@@ -301,10 +301,8 @@ class MainViewModel : ViewModel() {
             .filter { it.name in needRefreshNames }
             .forEach { iptvSource ->
                 runCatching {
-                    val channelGroupList =
-                        IptvRepository(iptvSource).getChannelGroupList(Configs.iptvSourceCacheTime)
-
-                    refreshChannelFavoriteList(iptvSource, channelGroupList)
+                    IptvRepository(iptvSource).observeChannelGroupList(Configs.iptvSourceCacheTime)
+                        .collect { refreshChannelFavoriteList(iptvSource, it) }
                 }
             }
     }
@@ -312,17 +310,24 @@ class MainViewModel : ViewModel() {
     private suspend fun refreshChannelFavoriteList(
         iptvSource: IptvSource,
         channelGroupList: ChannelGroupList,
-    ) = withContext(Dispatchers.Default) {
-        Configs.iptvChannelFavoriteList =
-            ChannelFavoriteList(Configs.iptvChannelFavoriteList.map { channelFavorite ->
+    ) {
+        if (Configs.iptvChannelFavoriteList.any { it.iptvSourceName == iptvSource.name }) {
+            val sourceChannels = withContext(Dispatchers.Default) {
+                channelGroupList.channelsWithGroups().withIndex().associateBy { (_, entry) ->
+                    val (groupName, channel) = entry
+                    groupName to channel.name
+                }
+            }
+            Configs.iptvChannelFavoriteList = ChannelFavoriteList(Configs.iptvChannelFavoriteList.map { channelFavorite ->
                 if (iptvSource.name != channelFavorite.iptvSourceName) return@map channelFavorite
 
-                val newChannel = channelGroupList
-                    .firstOrNull { group -> group.name == channelFavorite.groupName }?.channelList
-                    ?.firstOrNull { channel -> channel.name == channelFavorite.channel.name }
-
-                channelFavorite.copy(channel = newChannel ?: channelFavorite.channel)
+                val sourceChannel = sourceChannels[channelFavorite.groupName to channelFavorite.channel.name]
+                channelFavorite.copy(
+                    channel = sourceChannel?.value?.second ?: channelFavorite.channel,
+                    playlistPosition = sourceChannel?.index,
+                )
             })
+        }
         needRefresh()
     }
 }

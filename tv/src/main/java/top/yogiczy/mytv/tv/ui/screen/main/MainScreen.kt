@@ -4,6 +4,7 @@ import androidx.compose.animation.EnterExitState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -70,8 +71,15 @@ fun MainScreen(
         (uiState as? MainUiState.Ready)?.filteredChannelGroupList ?: ChannelGroupList()
     }
     val epgListProvider = { (uiState as? MainUiState.Ready)?.epgList ?: EpgList() }
+    val orderedFavorites by remember(settingsViewModel) {
+        derivedStateOf {
+            settingsViewModel.iptvChannelFavoriteList.inSubscriptionOrder(
+                settingsViewModel.iptvSourceList.map { it.name },
+            )
+        }
+    }
     val favoriteChannelListProvider = {
-        ChannelList(settingsViewModel.iptvChannelFavoriteList.map { it.channel.copy(index = -1) })
+        ChannelList(orderedFavorites.map { it.channel.copy(index = -1) })
     }
 
     val navController = rememberNavController()
@@ -115,10 +123,15 @@ fun MainScreen(
             Snackbar.show("取消收藏：${channel.name}")
         } else {
             if (uiState !is MainUiState.Ready) return
+            val groupName = filteredChannelGroupListProvider().chanelGroup(channel).name
+            val playlistPosition = channelGroupListProvider().channelsWithGroups()
+                .indexOfFirst { (group, listedChannel) -> group == groupName && listedChannel.name == channel.name }
+                .takeIf { it >= 0 }
             val favoriteChannel = ChannelFavorite(
                 channel = channel,
                 iptvSourceName = settingsViewModel.iptvSourceCurrent.name,
-                groupName = filteredChannelGroupListProvider().chanelGroup(channel).name,
+                groupName = groupName,
+                playlistPosition = playlistPosition,
             )
 
             settingsViewModel.iptvChannelFavoriteList =
@@ -241,7 +254,7 @@ fun MainScreen(
                     },
                     toSettingsCategoryScreen = { navController.navigateSingleTop(Screens.Settings.withArgs(it.name)) },
                     currentIptvSourceProvider = { settingsViewModel.iptvSourceCurrent },
-                    channelFavoriteListProvider = { settingsViewModel.iptvChannelFavoriteList },
+                    channelFavoriteListProvider = { orderedFavorites },
                     onChannelSelected = { onChannelSelected(it) },
                     epgListProvider = epgListProvider,
                     toLiveScreen = { navigateWithChannels(Screens.Live()) },
@@ -315,7 +328,7 @@ fun MainScreen(
 
             composable(Screens.Favorites()) {
                 FavoritesScreen(
-                    channelFavoriteListProvider = { settingsViewModel.iptvChannelFavoriteList },
+                    channelFavoriteListProvider = { orderedFavorites },
                     onChannelSelected = { onChannelSelected(it) },
                     onChannelFavoriteToggle = { onChannelFavoriteToggle(it) },
                     onChannelFavoriteClear = { onChannelFavoriteClear() },

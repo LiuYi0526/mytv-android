@@ -8,6 +8,15 @@ import kotlinx.serialization.Serializable
 data class ChannelFavoriteList(
     val value: List<ChannelFavorite> = emptyList(),
 ) : List<ChannelFavorite> by value {
+    fun inSubscriptionOrder(sourceNames: List<String>): ChannelFavoriteList {
+        val sourcePositions = (sourceNames + map { it.iptvSourceName }).distinct()
+            .withIndex().associate { (index, name) -> name to index }
+        return ChannelFavoriteList(sortedWith(compareBy(
+            { sourcePositions.getValue(it.iptvSourceName) },
+            { it.playlistPosition ?: Int.MAX_VALUE },
+        )))
+    }
+
     companion object {
         val EXAMPLE = ChannelFavoriteList(List(10) { i ->
             ChannelFavorite(

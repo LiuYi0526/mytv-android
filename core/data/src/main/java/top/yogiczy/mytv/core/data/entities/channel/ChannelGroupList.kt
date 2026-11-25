@@ -47,6 +47,10 @@ data class ChannelGroupList(
             get() = ChannelList(this.asSequence().flatMap { it.channelList.asSequence() }.toList())
     }
 
+    fun channelsWithGroups(): Sequence<Pair<String, Channel>> = asSequence().flatMap { group ->
+        group.channelList.asSequence().map { group.name to it }
+    }
+
     fun withMetadata(): ChannelGroupList {
         var index = 0
         return ChannelGroupList(map { group ->

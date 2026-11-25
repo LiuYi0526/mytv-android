@@ -7,6 +7,7 @@ data class ChannelFavorite(
     val channel: Channel,
     val iptvSourceName: String,
     val groupName: String,
+    val playlistPosition: Int? = null,
 ) {
     companion object {
         fun ChannelFavorite.isSame(other: ChannelFavorite): Boolean {
