@@ -5,7 +5,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -53,7 +53,7 @@ fun QuickOpBtn(
     Column(
         modifier = modifier
             .width(88.dp)
-            .height(94.dp)
+            .heightIn(min = 94.dp)
             .semantics(mergeDescendants = true) {
                 role = Role.Button
                 contentDescription = description

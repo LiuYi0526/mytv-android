@@ -64,11 +64,11 @@ class QuickOpToolbarTest {
         }
     }
 
-    private fun show(tracks: VideoPlayer.Metadata = allTracks, ready: Boolean = true) {
+    private fun show(tracks: VideoPlayer.Metadata = allTracks, ready: Boolean = true, fontScale: Float = 1f) {
         metadata.value = tracks
         tracksReady.value = ready
         compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+            CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
                 MyTvTheme {
                     Box(Modifier.width(960.dp).background(Color.Black)) {
                         QuickOpBtnList(
@@ -136,6 +136,28 @@ class QuickOpToolbarTest {
         val width = compose.onNode(hasContentDescription("视频轨道", substring = true)).fetchSemanticsNode().boundsInRoot.width
         compose.onNodeWithTag("toolbar").performScrollToNode(hasContentDescription("音轨", substring = true))
         assertEquals(width, compose.onNode(hasContentDescription("音轨", substring = true)).fetchSemanticsNode().boundsInRoot.width, 0.1f)
+    }
+
+    @Test fun chineseTrackLabelsGrowVerticallyWhenTwoLinesNeedMoreRoom() {
+        val chineseAudio = audio.copy(language = "zh")
+        show(
+            tracks = allTracks.copy(
+                audio = chineseAudio,
+                audioTracks = listOf(chineseAudio),
+                subtitleTracks = emptyList(),
+            ),
+            fontScale = 1.25f,
+        )
+        val toolbar = compose.onNodeWithTag("toolbar")
+        for (label in listOf("立体声\n中文", "字幕\n无字幕")) {
+            toolbar.performScrollToNode(hasText(label))
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(label, useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            val layout = layouts.single()
+            assertEquals(label, 2, layout.lineCount)
+            assertFalse(label, layout.hasVisualOverflow)
+        }
     }
 
     @Test fun touchSwipeAndTapReachTrackMenusAndTriggerOnlyOnce() {
