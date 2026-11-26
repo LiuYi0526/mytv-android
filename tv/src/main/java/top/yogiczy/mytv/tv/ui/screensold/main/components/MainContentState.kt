@@ -406,7 +406,7 @@ class MainContentState(
         }
     }
 
-    private fun programmeAt(position: Long, fallback: EpgProgramme?): EpgProgramme {
+    internal fun programmeAt(position: Long, fallback: EpgProgramme?): EpgProgramme {
         if (fallback != null && fallback.title != "时移播放" && position >= fallback.startAt && position < fallback.endAt)
             return fallback
         epgListProvider().displayGuide(currentChannel, position).programmeList.firstOrNull {

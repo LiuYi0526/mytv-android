@@ -370,6 +370,7 @@ fun MainContent(
         val liveProgramme = liveProgrammeAt(controllerNow)
         val timeline = playbackTimeline(liveProgramme, controllerNow)
         VideoPlayerControllerScreen(
+            seekSteps = settingsViewModel.videoPlayerSeekSteps,
             previousProgrammeProvider = {
                 PlaybackProgrammeNavigation.adjacent(
                     epgListProvider().displayGuide(mainContentState.currentChannel,
@@ -410,6 +411,10 @@ fun MainContent(
             videoPlayerDurationProvider = { timeline.range },
             videoPlayerSeekEnabledProvider = { timeline.seekEnabled },
             videoPlayerAvailableUntilProvider = { controllerNow.takeIf { timeline.absolute } },
+            videoPlayerProgrammeRangeAt = { position ->
+                mainContentState.programmeAt(position, mainContentState.currentPlaybackEpgProgramme ?: liveProgramme)
+                    .let { it.startAt to it.endAt }
+            },
             onVideoPlayerPlay = { videoPlayerState.play() },
             onVideoPlayerPause = { videoPlayerState.pause() },
             onVideoPlayerSeekTo = {

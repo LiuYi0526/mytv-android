@@ -10,6 +10,7 @@ import top.yogiczy.mytv.core.util.utils.humanizeMs
 import top.yogiczy.mytv.tv.ui.screen.settings.SettingsViewModel
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsCategoryScreen
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsListItem
+import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsSeekStepItem
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsUserAgentItem
 import top.yogiczy.mytv.tv.ui.screen.settings.components.SettingsHeadersItem
 import top.yogiczy.mytv.tv.ui.screen.settings.settingsVM
@@ -129,6 +130,27 @@ fun SettingsVideoPlayerScreen(
                 trailingContent = { Switch(settingsViewModel.videoPlayerPlaybackReload, null) },
                 onSelect = { settingsViewModel.videoPlayerPlaybackReload = !settingsViewModel.videoPlayerPlaybackReload },
             )
+        }
+
+        item {
+            SettingsSeekStepItem("进度条快退步长", settingsViewModel.videoPlayerSeekSteps.progressRewindSeconds) {
+                settingsViewModel.videoPlayerSeekSteps = settingsViewModel.videoPlayerSeekSteps.copy(progressRewindSeconds = it)
+            }
+        }
+        item {
+            SettingsSeekStepItem("进度条快进步长", settingsViewModel.videoPlayerSeekSteps.progressForwardSeconds) {
+                settingsViewModel.videoPlayerSeekSteps = settingsViewModel.videoPlayerSeekSteps.copy(progressForwardSeconds = it)
+            }
+        }
+        item {
+            SettingsSeekStepItem("快退按钮步长", settingsViewModel.videoPlayerSeekSteps.buttonRewindSeconds) {
+                settingsViewModel.videoPlayerSeekSteps = settingsViewModel.videoPlayerSeekSteps.copy(buttonRewindSeconds = it)
+            }
+        }
+        item {
+            SettingsSeekStepItem("快进按钮步长", settingsViewModel.videoPlayerSeekSteps.buttonForwardSeconds) {
+                settingsViewModel.videoPlayerSeekSteps = settingsViewModel.videoPlayerSeekSteps.copy(buttonForwardSeconds = it)
+            }
         }
 
         item {

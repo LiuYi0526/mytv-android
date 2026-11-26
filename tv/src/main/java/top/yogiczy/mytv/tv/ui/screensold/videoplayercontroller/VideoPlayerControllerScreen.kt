@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Replay
@@ -31,6 +33,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -38,6 +41,8 @@ import androidx.tv.material3.Icon
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeRecent
+import top.yogiczy.mytv.core.data.media.PlaybackSeekSteps
+import top.yogiczy.mytv.core.util.utils.humanizeMs
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.live.channels.components.LiveChannelsChannelInfo
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.player.VideoPlayer
@@ -52,6 +57,7 @@ import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
 @Composable
 fun VideoPlayerControllerScreen(
     modifier: Modifier = Modifier,
+    seekSteps: PlaybackSeekSteps = PlaybackSeekSteps.DEFAULT,
     isVideoPlayerPlayingProvider: () -> Boolean = { false },
     isVideoPlayerBufferingProvider: () -> Boolean = { false },
     videoPlayerCurrentPositionProvider: () -> Long = { 0L },
@@ -59,6 +65,7 @@ fun VideoPlayerControllerScreen(
     videoPlayerPositionIsAbsoluteProvider: () -> Boolean = { false },
     videoPlayerSeekEnabledProvider: () -> Boolean = { true },
     videoPlayerAvailableUntilProvider: () -> Long? = { null },
+    videoPlayerProgrammeRangeAt: (Long) -> Pair<Long, Long>? = { null },
     channelProvider: () -> Channel = { Channel() },
     channelLineIdxProvider: () -> Int = { 0 },
     recentEpgProgrammeProvider: () -> EpgProgrammeRecent? = { null },
@@ -111,11 +118,14 @@ fun VideoPlayerControllerScreen(
                 )
                 VideoPlayerControllerPositionCtrl(
                     modifier = Modifier.fillMaxWidth().focusRequester(progressFocus),
+                    mediaKey = channelProvider() to channelLineIdxProvider(),
+                    seekSteps = seekSteps,
                     currentPositionProvider = { position },
                     durationProvider = videoPlayerDurationProvider,
                     positionIsAbsoluteProvider = videoPlayerPositionIsAbsoluteProvider,
                     seekEnabledProvider = videoPlayerSeekEnabledProvider,
                     availableUntilProvider = videoPlayerAvailableUntilProvider,
+                    programmeRangeAt = videoPlayerProgrammeRangeAt,
                     onSeekTo = onVideoPlayerSeekTo,
                     toolbar = { positionLabel, adjust, cancelPreview ->
                         PlaybackControllerFooter(
@@ -128,11 +138,10 @@ fun VideoPlayerControllerScreen(
                                         enabled = previous?.let(canStartProgramme) == true,
                                         onSelect = { cancelPreview(); playProgramme(previous, focusProgress = false) },
                                     )
-                                    VideoPlayerControllerBtn(
-                                        modifier = Modifier.semantics { contentDescription = "后退10秒" },
-                                        imageVector = Icons.Default.Replay10,
+                                    PlaybackSeekButton(
+                                        deltaMs = -seekSteps.buttonRewindSeconds * 1_000L,
                                         enabled = hasProgress,
-                                        onSelect = { adjust(-10_000L) },
+                                        onSeekBy = adjust,
                                     )
                                     VideoPlayerControllerStateCtrl(
                                         modifier = Modifier.focusOnLaunchedSaveable(),
@@ -141,11 +150,10 @@ fun VideoPlayerControllerScreen(
                                         onPlay = onVideoPlayerPlay,
                                         onPause = onVideoPlayerPause,
                                     )
-                                    VideoPlayerControllerBtn(
-                                        modifier = Modifier.semantics { contentDescription = "前进10秒" },
-                                        imageVector = Icons.Default.Forward10,
+                                    PlaybackSeekButton(
+                                        deltaMs = seekSteps.buttonForwardSeconds * 1_000L,
                                         enabled = hasProgress,
-                                        onSelect = { adjust(10_000L) },
+                                        onSeekBy = adjust,
                                     )
                                     VideoPlayerControllerBtn(
                                         modifier = Modifier.semantics { contentDescription = "下一节目" },
@@ -182,6 +190,27 @@ fun VideoPlayerControllerScreen(
                         )
                     },
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaybackSeekButton(deltaMs: Long, enabled: Boolean, onSeekBy: (Long) -> Unit) {
+    val rewind = deltaMs < 0
+    val step = kotlin.math.abs(deltaMs)
+    val label = step.humanizeMs()
+    VideoPlayerControllerBtn(
+        modifier = Modifier.semantics { contentDescription = (if (rewind) "后退" else "前进") + label },
+        enabled = enabled,
+        onSelect = { onSeekBy(deltaMs) },
+    ) {
+        if (step == 10_000L) {
+            Icon(if (rewind) Icons.Default.Replay10 else Icons.Default.Forward10, contentDescription = null)
+        } else {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(if (rewind) Icons.Default.FastRewind else Icons.Default.FastForward, null, Modifier.size(16.dp))
+                Text(label, fontSize = 9.sp, lineHeight = 10.sp, maxLines = 1)
             }
         }
     }

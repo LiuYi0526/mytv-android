@@ -42,57 +42,113 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
+import top.yogiczy.mytv.core.data.media.PlaybackSeekSteps
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import kotlin.math.min
 
+private data class SeekPreview(val position: Long, val range: Pair<Long, Long>)
+
+private fun Pair<Long, Long>.containsPosition(position: Long) = position >= first && position < second
+
 @Composable
 fun VideoPlayerControllerPositionCtrl(
     modifier: Modifier = Modifier,
+    mediaKey: Any? = null,
+    seekSteps: PlaybackSeekSteps = PlaybackSeekSteps.DEFAULT,
     currentPositionProvider: () -> Long = { 0L },
     durationProvider: () -> Pair<Long, Long> = { 0L to 0L },
     positionIsAbsoluteProvider: () -> Boolean = { false },
     seekEnabledProvider: () -> Boolean = { true },
     availableUntilProvider: () -> Long? = { null },
+    programmeRangeAt: (Long) -> Pair<Long, Long>? = { null },
     onSeekTo: (Long) -> Unit = {},
     toolbar: (@Composable (positionLabel: String, adjust: (Long) -> Unit, cancelPreview: () -> Unit) -> Unit)? = null,
 ) {
     val range = durationProvider()
     val absolute = positionIsAbsoluteProvider()
     val seekEnabled = seekEnabledProvider()
-    // A new programme/time base must never receive an old pending seek.
-    var pending by remember(range.first, absolute, seekEnabled) { mutableStateOf<Long?>(null) }
-    var dragging by remember(range.first, absolute, seekEnabled) { mutableStateOf(false) }
-    var keyHeld by remember(range.first, absolute, seekEnabled) { mutableStateOf(false) }
+    // A step preview survives natural programme rollover during debounce.
+    var pendingAcrossProgrammes by remember(mediaKey, absolute, seekEnabled) { mutableStateOf<SeekPreview?>(null) }
+    var pendingWithinProgramme by remember(mediaKey, range.first, absolute, seekEnabled) { mutableStateOf<SeekPreview?>(null) }
+    var committedPreview by remember(mediaKey, absolute, seekEnabled) { mutableStateOf<SeekPreview?>(null) }
+    var dragging by remember(mediaKey, range.first, absolute, seekEnabled) { mutableStateOf(false) }
+    var keyHeld by remember(mediaKey, absolute, seekEnabled) { mutableStateOf(false) }
     var revision by remember { mutableStateOf(0L) }
     val latestSeek by rememberUpdatedState(onSeekTo)
     val latestPosition by rememberUpdatedState(currentPositionProvider)
     val latestRange by rememberUpdatedState(range)
     val latestAbsolute by rememberUpdatedState(absolute)
     val latestSeekEnabled by rememberUpdatedState(seekEnabled)
+    val latestProgrammeRangeAt by rememberUpdatedState(programmeRangeAt)
 
-    fun clamp(position: Long): Long {
-        val (start, end) = latestRange
-        val limit = if (latestAbsolute) min(end, System.currentTimeMillis()) else end
+    fun clamp(position: Long, bounds: Pair<Long, Long>, acrossProgrammes: Boolean = false): Long {
+        val (start, end) = bounds
+        val limit = if (latestAbsolute) {
+            val now = System.currentTimeMillis()
+            if (acrossProgrammes) return position.coerceIn(0L, now)
+            min(end, now)
+        } else end
         return position.coerceIn(start, limit.coerceAtLeast(start))
     }
+    fun clearPreview() {
+        pendingAcrossProgrammes = null
+        pendingWithinProgramme = null
+        committedPreview = null
+    }
     fun commit() {
-        val target = pending ?: return
-        pending = null
-        if (latestSeekEnabled && latestRange.second > latestRange.first) latestSeek(clamp(target))
+        val acrossProgrammes = pendingAcrossProgrammes != null
+        val target = pendingAcrossProgrammes ?: pendingWithinProgramme ?: return
+        clearPreview()
+        if (latestSeekEnabled && latestRange.second > latestRange.first) {
+            val position = clamp(target.position, target.range, acrossProgrammes)
+            // Bridge the native seek callback without snapping back to the old programme.
+            if (latestAbsolute && target.range != latestRange && target.range.containsPosition(position)) {
+                committedPreview = target.copy(position = position)
+            }
+            latestSeek(position)
+        }
+    }
+    fun reached(preview: SeekPreview) = latestRange == preview.range && preview.range.containsPosition(latestPosition())
+    val awaiting = committedPreview
+    val arrived = awaiting?.let { reached(it) } == true
+    LaunchedEffect(mediaKey, absolute, seekEnabled, awaiting, arrived) {
+        if (awaiting != null) {
+            if (!arrived) delay(2_000)
+            committedPreview = null
+        }
     }
     // The toolbar callback must capture the new pending state when the programme changes.
     // A local callable reference compares equal even when its captured state differs.
-    val adjust: (Long) -> Unit = { delta ->
+    val adjust: (delta: Long, acrossProgrammes: Boolean) -> Unit = { delta, acrossProgrammes ->
         if (latestSeekEnabled && latestRange.second > latestRange.first) {
-            pending = clamp((pending ?: latestPosition()) + delta)
+            val preview = pendingAcrossProgrammes ?: pendingWithinProgramme ?: committedPreview?.takeUnless { reached(it) }
+            val position = preview?.position ?: latestPosition()
+                .takeUnless { latestAbsolute && it <= 0L } ?: latestRange.first
+            val bounds = preview?.range ?: latestRange
+            clearPreview()
+            if (acrossProgrammes && latestAbsolute) {
+                val target = clamp(position + delta, bounds, true)
+                val targetRange = when {
+                    bounds.containsPosition(target) -> bounds
+                    latestRange.containsPosition(target) -> latestRange
+                    else -> latestProgrammeRangeAt(target)?.takeIf { it.containsPosition(target) } ?: latestRange
+                }
+                pendingAcrossProgrammes = SeekPreview(target, targetRange)
+            } else {
+                pendingWithinProgramme = SeekPreview(clamp(position + delta, bounds), bounds)
+            }
             revision++
         }
     }
+    val pending = pendingAcrossProgrammes ?: pendingWithinProgramme
+    val visiblePreview = pending ?: awaiting.takeUnless { arrived }
+    val displayedRange = visiblePreview?.range ?: range
+    val displayedPosition = visiblePreview?.position ?: currentPositionProvider()
     // Touch commits on release; held remote keys only commit after release/idle.
-    LaunchedEffect(pending, revision, dragging, keyHeld, range, absolute) {
+    LaunchedEffect(mediaKey, pending, revision, dragging, keyHeld, range, absolute) {
         if (pending != null && !dragging && !keyHeld) {
             delay(1_000)
             commit()
@@ -101,58 +157,66 @@ fun VideoPlayerControllerPositionCtrl(
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         VideoPlayerControllerPositionProgress(
-            currentPosition = pending ?: currentPositionProvider(),
-            range = range,
+            currentPosition = displayedPosition,
+            range = displayedRange,
             absolute = absolute,
             availableUntil = availableUntilProvider().takeIf { absolute },
             seekEnabled = seekEnabled,
             showTimeLabels = toolbar == null,
             onRemoteAdjust = { direction ->
                 keyHeld = true
-                adjust(600_000L * direction)
+                val seconds = if (direction < 0) -seekSteps.progressRewindSeconds else seekSteps.progressForwardSeconds
+                adjust(seconds * 1_000L, true)
             },
             onRemoteRelease = { keyHeld = false },
             onConfirm = { keyHeld = false; commit() },
-            onDragStart = { keyHeld = false; dragging = true },
-            onDrag = { fraction -> adjust(((latestRange.second - latestRange.first) * fraction).toLong()) },
+            onDragStart = {
+                keyHeld = false
+                dragging = true
+                clearPreview()
+                val position = if (absolute && displayedPosition <= 0L) displayedRange.first else displayedPosition
+                pendingWithinProgramme = SeekPreview(position, displayedRange)
+            },
+            onDrag = { fraction -> adjust(((displayedRange.second - displayedRange.first) * fraction).toLong(), false) },
             onDragEnd = { dragging = false; commit() },
-            onDragCancel = { dragging = false; pending = null },
+            onDragCancel = { dragging = false; clearPreview() },
             onSetProgress = { fraction ->
-                pending = clamp(latestRange.first + ((latestRange.second - latestRange.first) * fraction).toLong())
+                clearPreview()
+                val target = displayedRange.first + ((displayedRange.second - displayedRange.first) * fraction).toLong()
+                pendingWithinProgramme = SeekPreview(clamp(target, displayedRange), displayedRange)
                 commit()
             },
         )
         if (toolbar != null) {
-            val position = pending ?: currentPositionProvider()
-            val elapsed = (position - range.first).coerceAtLeast(0L)
-            val total = (range.second - range.first).coerceAtLeast(0L)
+            val elapsed = (displayedPosition - displayedRange.first).coerceAtLeast(0L)
+            val total = (displayedRange.second - displayedRange.first).coerceAtLeast(0L)
             val clock = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
             val label = when {
                 total <= 0L -> "直播"
-                absolute -> "${clock.format(position)} / ${clock.format(range.second)}"
+                absolute -> "${clock.format(displayedPosition)} / ${clock.format(displayedRange.second)}"
                 else -> "${formatElapsed(elapsed.coerceAtMost(total))} / ${formatElapsed(total)}"
             }
-            toolbar(label, adjust) { pending = null; dragging = false; keyHeld = false }
+            toolbar(label, { delta -> adjust(delta, true) }) { clearPreview(); dragging = false; keyHeld = false }
         } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             VideoPlayerControllerBtn(
                 modifier = Modifier.semantics { contentDescription = "后退10分钟" },
                 imageVector = Icons.Default.KeyboardDoubleArrowLeft,
-                onSelect = { adjust(-600_000L) },
+                onSelect = { adjust(-600_000L, false) },
             )
             VideoPlayerControllerBtn(
                 modifier = Modifier.semantics { contentDescription = "后退1分钟" },
                 imageVector = Icons.Default.ChevronLeft,
-                onSelect = { adjust(-60_000L) },
+                onSelect = { adjust(-60_000L, false) },
             )
             VideoPlayerControllerBtn(
                 modifier = Modifier.semantics { contentDescription = "前进1分钟" },
                 imageVector = Icons.Default.ChevronRight,
-                onSelect = { adjust(60_000L) },
+                onSelect = { adjust(60_000L, false) },
             )
             VideoPlayerControllerBtn(
                 modifier = Modifier.semantics { contentDescription = "前进10分钟" },
                 imageVector = Icons.Default.KeyboardDoubleArrowRight,
-                onSelect = { adjust(600_000L) },
+                onSelect = { adjust(600_000L, false) },
             )
         }
     }
@@ -207,10 +271,11 @@ private fun VideoPlayerControllerPositionProgress(
                     val event = it.nativeKeyEvent
                     when (event.keyCode) {
                         KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            if (event.action == KeyEvent.ACTION_UP) onRemoteRelease()
                             if (!valid) false else {
                                 if (event.action == KeyEvent.ACTION_DOWN) {
                                     onRemoteAdjust(if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1)
-                                } else if (event.action == KeyEvent.ACTION_UP) onRemoteRelease()
+                                }
                                 true
                             }
                         }

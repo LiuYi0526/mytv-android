@@ -70,4 +70,11 @@ class PlaybackRangeTest {
         assertEquals(60_000L, continuous.windowPosition(start + 720_000, start + 660_000, 300_000))
     }
 
+    @Test fun continuousSeekBeforeTheArchiveRangeRequiresReloadInsteadOfClamping() {
+        val continuous = range.copy(continuous = true)
+        assertNull(continuous.windowPosition(start - 10_000, start, 600_000))
+        assertNull(continuous.windowPosition(start - 10_000, start - 30_000, 600_000))
+        assertEquals(0L, continuous.windowPosition(start, start, 600_000))
+    }
+
 }

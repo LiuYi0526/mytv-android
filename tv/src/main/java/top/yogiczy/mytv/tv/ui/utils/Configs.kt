@@ -21,6 +21,7 @@ import top.yogiczy.mytv.tv.sync.CloudSyncProvider
 import top.yogiczy.mytv.tv.ui.screen.Screens
 import top.yogiczy.mytv.tv.ui.screen.components.AppThemeDef
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.VideoPlayerDisplayMode
+import top.yogiczy.mytv.core.data.media.PlaybackSeekSteps
 
 /**
  * 应用配置
@@ -192,6 +193,7 @@ object Configs {
         VIDEO_PLAYER_RTSP_TCP,
         VIDEO_PLAYER_LINE_PROBE_ENABLED,
         VIDEO_PLAYER_PLAYBACK_RELOAD,
+        VIDEO_PLAYER_SEEK_STEPS,
 
         /** 播放器 显示模式 */
         VIDEO_PLAYER_DISPLAY_MODE,
@@ -612,6 +614,13 @@ object Configs {
         get() = SP.getBoolean(KEY.VIDEO_PLAYER_PLAYBACK_RELOAD.name, false)
         set(value) = SP.putBoolean(KEY.VIDEO_PLAYER_PLAYBACK_RELOAD.name, value)
 
+    var videoPlayerSeekSteps: PlaybackSeekSteps
+        get() = runCatching {
+            Globals.json.decodeFromString<PlaybackSeekSteps>(SP.getString(KEY.VIDEO_PLAYER_SEEK_STEPS.name, "{}"))
+                .validated()
+        }.getOrDefault(PlaybackSeekSteps.DEFAULT)
+        set(value) = SP.putString(KEY.VIDEO_PLAYER_SEEK_STEPS.name, Globals.json.encodeToString(value.validated()))
+
     /** 播放器 显示模式 */
     var videoPlayerDisplayMode: VideoPlayerDisplayMode
         get() = VideoPlayerDisplayMode.fromValue(
@@ -827,6 +836,7 @@ object Configs {
             videoPlayerRtspTcp = videoPlayerRtspTcp,
             videoPlayerLineProbeEnabled = videoPlayerLineProbeEnabled,
             videoPlayerPlaybackReload = videoPlayerPlaybackReload,
+            videoPlayerSeekSteps = videoPlayerSeekSteps,
             videoPlayerDisplayMode = videoPlayerDisplayMode,
             videoPlayerChannelDisplayModes = videoPlayerChannelDisplayModes,
             videoPlayerForceAudioSoftDecode = videoPlayerForceAudioSoftDecode,
@@ -903,6 +913,7 @@ object Configs {
         configs.videoPlayerRtspTcp?.let { videoPlayerRtspTcp = it }
         configs.videoPlayerLineProbeEnabled?.let { videoPlayerLineProbeEnabled = it }
         configs.videoPlayerPlaybackReload?.let { videoPlayerPlaybackReload = it }
+        configs.videoPlayerSeekSteps?.let { videoPlayerSeekSteps = it }
         configs.videoPlayerDisplayMode?.let { videoPlayerDisplayMode = it }
         configs.videoPlayerChannelDisplayModes?.let { videoPlayerChannelDisplayModes = it }
         configs.videoPlayerForceAudioSoftDecode?.let { videoPlayerForceAudioSoftDecode = it }
@@ -978,6 +989,7 @@ object Configs {
         val videoPlayerRtspTcp: Boolean? = null,
         val videoPlayerLineProbeEnabled: Boolean? = null,
         val videoPlayerPlaybackReload: Boolean? = null,
+        val videoPlayerSeekSteps: PlaybackSeekSteps? = null,
         val videoPlayerDisplayMode: VideoPlayerDisplayMode? = null,
         val videoPlayerChannelDisplayModes: ChannelDisplayModeList? = null,
         val videoPlayerForceAudioSoftDecode: Boolean? = null,

@@ -19,7 +19,9 @@ data class PlaybackRange(
         windowDurationMs: Long?,
     ): Long? {
         val start = windowStartAt ?: sourceStartAt
-        val target = if (continuous) targetAt.coerceAtLeast(startAt) else targetAt.coerceIn(startAt, endAt)
+        // Let a seek before this archive range reload at the requested time.
+        if (continuous && targetAt < startAt) return null
+        val target = if (continuous) targetAt else targetAt.coerceIn(startAt, endAt)
         if (!continuous && start >= endAt) return null
         // Origins round programme starts to segment boundaries (observed: 40 seconds).
         // A resumed position must never silently jump ahead when its old window has expired.

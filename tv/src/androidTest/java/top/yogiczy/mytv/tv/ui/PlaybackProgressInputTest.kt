@@ -17,6 +17,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Test
+import top.yogiczy.mytv.core.data.media.PlaybackSeekSteps
 import top.yogiczy.mytv.tv.ui.screensold.videoplayercontroller.components.VideoPlayerControllerPositionCtrl
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
@@ -32,7 +33,9 @@ class PlaybackProgressInputTest {
     @Volatile private var trackCenterY = 0f
     private val start = 1_793_271_600_000L
 
-    private fun show(position: Long = 120_000, range: Pair<Long, Long> = 0L to 600_000L, absolute: Boolean = false) {
+    private fun show(position: Long = 120_000, range: Pair<Long, Long> = 0L to 600_000L,
+        absolute: Boolean = false, steps: PlaybackSeekSteps = PlaybackSeekSteps.DEFAULT,
+    ) {
         scenario = ActivityScenario.launch(ComponentActivity::class.java)
         scenario!!.onActivity { activity ->
             activity.setContent {
@@ -41,6 +44,7 @@ class PlaybackProgressInputTest {
                     VideoPlayerControllerPositionCtrl(
                         modifier = Modifier.fillMaxWidth().focusOnLaunchedSaveable()
                             .onGloballyPositioned { bounds = it.boundsInWindow() },
+                        seekSteps = steps,
                         currentPositionProvider = { position },
                         durationProvider = { range },
                         positionIsAbsoluteProvider = { absolute },
@@ -86,15 +90,15 @@ class PlaybackProgressInputTest {
 
     @After fun close() { scenario?.close() }
 
-    @Test fun remoteKeysBatchTenMinuteStepsAndPreserveUtc() {
+    @Test fun remoteKeysBatchOneMinuteStepsAndPreserveUtc() {
         show(start + 1_200_000, start to start + 3_600_000, true)
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         press(KeyEvent.KEYCODE_DPAD_LEFT)
-        assertTarget(start + 1_800_000)
+        assertTarget(start + 1_260_000)
     }
 
-    @Test fun heldRemoteKeepsTenMinuteStepsAndDoesNotSeekBeforeRelease() {
+    @Test fun heldRemoteKeepsOneMinuteStepsAndDoesNotSeekBeforeRelease() {
         show(range = 0L to 3_600_000L)
         key(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_DOWN)
         key(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_DOWN, 1)
@@ -102,26 +106,39 @@ class PlaybackProgressInputTest {
         SystemClock.sleep(1_200)
         assertEquals(0, calls.get())
         key(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_UP)
-        assertTarget(1_920_000)
+        assertTarget(300_000)
     }
 
     @Test fun confirmImmediatelyCommitsWithoutDuplicateDebounce() {
         show()
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         press(KeyEvent.KEYCODE_DPAD_CENTER)
-        assertEquals(600_000, target.get())
-        assertTarget(600_000)
+        assertEquals(180_000, target.get())
+        assertTarget(180_000)
     }
 
-    @Test fun remoteStopsAtBothProgrammeBounds() {
+    @Test fun remoteCarriesOffsetsAcrossBothProgrammeBounds() {
         show(start + 5_000, start to start + 15_000, true)
         press(KeyEvent.KEYCODE_DPAD_LEFT)
-        assertTarget(start)
+        assertTarget(start - 55_000)
         calls.set(0)
         target.set(Long.MIN_VALUE)
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        assertTarget(start + 65_000)
+    }
+
+    @Test fun remoteReadsIndependentConfiguredSteps() {
+        show(start + 50_000, start to start + 600_000, true,
+            PlaybackSeekSteps(progressRewindSeconds = 15, progressForwardSeconds = 120))
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
-        assertTarget(start + 15_000)
+        assertTarget(start + 155_000)
+    }
+
+    @Test fun remoteRelativeSeekStillClampsToMediaDuration() {
+        show(position = 590_000)
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        assertTarget(600_000)
     }
 
     @Test fun heldDragOnlySeeksOnceOnRelease() {
@@ -147,7 +164,7 @@ class PlaybackProgressInputTest {
         SystemClock.sleep(1_200)
         assertEquals(0, calls.get())
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
-        assertTarget(600_000)
+        assertTarget(180_000)
     }
 
     @Test fun dragClampsToEndAndPreservesUtc() {

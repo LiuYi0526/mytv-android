@@ -87,6 +87,47 @@ class PlaybackContinuationTest {
         }
     }
 
+    @Test fun rewindingFromProgrammeStartReloadsAtTheEndOfThePreviousProgramme() =
+        isolated(initialProgramme = second) { f ->
+            main {
+                f.engine.loadedDurationMs = 90_000
+                val count = f.engine.prepares
+                f.player.pause()
+                val target = second.startAt - 10_000
+                f.state.seekTo(target)
+                assertEquals(count + 1, f.engine.prepares)
+                assertNull(f.engine.lastSeek)
+                assertEquals(first, f.state.currentPlaybackEpgProgramme)
+                assertEquals(target, f.engine.range!!.sourceStartAt)
+                assertFalse(f.player.playRequested)
+            }
+        }
+
+    @Test fun forwardAcrossProgrammesReusesTheWindowWhenItContainsTheTarget() = isolated { f ->
+        main {
+            f.engine.loadedDurationMs = 60_000
+            val count = f.engine.prepares
+            val target = first.endAt + 5_000
+            f.state.seekTo(target)
+            assertEquals(count, f.engine.prepares)
+            assertEquals(target, f.engine.lastSeek)
+            assertEquals(second, f.state.currentPlaybackEpgProgramme)
+        }
+    }
+
+    @Test fun forwardAcrossProgrammesReloadsAtTheExactTargetOutsideTheWindow() = isolated { f ->
+        main {
+            f.engine.loadedDurationMs = first.endAt - first.startAt
+            val count = f.engine.prepares
+            val target = first.endAt + 5_000
+            f.state.seekTo(target)
+            assertEquals(count + 1, f.engine.prepares)
+            assertNull(f.engine.lastSeek)
+            assertEquals(second, f.state.currentPlaybackEpgProgramme)
+            assertEquals(target, f.engine.range!!.sourceStartAt)
+        }
+    }
+
     @Test fun finiteWindowsContinueFromActualEndAndCanCrossProgrammes() = isolated { f ->
         val initial = f.engine.prepares
         main { f.engine.end(start + 25_000) }
@@ -217,9 +258,14 @@ class PlaybackContinuationTest {
         var prepares = 0
         var playCalls = 0
         var lastSeek: Long? = null
+        var loadedDurationMs: Long? = null
         fun position(at: Long) = triggerCurrentPosition(at)
         fun end(at: Long) = triggerPlaybackWindowEnded(at)
         override val positionIsAbsolute = true
+        override fun canSeekTo(position: Long): Boolean {
+            val duration = loadedDurationMs ?: return true
+            return range?.windowPosition(position, null, duration) != null
+        }
         override fun prepare(line: ChannelLine) { this.line = line; prepares++ }
         override fun prepare(line: ChannelLine, playbackRange: PlaybackRange?) { prepare(line); range = playbackRange }
         override fun play() { playCalls++ }

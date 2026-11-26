@@ -3,7 +3,9 @@ package top.yogiczy.mytv.tv.ui
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import org.junit.Assert.assertEquals
@@ -14,6 +16,7 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgProgramme
 import top.yogiczy.mytv.core.data.entities.epg.EpgProgrammeRecent
 import top.yogiczy.mytv.core.data.media.PlaybackProgrammeNavigation
 import top.yogiczy.mytv.core.data.media.PlaybackControllerTimeline
+import top.yogiczy.mytv.core.data.media.PlaybackSeekSteps
 import top.yogiczy.mytv.tv.ui.screensold.videoplayercontroller.VideoPlayerControllerScreen
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import java.text.SimpleDateFormat
@@ -34,21 +37,33 @@ class PlaybackControllerPanelTest {
     private val previous = programme.copy(startAt = start - 600_000, endAt = start)
     private val next = programme.copy(startAt = programme.endAt, endAt = programme.endAt + 600_000)
 
-    private fun show(replay: Boolean = false, absolute: Boolean = true, supported: Boolean = true, futureNext: Boolean = false, playing: Boolean = true) {
+    private fun show(replay: Boolean = false, absolute: Boolean = true, supported: Boolean = true,
+        futureNext: Boolean = false, playing: Boolean = true, positionMs: Long = 120_000,
+        replayProgramme: () -> EpgProgramme = { programme },
+        seekSteps: PlaybackSeekSteps = PlaybackSeekSteps.DEFAULT,
+        positionProvider: () -> Long = { if (absolute) start + positionMs else positionMs },
+    ) {
         val visible = mutableStateOf(true)
         compose.setContent {
             MyTvTheme {
                 if (visible.value) VideoPlayerControllerScreen(
+                    seekSteps = seekSteps,
                     channelProvider = { Channel(name = "测试频道") },
                     recentEpgProgrammeProvider = { EpgProgrammeRecent(programme, programme.copy(title = "下一档", startAt = programme.endAt)) },
-                    currentPlaybackEpgProgrammeProvider = { programme.takeIf { replay } },
+                    currentPlaybackEpgProgrammeProvider = { if (replay) replayProgramme() else null },
                     previousProgrammeProvider = { previous },
                     nextProgrammeProvider = { if (futureNext) next.copy(startAt = System.currentTimeMillis() + 60_000) else next },
                     canStartProgramme = { supported && it.startAt < System.currentTimeMillis() },
                     onProgrammePlayback = { selectedProgramme.set(it) },
-                    videoPlayerCurrentPositionProvider = { if (absolute) start + 120_000 else 120_000 },
-                    videoPlayerDurationProvider = { if (absolute) start to start + 600_000 else 0L to 600_000L },
+                    videoPlayerCurrentPositionProvider = positionProvider,
+                    videoPlayerDurationProvider = {
+                        if (absolute) replayProgramme().let { it.startAt to it.endAt } else 0L to 600_000L
+                    },
                     videoPlayerPositionIsAbsoluteProvider = { absolute },
+                    videoPlayerProgrammeRangeAt = { position ->
+                        listOf(previous, programme, next).firstOrNull { position in it.startAt until it.endAt }
+                            ?.let { it.startAt to it.endAt }
+                    },
                     isVideoPlayerPlayingProvider = { playing },
                     onVideoPlayerSeekTo = { seek.set(it) },
                     onVideoPlayerPause = { pause.incrementAndGet() },
@@ -100,9 +115,9 @@ class PlaybackControllerPanelTest {
         val bar = focusProgress()
         bar.assertIsFocused()
         bar.performKeyInput { pressKey(Key.DirectionRight) }
-        compose.onNodeWithText("${clock(start + 600_000)} / ${clock(start + 600_000)}").assertExists()
+        compose.onNodeWithText("${clock(start + 180_000)} / ${clock(start + 600_000)}").assertExists()
         compose.waitUntil(5_000) { seek.get() != Long.MIN_VALUE }
-        assertEquals(start + 600_000, seek.get())
+        assertEquals(start + 180_000, seek.get())
     }
 
     @Test fun relativeMediaStillUsesElapsedTime() {
@@ -131,7 +146,7 @@ class PlaybackControllerPanelTest {
         compose.onNodeWithText("${clock(start + 120_000)} / ${clock(programme.endAt)}").assertExists()
         focusProgress().assertIsFocused()
             .performKeyInput { pressKey(Key.DirectionLeft); pressKey(Key.Enter) }
-        assertEquals(start, seek.get())
+        assertEquals(start + 60_000, seek.get())
     }
 
     @Test fun guideWithoutReplayStillShowsProgressButDisablesSeeking() {
@@ -151,6 +166,87 @@ class PlaybackControllerPanelTest {
         compose.onNodeWithContentDescription("前进10秒").performTouchInput { click() }
         compose.waitUntil(5_000) { seek.get() != Long.MIN_VALUE }
         assertEquals(start + 130_000, seek.get())
+    }
+
+    @Test fun buttonsShowAndApplyTheirIndependentConfiguredSteps() {
+        show(replay = true, seekSteps = PlaybackSeekSteps(buttonRewindSeconds = 15, buttonForwardSeconds = 30))
+        compose.onNodeWithContentDescription("后退15秒").performTouchInput { click() }
+        compose.waitUntil(5_000) { seek.get() != Long.MIN_VALUE }
+        assertEquals(start + 105_000, seek.get())
+
+        seek.set(Long.MIN_VALUE)
+        compose.onNodeWithContentDescription("前进30秒").performTouchInput { click() }
+        compose.waitUntil(5_000) { seek.get() != Long.MIN_VALUE }
+        assertEquals(start + 150_000, seek.get())
+    }
+
+    @Test fun rewindAtProgrammeStartSeeksTenSecondsIntoPreviousProgramme() {
+        show(replay = true, positionMs = 0)
+        compose.onNodeWithContentDescription("后退10秒").performTouchInput { click() }
+        compose.waitUntil(5_000) { seek.get() != Long.MIN_VALUE }
+        assertEquals(start - 10_000, seek.get())
+    }
+
+    @Test fun forwardCarriesRemainingSecondsIntoNextProgramme() {
+        show(replay = true, positionMs = 595_000)
+        compose.onNodeWithContentDescription("前进10秒").performTouchInput { click() }
+        compose.waitUntil(5_000) { seek.get() != Long.MIN_VALUE }
+        assertEquals(programme.endAt + 5_000, seek.get())
+    }
+
+    @Test fun rewindPreviewsPreviousProgrammeBeforeSeekAndKeepsItUntilPlaybackArrives() {
+        val current = mutableStateOf(programme)
+        val playhead = mutableLongStateOf(start + 1_000)
+        show(replay = true, replayProgramme = { current.value }, positionProvider = { playhead.longValue })
+        val target = start - 9_000
+        compose.onNodeWithContentDescription("后退10秒").performTouchInput { click() }
+        assertProgrammeProgress(target, previous)
+        assertEquals(Long.MIN_VALUE, seek.get())
+
+        compose.waitUntil(5_000) { seek.get() == target }
+        assertProgrammeProgress(target, previous)
+        compose.runOnIdle {
+            current.value = previous
+            playhead.longValue = target + 1_000
+        }
+        assertProgrammeProgress(target + 1_000, previous)
+    }
+
+    @Test fun progressKeyPreviewsNextProgrammeBeforeConfirmingSeek() {
+        show(replay = true, positionMs = 595_000)
+        focusProgress().performKeyInput { pressKey(Key.DirectionRight) }
+        val target = next.startAt + 55_000
+        assertProgrammeProgress(target, next)
+        assertEquals(Long.MIN_VALUE, seek.get())
+        compose.onNodeWithContentDescription("播放进度").performKeyInput { pressKey(Key.Enter) }
+        assertEquals(target, seek.get())
+    }
+
+    private fun assertProgrammeProgress(position: Long, programme: EpgProgramme) {
+        compose.onNodeWithText("${clock(position)} / ${clock(programme.endAt)}").assertExists()
+        val fraction = ((position - programme.startAt).toDouble() / (programme.endAt - programme.startAt)).toFloat()
+        compose.onNodeWithContentDescription("播放进度").assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(fraction, 0f..1f)),
+        )
+    }
+
+    @Test fun forwardStillCommitsWhenPlaybackNaturallyCrossesTheBoundaryDuringPreview() {
+        val current = mutableStateOf(programme)
+        show(replay = true, positionMs = 599_750, replayProgramme = { current.value })
+        compose.onNodeWithContentDescription("前进10秒").performTouchInput { click() }
+        compose.runOnIdle {
+            assertEquals(Long.MIN_VALUE, seek.get())
+            current.value = next
+        }
+        compose.waitUntil(5_000) { seek.get() != Long.MIN_VALUE }
+        assertEquals(programme.endAt + 9_750, seek.get())
+    }
+
+    @Test fun relativePlaybackStillClampsTenSecondButtonToMediaEnd() {
+        show(absolute = false, positionMs = 595_000)
+        compose.onNodeWithContentDescription("前进10秒").performTouchInput { click() }
+        compose.waitUntil(5_000) { seek.get() != Long.MIN_VALUE }
+        assertEquals(600_000L, seek.get())
     }
 
     @Test fun pauseTouchOnlyFiresOnce() {

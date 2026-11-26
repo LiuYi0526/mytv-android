@@ -24,6 +24,7 @@ import top.yogiczy.mytv.tv.sync.CloudSyncProvider
 import top.yogiczy.mytv.tv.ui.screen.Screens
 import top.yogiczy.mytv.tv.ui.screen.components.AppThemeDef
 import top.yogiczy.mytv.tv.ui.screensold.videoplayer.VideoPlayerDisplayMode
+import top.yogiczy.mytv.core.data.media.PlaybackSeekSteps
 import top.yogiczy.mytv.tv.ui.utils.Configs
 
 class SettingsViewModel : ViewModel() {
@@ -502,6 +503,16 @@ class SettingsViewModel : ViewModel() {
             Configs.videoPlayerPlaybackReload = value
             afterSetWhenCloudSyncAutoPull()
         }
+
+    private var _videoPlayerSeekSteps by mutableStateOf(PlaybackSeekSteps.DEFAULT)
+    var videoPlayerSeekSteps: PlaybackSeekSteps
+        get() = _videoPlayerSeekSteps
+        set(value) {
+            _videoPlayerSeekSteps = value.validated()
+            Configs.videoPlayerSeekSteps = _videoPlayerSeekSteps
+            afterSetWhenCloudSyncAutoPull()
+        }
+
     var videoPlayerRtspTcp: Boolean
         get() = _videoPlayerRtspTcp
         set(value) {
@@ -735,6 +746,7 @@ class SettingsViewModel : ViewModel() {
         _videoPlayerRtspTcp = Configs.videoPlayerRtspTcp
         _videoPlayerLineProbeEnabled = Configs.videoPlayerLineProbeEnabled
         _videoPlayerPlaybackReload = Configs.videoPlayerPlaybackReload
+        _videoPlayerSeekSteps = Configs.videoPlayerSeekSteps
         _videoPlayerDisplayMode = Configs.videoPlayerDisplayMode
         channelDisplayModes = Configs.videoPlayerChannelDisplayModes
         _videoPlayerForceAudioSoftDecode = Configs.videoPlayerForceAudioSoftDecode
