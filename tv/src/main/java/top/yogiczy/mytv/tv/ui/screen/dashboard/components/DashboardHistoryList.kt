@@ -47,7 +47,8 @@ fun DashboardHistoryList(
             horizontalArrangement = Arrangement.spacedBy(20.dp),
             contentPadding = PaddingValues(start = padding.start, end = padding.end),
             preservePaddingOnFocus = true,
-            restoreFocus = LocalDashboardFocus.current?.restoring != true,
+            restoreFocus = false,
+            focusOnSecondCard = true,
         ) { runtime ->
             items(channels, runtime) { itemModifier, channel ->
                 val focus = LocalDashboardFocus.current

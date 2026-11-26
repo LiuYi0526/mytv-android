@@ -18,7 +18,7 @@ import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.recentProgramme
 import top.yogiczy.mytv.tv.ui.screen.dashboard.rememberDashboardRowState
 import top.yogiczy.mytv.tv.ui.screen.dashboard.LocalDashboardFocus
 import top.yogiczy.mytv.tv.ui.screen.dashboard.dashboardFocus
-import top.yogiczy.mytv.tv.ui.screen.dashboard.dashboardChannelKey
+import top.yogiczy.mytv.tv.ui.screen.dashboard.dashboardFavoriteKey
 import top.yogiczy.mytv.tv.ui.material.LazyRow
 import top.yogiczy.mytv.tv.ui.material.items
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
@@ -46,18 +46,19 @@ fun DashboardFavoriteList(
         DashboardSectionHeader("我的收藏", channelFavoriteList.size)
 
         if (channelFavoriteList.isNotEmpty()) LazyRow(
-            state = rememberDashboardRowState(channelFavoriteList.map { dashboardChannelKey("favorite", it.channel) }),
+            state = rememberDashboardRowState(channelFavoriteList.map(::dashboardFavoriteKey)),
             modifier = modifier,
             horizontalArrangement = Arrangement.spacedBy(20.dp),
             contentPadding = PaddingValues(start = childPadding.start, end = childPadding.end),
             preservePaddingOnFocus = true,
-            restoreFocus = LocalDashboardFocus.current?.restoring != true,
+            restoreFocus = false,
+            focusOnSecondCard = true,
         ) { runtime ->
             items(channelFavoriteList, runtime) { itemModifier, channelFavorite ->
                 val channel = channelFavorite.channel.copy(index = -1)
 
                 val focus = LocalDashboardFocus.current
-                val focusKey = dashboardChannelKey("favorite", channel)
+                val focusKey = dashboardFavoriteKey(channelFavorite)
                 ChannelsChannelItem(
                     modifier = itemModifier.dashboardFocus(focusKey),
                     channelProvider = { channel },

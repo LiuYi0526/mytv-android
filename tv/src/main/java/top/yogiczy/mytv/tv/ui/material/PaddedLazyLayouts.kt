@@ -22,6 +22,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 // Nested scrolling containers must start from the original policy, not inherit another axis's insets.
@@ -31,19 +32,26 @@ internal val LocalUnpaddedScrollSpec = staticCompositionLocalOf<BringIntoViewSpe
 private fun PreserveVerticalFocusPadding(
     padding: PaddingValues,
     reverseLayout: Boolean,
+    focusRowSpacing: Dp? = null,
     content: @Composable () -> Unit,
 ) {
     val baseSpec = LocalUnpaddedScrollSpec.current ?: LocalBringIntoViewSpec.current
     val top = with(LocalDensity.current) { padding.calculateTopPadding().toPx() }
     val bottom = with(LocalDensity.current) { padding.calculateBottomPadding().toPx() }
+    val rowSpacing = with(LocalDensity.current) { focusRowSpacing?.toPx() }
     val leading = if (reverseLayout) bottom else top
     val trailing = if (reverseLayout) top else bottom
-    val paddedSpec = remember(baseSpec, leading, trailing) {
+    val paddedSpec = remember(baseSpec, leading, trailing, rowSpacing) {
         object : BringIntoViewSpec by baseSpec {
-            override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
-                baseSpec.calculateScrollDistance(
-                    offset - leading, size, (containerSize - leading - trailing).coerceAtLeast(0f),
-                )
+            override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+                val contentOffset = offset - leading
+                val contentHeight = (containerSize - leading - trailing).coerceAtLeast(0f)
+                if (rowSpacing != null && size * 2 + rowSpacing <= contentHeight) {
+                    // Leave a full row above the focused card. The grid clamps scrolling at its ends.
+                    return contentOffset - (size + rowSpacing)
+                }
+                return baseSpec.calculateScrollDistance(contentOffset, size, contentHeight)
+            }
         }
     }
     CompositionLocalProvider(
@@ -91,9 +99,14 @@ fun PaddedLazyVerticalGrid(
     horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
     flingBehavior: FlingBehavior = ScrollableDefaults.flingBehavior(),
     userScrollEnabled: Boolean = true,
+    focusOnSecondRow: Boolean = false,
     content: LazyGridScope.() -> Unit,
 ) {
-    PreserveVerticalFocusPadding(contentPadding, reverseLayout) {
+    PreserveVerticalFocusPadding(
+        contentPadding,
+        reverseLayout,
+        focusRowSpacing = verticalArrangement.spacing.takeIf { focusOnSecondRow },
+    ) {
         androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
             columns = columns,
             modifier = modifier,

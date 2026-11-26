@@ -135,6 +135,7 @@ fun ChannelsChannelGrid(
                 horizontalArrangement = Arrangement.spacedBy(20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = childPadding.copy(top = 10.dp).paddingValues,
+                focusOnSecondRow = true,
             ) {
                 itemsIndexed(channelList) { index, channel ->
                     ChannelsChannelItem(

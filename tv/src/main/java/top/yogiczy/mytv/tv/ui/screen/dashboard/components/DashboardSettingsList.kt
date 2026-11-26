@@ -25,7 +25,7 @@ fun DashboardSettingsList(onCategorySelected: (SettingsCategories) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(20.dp),
             contentPadding = PaddingValues(start = padding.start, end = padding.end),
             preservePaddingOnFocus = true,
-            restoreFocus = focus?.restoring != true,
+            restoreFocus = false,
         ) { runtime ->
             items(SettingsCategories.entries, runtime, key = { it.name }) { itemModifier, category ->
                 val key = "settings/${category.name}"

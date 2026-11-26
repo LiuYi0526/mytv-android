@@ -18,12 +18,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.mapSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -79,16 +82,34 @@ fun DashboardScreen(
         listOf("source", "module/live", "module/channels", "module/favorites", "module/search",
             "module/multiview", "module/push", "module/about") +
             SettingsCategories.entries.map { "settings/${it.name}" } +
-            favorites.map { dashboardChannelKey("favorite", it.channel) } +
+            favorites.map(::dashboardFavoriteKey) +
             recentChannels.map { dashboardChannelKey("history", it) },
     )
+    val lastCardByRow = rememberSaveable(saver = mapSaver(
+        save = { it.toMap() },
+        restore = { saved -> saved.mapValues { it.value as String }.toMutableMap() },
+    )) { mutableMapOf<String, String>() }
+    val verticalFocus = remember(listState, coroutineScope, focus, lastCardByRow) {
+        DashboardVerticalFocus(listState, coroutineScope, focus, lastCardByRow)
+    }
+    val rowOrder = buildList {
+        add("source")
+        add("module")
+        if (favorites.isNotEmpty()) add("favorite")
+        if (recentChannels.isNotEmpty()) add("history")
+        add("settings")
+    }
+    val verticalKeys = Modifier.onPreviewKeyEvent { verticalFocus.onKeyEvent(it, rowOrder) }
 
-    CompositionLocalProvider(LocalDashboardFocus provides focus) {
+    CompositionLocalProvider(
+        LocalDashboardFocus provides focus,
+        LocalDashboardVerticalFocus provides verticalFocus,
+    ) {
     AppScreen(
         modifier = modifier,
         header = {
             DashboardScreeIptvSource(
-                modifier = Modifier.dashboardFocus("source"),
+                modifier = verticalKeys.dashboardFocus("source"),
                 currentIptvSourceProvider = currentIptvSourceProvider,
                 toSettingsIptvSourceScreen = { focus.selected("source"); toSettingsIptvSourceScreen() },
                 clearCurrentIptvSourceCache = {
@@ -103,11 +124,12 @@ fun DashboardScreen(
         onBackPressed = onBackPressed,
     ) {
         PaddedLazyColumn(
+            modifier = verticalKeys,
             state = listState,
             contentPadding = PaddingValues(top = 10.dp, bottom = childPadding.bottom),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            item(key = "modules") {
+            item(key = "module") {
                 DashboardModuleList(
                     toLiveScreen = toLiveScreen,
                     toChannelsScreen = toChannelsScreen,
@@ -119,7 +141,7 @@ fun DashboardScreen(
                 )
             }
 
-            if (favorites.isNotEmpty()) item(key = "favorites") {
+            if (favorites.isNotEmpty()) item(key = "favorite") {
                 DashboardFavoriteList(
                     channelFavoriteListProvider = { favorites },
                     onChannelSelected = onChannelSelected,

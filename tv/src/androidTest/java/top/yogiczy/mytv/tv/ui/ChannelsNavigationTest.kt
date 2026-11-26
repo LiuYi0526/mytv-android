@@ -1,6 +1,7 @@
 package top.yogiczy.mytv.tv.ui
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -60,6 +61,7 @@ import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardFavoriteList
 import top.yogiczy.mytv.tv.ui.screen.dashboard.components.DashboardHistoryList
 import top.yogiczy.mytv.tv.ui.screen.favorites.FavoritesScreen
+import top.yogiczy.mytv.tv.ui.screen.search.SearchScreen
 import top.yogiczy.mytv.tv.ui.screen.search.components.SearchResult
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.Configs
@@ -122,6 +124,73 @@ class ChannelsNavigationTest {
         press(Key.DirectionDown)
         awaitFocus("分组乙")
         compose.onNodeWithText("乙台一").assertIsDisplayed()
+    }
+
+    @Test fun allChannelsKeepTheFocusedCardOnTheSecondVisibleRowUntilTheGridEnds() =
+        verifySecondVisibleRowFocus { modifier, channels ->
+            val groups = ChannelGroupList(listOf(ChannelGroup("测试分组", channels)))
+            ChannelsScreen(modifier = modifier, channelGroupListProvider = { groups })
+        }
+
+    @Test fun favoritesKeepTheFocusedCardOnTheSecondVisibleRowUntilTheGridEnds() =
+        verifySecondVisibleRowFocus { modifier, channels ->
+            val favorites = ChannelFavoriteList(channels.map { ChannelFavorite(it, "测试订阅", "测试分组") })
+            FavoritesScreen(modifier = modifier, channelFavoriteListProvider = { favorites })
+        }
+
+    @Test fun searchResultsKeepTheFocusedCardOnTheSecondVisibleRowUntilTheGridEnds() =
+        verifySecondVisibleRowFocus(
+            columnCount = 3,
+            enterGrid = {
+                awaitFocus("A")
+                press(Key.Enter)
+                repeat(5) { press(Key.DirectionRight) }
+            },
+        ) { modifier, channels ->
+            val groups = ChannelGroupList(listOf(ChannelGroup("测试分组", channels)))
+            SearchScreen(modifier = modifier, channelGroupListProvider = { groups })
+        }
+
+    private fun verifySecondVisibleRowFocus(
+        columnCount: Int = 4,
+        enterGrid: () -> Unit = {},
+        screen: @Composable (Modifier, ChannelList) -> Unit,
+    ) {
+        val rowCount = 12
+        val channels = ChannelList(List(columnCount * rowCount) { Channel(name = "Alpha ${it + 1}") })
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                MyTvTheme {
+                    screen(Modifier.size(width = 720.dp, height = 520.dp), channels)
+                }
+            }
+        }
+        enterGrid()
+
+        fun focusedOffsetInGrid(row: Int): Float {
+            val name = channels[row * columnCount].name
+            awaitFocus(name)
+            val card = compose.onNode(isFocused() and hasAnyDescendant(hasText(name)), useUnmergedTree = true)
+            val grid = compose.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(name)), useUnmergedTree = true)
+            return card.fetchSemanticsNode().boundsInRoot.top - grid.fetchSemanticsNode().boundsInRoot.top
+        }
+
+        val firstOffset = focusedOffsetInGrid(0)
+        press(Key.DirectionDown)
+        val secondOffset = focusedOffsetInGrid(1)
+        assertTrue(secondOffset > firstOffset)
+        for (row in 2 until rowCount) {
+            press(Key.DirectionDown)
+            val offset = focusedOffsetInGrid(row)
+            if (row in 2..4) assertEquals(secondOffset, offset, 2f)
+            if (row == rowCount - 1) assertTrue(offset > secondOffset)
+        }
+        for (row in rowCount - 2 downTo 0) {
+            press(Key.DirectionUp)
+            val offset = focusedOffsetInGrid(row)
+            if (row in 1..4) assertEquals(secondOffset, offset, 2f)
+            if (row == 0) assertEquals(firstOffset, offset, 2f)
+        }
     }
 
     @Test fun allChannelsDisplayLongNamesAndCurrentProgrammes() = verifyLongChannelNames { channels, epg ->

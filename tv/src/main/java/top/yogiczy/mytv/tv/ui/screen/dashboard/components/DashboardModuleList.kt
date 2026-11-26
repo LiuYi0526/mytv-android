@@ -45,7 +45,7 @@ fun DashboardModuleList(
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         contentPadding = PaddingValues(start = childPadding.start, end = childPadding.end),
         preservePaddingOnFocus = true,
-        restoreFocus = focus?.restoring != true,
+        restoreFocus = false,
     ) { runtime ->
         item {
             DashboardModuleItem(

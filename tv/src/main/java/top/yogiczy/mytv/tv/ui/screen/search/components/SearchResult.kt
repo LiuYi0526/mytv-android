@@ -85,6 +85,7 @@ fun SearchResult(
             ),
             horizontalArrangement = Arrangement.spacedBy(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
+            focusOnSecondRow = true,
         ) {
             itemsIndexed(channelList) { index, channel ->
                 ChannelsChannelItem(
