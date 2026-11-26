@@ -1,5 +1,6 @@
 package top.yogiczy.mytv.core.data.repositories.epg
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
@@ -25,6 +26,11 @@ class EpgRepository(private val source: EpgSource) :
     private val epgXmlRepository = EpgXmlRepository(source)
     private val cache = EpgCacheStore(File(Globals.cacheDir, source.cacheFileName(PARSED_CACHE_EXTENSION)))
 
+    suspend fun getCachedGuide(
+        refreshHour: Int,
+        select: (EpgList) -> EpgList,
+    ): EpgCacheStore.CachedGuide? = cache.readCached(refreshHour, select)
+
     suspend fun getCachedInfo(): EpgSourceCacheInfo? = withContext(Dispatchers.IO) {
         EpgSourceCacheInfo.read(
             File(Globals.cacheDir, source.cacheFileName(PARSED_CACHE_EXTENSION)),
@@ -36,10 +42,7 @@ class EpgRepository(private val source: EpgSource) :
         onProgress(EpgUpdateProgress())
         val xml = epgXmlRepository.getXml(onProgress)
         onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.PARSING))
-        val epgList = xml.use { EpgParser.fromXml(it) }
-        if (epgList.isEmpty()) throw Exception("获取节目单为空")
-
-        return epgList
+        return xml.use { EpgParser.fromXml(it) }
     }
 
     /**
@@ -56,6 +59,8 @@ class EpgRepository(private val source: EpgSource) :
                 log.i("加载节目单（${source.name}）：${epgList.size}个频道，${epgList.sumOf { it.programmeList.size }}个节目")
                 onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.COMPLETE))
             }
+        } catch (ex: CancellationException) {
+            throw ex
         } catch (ex: Exception) {
             log.e("加载节目单（${source.name}）失败", ex)
             throw ex
@@ -100,6 +105,8 @@ private class EpgXmlRepository(private val source: EpgSource) :
                 log.i("获取节目单（${source.name}）xml成功", null, t.duration)
 
                 t.value
+            } catch (ex: CancellationException) {
+                throw ex
             } catch (ex: Exception) {
                 log.e("获取节目单（${source.name}）xml失败", ex)
                 throw HttpException("获取节目单xml失败，请检查网络连接", ex)

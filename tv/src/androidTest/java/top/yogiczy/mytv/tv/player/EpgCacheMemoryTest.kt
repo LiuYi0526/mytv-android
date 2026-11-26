@@ -95,7 +95,8 @@ class EpgCacheMemoryTest {
 
     /** Explicit opt-in: read the user's large cache, write only a temporary copy. */
     @Test fun actualLargeXmlRefreshWritesCacheWithoutStringRoundTrip() = runBlocking {
-        val relative = InstrumentationRegistry.getArguments().getString("epgXmlPath")
+        val args = InstrumentationRegistry.getArguments()
+        val relative = args.getString("epgXmlPath")
         assumeTrue("Pass epgXmlPath to verify XML refresh", relative != null)
         val cacheDir = InstrumentationRegistry.getInstrumentation().targetContext.cacheDir.canonicalFile
         val source = File(cacheDir, relative!!).canonicalFile
@@ -103,18 +104,30 @@ class EpgCacheMemoryTest {
         val modified = source.lastModified()
         val bytes = source.length()
         withCache { _, cache ->
-            var parsed: EpgList? = null
-            val fresh = cache.getOrRefresh(forceRefresh = true) {
-                EpgParser.fromXml(source.inputStream().buffered()).also { parsed = it }
+            val previousCount: Int
+            val fresh = run {
+                val previous = args.getString("epgCachePath")?.let { cachePath ->
+                    val previousFile = File(cacheDir, cachePath).canonicalFile
+                    require(previousFile.path.startsWith(cacheDir.path + File.separator) && previousFile.isFile)
+                    requireNotNull(EpgCacheStore(previousFile).readCached(0) { guide ->
+                        EpgList(guide.take(guide.size * 2 / 3))
+                    }).guide
+                }
+                var parsed: EpgList? = null
+                val refreshed = cache.getOrRefresh(forceRefresh = true) {
+                    source.inputStream().buffered().use { EpgParser.fromXml(it) }.also { parsed = it }
+                }
+                assertSame(parsed, refreshed)
+                previousCount = previous?.sumOf { it.programmeList.size } ?: 0
+                refreshed
             }
-            assertSame(parsed, fresh)
             assertTrue(fresh.sumOf { it.programmeList.size } > 0)
             assertTrue(fresh.any { epg -> epg.programmeList.any { !it.description.isNullOrEmpty() } })
             assertEquals(fresh, cache.getOrRefresh { error("Must use the written cache") })
             assertEquals(modified, source.lastModified())
             assertEquals(bytes, source.length())
             Log.i("EpgCacheMemoryTest", "xmlBytes=$bytes channels=${fresh.size} " +
-                "programmes=${fresh.sumOf { it.programmeList.size }} refreshRoundTrip=passed")
+                "programmes=${fresh.sumOf { it.programmeList.size }} retainedOldProgrammes=$previousCount refreshRoundTrip=passed")
         }
         Unit
     }
@@ -142,7 +155,7 @@ class EpgCacheMemoryTest {
         try {
             // Keep headroom occupied to exercise loading alongside app state.
             val retained = ByteArray(16 * 1024 * 1024)
-            val loaded = EpgCacheStore(source).getOrRefresh { error("Real cache must not be refreshed") }
+            val loaded = requireNotNull(EpgCacheStore(source).readCached(0) { it }).guide
             val count = loaded.sumOf { it.programmeList.size }
             val descriptions = loaded.sumOf { epg -> epg.programmeList.count { !it.description.isNullOrEmpty() } }
             assertTrue(count > 0)

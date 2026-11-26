@@ -25,6 +25,7 @@ import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelGroupList.Companion.channelList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelLineList
 import top.yogiczy.mytv.core.data.entities.channel.ChannelList
+import top.yogiczy.mytv.core.data.entities.epg.Epg
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
 import top.yogiczy.mytv.core.data.entities.epg.EpgList.Companion.match
 import top.yogiczy.mytv.core.data.entities.epgsource.EpgSource
@@ -41,6 +42,8 @@ import top.yogiczy.mytv.tv.sync.CloudSyncData
 import top.yogiczy.mytv.tv.ui.material.Snackbar
 import top.yogiczy.mytv.tv.ui.material.SnackbarType
 import top.yogiczy.mytv.tv.ui.utils.Configs
+import java.util.Collections
+import java.util.IdentityHashMap
 import java.util.UUID
 
 class MainViewModel : ViewModel() {
@@ -227,50 +230,67 @@ class MainViewModel : ViewModel() {
 
     private suspend fun refreshEpg() {
         if (!Configs.epgEnable) return
+        val state = _uiState.value as? MainUiState.Ready ?: return
+        val channelGroupList = state.channelGroupList
+        if (channelGroupList.isEmpty()) return
+        val channels = channelGroupList.channelList + Configs.iptvChannelFavoriteList.map { it.channel }
+        val repositories = EpgSourceCatalog.resolve(
+            Configs.iptvSourceCurrent, Configs.epgSourceList, Configs.epgSourceCurrent,
+        ).map(::EpgRepository)
+        val refreshHour = Configs.epgRefreshTimeThreshold
 
-        if (_uiState.value is MainUiState.Ready) {
-            val channelGroupList = (_uiState.value as MainUiState.Ready).channelGroupList
-            if (channelGroupList.isEmpty()) return
-            flow {
-                val epgSources = EpgSourceCatalog.resolve(Configs.iptvSourceCurrent, Configs.epgSourceList, Configs.epgSourceCurrent)
-                if (epgSources.isEmpty()) { emit(EpgList()); return@flow }
-                val guides = mutableListOf<EpgList>()
-                var failure: Exception? = null
-                for (epgSource in epgSources) {
-                    try {
-                        guides += EpgRepository(epgSource).getEpgList(Configs.epgRefreshTimeThreshold)
-                    } catch (ex: CancellationException) {
-                        throw ex
-                    } catch (ex: Exception) {
-                        failure = ex
-                    }
-                }
-                if (guides.isEmpty()) throw (failure ?: IllegalStateException("节目单为空"))
-                if (failure != null) Snackbar.show("部分节目单加载失败，已保留可用节目单", type = SnackbarType.ERROR)
-                emit(EpgList(guides.flatMap { it.value }))
-            }
-                .retryWhen { e, attempt ->
-                    if (attempt >= Constants.NETWORK_RETRY_COUNT) return@retryWhen false
-                    if (e !is HttpException) return@retryWhen false
-
-                    delay(Constants.NETWORK_RETRY_INTERVAL)
-                    true
-                }
-                .catch {
-                    emit(EpgList())
-                    Snackbar.show("节目单获取失败，请检查网络连接", type = SnackbarType.ERROR)
-                }
-                .map { epgList ->
-                    withContext(Dispatchers.Default) {
-                        val channels = channelGroupList.channelList + Configs.iptvChannelFavoriteList.map { it.channel }
-                        EpgList(channels.mapNotNull { epgList.match(it) }.distinct())
-                    }
-                }
-                .map { epgList ->
-                    _uiState.value = (_uiState.value as MainUiState.Ready).copy(epgList = epgList)
-                }
-                .collect()
+        fun select(guide: EpgList): EpgList {
+            val matched = Collections.newSetFromMap(IdentityHashMap<Epg, Boolean>())
+            channels.mapNotNullTo(matched) { guide.match(it) }
+            return EpgList(guide.filter { it in matched })
         }
+
+        val guides = MutableList<EpgList?>(repositories.size) { null }
+        suspend fun publish() {
+            val guide = withContext(Dispatchers.Default) {
+                select(EpgList(guides.filterNotNull().flatMap { it.value }))
+            }
+            val current = _uiState.value as? MainUiState.Ready ?: return
+            if (current.channelGroupList === channelGroupList) {
+                _uiState.value = current.copy(epgList = guide)
+            }
+        }
+
+        // Load local guides before waiting on any source's network refresh.
+        val pending = repositories.indices.filter { index ->
+            val cached = repositories[index].getCachedGuide(refreshHour, ::select)
+            guides[index] = cached?.guide
+            cached == null || cached.expired
+        }
+        if (repositories.isEmpty() || guides.any { it != null }) publish()
+        if (pending.isEmpty()) return
+
+        flow<Unit> {
+            var failure: Exception? = null
+            for (index in pending) {
+                try {
+                    guides[index] = withContext(Dispatchers.Default) {
+                        select(repositories[index].getEpgList(refreshHour))
+                    }
+                } catch (ex: CancellationException) {
+                    throw ex
+                } catch (ex: Exception) {
+                    failure = ex
+                    continue
+                }
+                emit(Unit)
+            }
+            if (failure != null) {
+                if (guides.all { it == null }) throw failure
+                Snackbar.show("节目单刷新失败，已保留可用节目单", type = SnackbarType.ERROR)
+            }
+        }.retryWhen { error, attempt ->
+            if (error !is HttpException || attempt >= Constants.NETWORK_RETRY_COUNT) return@retryWhen false
+            delay(Constants.NETWORK_RETRY_INTERVAL)
+            true
+        }.catch {
+            Snackbar.show("节目单获取失败，请检查网络连接", type = SnackbarType.ERROR)
+        }.collect { publish() }
     }
 
     private suspend fun mergeEpgMetadata() = withContext(Dispatchers.Default) {

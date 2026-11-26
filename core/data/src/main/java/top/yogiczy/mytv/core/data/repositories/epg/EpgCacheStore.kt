@@ -23,6 +23,19 @@ class EpgCacheStore(private val file: File, private val json: Json = Globals.jso
     private val atomicFile = AtomicFile(file)
     private val mutex = synchronized(locks) { locks.getOrPut(file.absolutePath) { Mutex() } }
 
+    data class CachedGuide(val guide: EpgList, val expired: Boolean)
+
+    suspend fun readCached(
+        refreshHour: Int,
+        select: (EpgList) -> EpgList,
+    ): CachedGuide? = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            val modified = lastModified()
+            val guide = readGuide() ?: return@withContext null
+            CachedGuide(select(guide), EpgCachePolicy.isExpired(modified, refreshHour))
+        }
+    }
+
     suspend fun getOrRefresh(
         refreshHour: Int = 0,
         forceRefresh: Boolean = false,
@@ -30,29 +43,16 @@ class EpgCacheStore(private val file: File, private val json: Json = Globals.jso
         refresh: suspend () -> EpgList,
     ): EpgList = mutex.withLock {
         withContext(Dispatchers.IO) {
-            // openRead also recovers an interrupted AtomicFile write on older
-            // Android versions. Only inspect metadata here, not the payload.
-            val modified = if (forceRefresh) 0L else try {
-                atomicFile.openRead().use { file.lastModified() }
-            } catch (_: IOException) {
-                0L
-            }
+            val modified = if (forceRefresh) 0L else lastModified()
             // Check expiry before reading. A manual refresh must not first load
             // the old (possibly very large) guide into memory.
             if (!EpgCachePolicy.isExpired(modified, refreshHour, forceRefresh = forceRefresh)) {
-                val cached = try {
-                    onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.LOADING))
-                    atomicFile.openRead().buffered().use { json.decodeFromStream<EpgList>(it) }
-                } catch (_: IOException) {
-                    null
-                } catch (_: SerializationException) {
-                    null
-                }
-                if (cached != null && cached.isNotEmpty()) return@withContext cached
+                onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.LOADING))
+                readGuide()?.let { return@withContext it }
             }
 
             val fresh = refresh()
-            check(fresh.isNotEmpty()) { "获取节目单为空" }
+            check(fresh.hasProgrammes()) { "获取节目单为空" }
             onProgress(EpgUpdateProgress(EpgUpdateProgress.Stage.SAVING))
             currentCoroutineContext().ensureActive()
             val output = atomicFile.startWrite()
@@ -73,6 +73,24 @@ class EpgCacheStore(private val file: File, private val json: Json = Globals.jso
     suspend fun clear() = mutex.withLock {
         withContext(Dispatchers.IO) { atomicFile.delete() }
     }
+
+    private fun lastModified(): Long = try {
+        // openRead also recovers an interrupted AtomicFile write.
+        atomicFile.openRead().use { file.lastModified() }
+    } catch (_: IOException) {
+        0L
+    }
+
+    private fun readGuide(): EpgList? = try {
+        atomicFile.openRead().buffered().use { json.decodeFromStream<EpgList>(it) }
+            .takeIf { it.hasProgrammes() }
+    } catch (_: IOException) {
+        null
+    } catch (_: SerializationException) {
+        null
+    }
+
+    private fun EpgList.hasProgrammes() = any { it.programmeList.isNotEmpty() }
 
     companion object {
         private val locks = mutableMapOf<String, Mutex>()
