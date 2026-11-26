@@ -8,7 +8,17 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.decodeFromStream
 import top.yogiczy.mytv.core.data.utils.Globals
 
-data class EpgSourceCacheInfo(val channelCount: Int, val cacheBytes: Long, val updatedAt: Long) {
+data class EpgSourceCacheInfo(
+    val channelCount: Int,
+    val cacheBytes: Long,
+    val updatedAt: Long,
+    val httpValidator: HttpValidator? = null,
+) {
+    enum class HttpValidator(val label: String) {
+        ETAG("ETag"),
+        LAST_MODIFIED("Last-Modified"),
+    }
+
     companion object {
         @OptIn(ExperimentalSerializationApi::class)
         fun read(parsedCache: File, xmlCache: File? = null): EpgSourceCacheInfo? {

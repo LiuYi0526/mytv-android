@@ -6,6 +6,7 @@ import okhttp3.Response
 import okio.BufferedSource
 import okio.ByteString.Companion.encodeUtf8
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
+import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCacheInfo.HttpValidator
 
 @Serializable
 internal data class EpgValidators(
@@ -15,7 +16,12 @@ internal data class EpgValidators(
     val gzipMtime: Long? = null,
     val contentLength: Long? = null,
 ) {
-    val hasHttpValidator: Boolean get() = etag != null || lastModified != null
+    val httpValidator: HttpValidator? get() = when {
+        etag != null -> HttpValidator.ETAG
+        lastModified != null -> HttpValidator.LAST_MODIFIED
+        else -> null
+    }
+    val hasHttpValidator: Boolean get() = httpValidator != null
     val canValidate: Boolean get() = hasHttpValidator || gzipMtime != null
 
     fun applyTo(builder: Request.Builder): Request.Builder = when {

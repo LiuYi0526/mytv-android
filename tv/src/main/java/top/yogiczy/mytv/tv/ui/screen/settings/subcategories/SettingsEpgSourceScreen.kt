@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -26,6 +27,8 @@ import top.yogiczy.mytv.core.data.repositories.epg.EpgRepository
 import top.yogiczy.mytv.core.data.repositories.epg.EpgUpdateProgress
 import top.yogiczy.mytv.core.util.utils.humanizeBytes
 import top.yogiczy.mytv.tv.ui.material.PaddedLazyColumn
+import top.yogiczy.mytv.tv.ui.material.Tag
+import top.yogiczy.mytv.tv.ui.material.TagDefaults
 import top.yogiczy.mytv.tv.ui.rememberChildPadding
 import top.yogiczy.mytv.tv.ui.screen.components.AppScaffoldHeaderBtn
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
@@ -77,15 +80,33 @@ fun SettingsEpgSourceScreen(
             if (sources.isEmpty()) item { Text("暂无节目单，请选择右上角“添加节目单”", Modifier.padding(16.dp)) }
             itemsIndexed(sources, key = { _, source -> source.url }) { index, source ->
                 val isDefault = source.url == currentEpgSourceProvider().url
+                val info = cacheInfo[source]
                 ListItem(
                     modifier = (if (index == lastIndex.coerceAtMost(sources.lastIndex)) Modifier.focusOnLaunched() else Modifier)
                         .handleKeyEvents(onSelect = { lastIndex = index; selectedUrl = source.url }),
                     selected = false, onClick = {},
-                    leadingContent = { Text("#${index + 1}") }, headlineContent = { Text(source.name) },
+                    leadingContent = { Text("#${index + 1}") },
+                    headlineContent = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(source.name, Modifier.weight(1f, fill = false))
+                            info?.httpValidator?.let { validator ->
+                                val contentColor = LocalContentColor.current
+                                Tag(
+                                    text = validator.label,
+                                    colors = TagDefaults.colors(
+                                        containerColor = contentColor.copy(alpha = 0.1f),
+                                        contentColor = contentColor,
+                                    ),
+                                )
+                            }
+                        }
+                    },
                     supportingContent = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(source.url, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            val info = cacheInfo[source]
                             val statistics = remember(info, cacheInfo.containsKey(source)) {
                                 when {
                                     !cacheInfo.containsKey(source) -> "正在读取缓存…"

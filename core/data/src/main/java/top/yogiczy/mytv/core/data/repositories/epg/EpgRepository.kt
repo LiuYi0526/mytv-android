@@ -23,17 +23,14 @@ class EpgRepository(private val source: EpgSource) :
 
     private val log = Logger.create("EpgRepository")
     private val xmlCache = File(Globals.cacheDir, source.cacheFileName("xml"))
-    private val parsedCache = File(Globals.cacheDir, source.cacheFileName(PARSED_CACHE_EXTENSION))
-    private val cache = EpgCacheStore(parsedCache)
+    private val cache = EpgCacheStore(File(Globals.cacheDir, source.cacheFileName(PARSED_CACHE_EXTENSION)))
 
     suspend fun getCachedGuide(
         refreshHour: Int,
         select: (EpgList) -> EpgList,
     ): EpgCacheStore.CachedGuide? = cache.readCached(refreshHour, select)
 
-    suspend fun getCachedInfo(): EpgSourceCacheInfo? = withContext(Dispatchers.IO) {
-        EpgSourceCacheInfo.read(parsedCache, xmlCache)
-    }
+    suspend fun getCachedInfo(): EpgSourceCacheInfo? = cache.readInfo(xmlCache)
 
     private suspend fun refresh(
         previous: EpgValidators?,

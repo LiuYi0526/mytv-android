@@ -3,6 +3,7 @@ package top.yogiczy.mytv.core.data.repositories.epg
 import android.util.AtomicFile
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -17,6 +18,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
 import kotlinx.serialization.json.encodeToStream
 import top.yogiczy.mytv.core.data.entities.epg.EpgList
+import top.yogiczy.mytv.core.data.entities.epgsource.EpgSourceCacheInfo
 import top.yogiczy.mytv.core.data.utils.Globals
 
 /** Stream the existing v3 cache format without allocating a whole-guide string. */
@@ -39,6 +41,15 @@ class EpgCacheStore(private val file: File, private val json: Json = Globals.jso
 
     @Serializable
     private data class Validation(val stamp: GuideStamp, val checkedAt: Long, val validators: EpgValidators)
+
+    internal suspend fun readInfo(xmlCache: File): EpgSourceCacheInfo? = withContext(Dispatchers.IO) {
+        val stamp = fileStamp()
+        val info = EpgSourceCacheInfo.read(file, xmlCache) ?: return@withContext null
+        // Read the committed files so the list can show the cache during a refresh.
+        val validation = readValidation(stamp) { validationFile.baseFile.inputStream() }
+            ?.takeIf { stamp.modified == info.updatedAt && stamp == fileStamp() }
+        info.copy(httpValidator = validation?.validators?.httpValidator)
+    }
 
     suspend fun readCached(
         refreshHour: Int,
@@ -140,13 +151,15 @@ class EpgCacheStore(private val file: File, private val json: Json = Globals.jso
 
     private fun guideStamp(): GuideStamp? = try {
         // openRead also recovers an interrupted AtomicFile write.
-        atomicFile.openRead().use { GuideStamp(file.lastModified(), file.length()) }
+        atomicFile.openRead().use { fileStamp() }
     } catch (_: IOException) {
         null
     }
 
-    private fun readValidation(stamp: GuideStamp): Validation? = try {
-        validationFile.openRead().use { json.decodeFromStream<Validation>(it) }
+    private fun fileStamp() = GuideStamp(file.lastModified(), file.length())
+
+    private fun readValidation(stamp: GuideStamp, openRead: () -> InputStream = validationFile::openRead): Validation? = try {
+        openRead().use { json.decodeFromStream<Validation>(it) }
             .takeIf { it.stamp == stamp && it.validators.canValidate }
     } catch (_: IOException) {
         null
