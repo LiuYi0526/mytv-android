@@ -22,11 +22,15 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
@@ -53,6 +57,7 @@ import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.utils.backHandler
 import top.yogiczy.mytv.tv.ui.utils.clickableNoIndication
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
+import top.yogiczy.mytv.tv.ui.utils.saveRequestFocus
 
 @Composable
 fun VideoPlayerControllerScreen(
@@ -91,10 +96,21 @@ fun VideoPlayerControllerScreen(
     val next = nextProgrammeProvider()
     val padding = rememberChildPadding()
     val progressFocus = remember { FocusRequester() }
-    fun playProgramme(target: EpgProgramme?, focusProgress: Boolean = true) {
+    val playPauseFocus = remember { FocusRequester() }
+    var previousFocused by remember { mutableStateOf(false) }
+    var nextFocused by remember { mutableStateOf(false) }
+
+    fun playAdjacentProgramme(
+        target: EpgProgramme?,
+        buttonFocused: Boolean,
+        adjacentProgrammeProvider: () -> EpgProgramme?,
+    ) {
         if (target == null || !canStartProgramme(target)) return
-        if (focusProgress) progressFocus.requestFocus()
         onProgrammePlayback(target)
+        // The switch updates the programme before the focused button is recomposed.
+        if (buttonFocused && adjacentProgrammeProvider()?.let(canStartProgramme) != true) {
+            playPauseFocus.saveRequestFocus()
+        }
     }
 
     CompositionLocalProvider(LocalContentColor provides Color.White) {
@@ -133,10 +149,15 @@ fun VideoPlayerControllerScreen(
                             transport = {
                                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                                     VideoPlayerControllerBtn(
-                                        modifier = Modifier.semantics { contentDescription = "上一节目" },
+                                        modifier = Modifier
+                                            .onFocusChanged { previousFocused = it.isFocused }
+                                            .semantics { contentDescription = "上一节目" },
                                         imageVector = Icons.Default.SkipPrevious,
                                         enabled = previous?.let(canStartProgramme) == true,
-                                        onSelect = { cancelPreview(); playProgramme(previous, focusProgress = false) },
+                                        onSelect = {
+                                            cancelPreview()
+                                            playAdjacentProgramme(previous, previousFocused, previousProgrammeProvider)
+                                        },
                                     )
                                     PlaybackSeekButton(
                                         deltaMs = -seekSteps.buttonRewindSeconds * 1_000L,
@@ -144,7 +165,7 @@ fun VideoPlayerControllerScreen(
                                         onSeekBy = adjust,
                                     )
                                     VideoPlayerControllerStateCtrl(
-                                        modifier = Modifier.focusOnLaunchedSaveable(),
+                                        modifier = Modifier.focusRequester(playPauseFocus).focusOnLaunchedSaveable(),
                                         isPlayingProvider = isVideoPlayerPlayingProvider,
                                         isBufferingProvider = isVideoPlayerBufferingProvider,
                                         onPlay = onVideoPlayerPlay,
@@ -156,10 +177,15 @@ fun VideoPlayerControllerScreen(
                                         onSeekBy = adjust,
                                     )
                                     VideoPlayerControllerBtn(
-                                        modifier = Modifier.semantics { contentDescription = "下一节目" },
+                                        modifier = Modifier
+                                            .onFocusChanged { nextFocused = it.isFocused }
+                                            .semantics { contentDescription = "下一节目" },
                                         imageVector = Icons.Default.SkipNext,
                                         enabled = next?.let(canStartProgramme) == true,
-                                        onSelect = { cancelPreview(); playProgramme(next, focusProgress = false) },
+                                        onSelect = {
+                                            cancelPreview()
+                                            playAdjacentProgramme(next, nextFocused, nextProgrammeProvider)
+                                        },
                                     )
                                 }
                             },
@@ -168,7 +194,13 @@ fun VideoPlayerControllerScreen(
                                     VideoPlayerControllerBtn(
                                         modifier = Modifier.size(80.dp, 40.dp).semantics { contentDescription = "从头观看" },
                                         enabled = programme?.let(canStartProgramme) == true,
-                                        onSelect = { cancelPreview(); playProgramme(programme) },
+                                        onSelect = {
+                                            cancelPreview()
+                                            if (programme != null && canStartProgramme(programme)) {
+                                                progressFocus.requestFocus()
+                                                onProgrammePlayback(programme)
+                                            }
+                                        },
                                     ) {
                                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                                             Icon(Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(20.dp))

@@ -298,32 +298,41 @@ class PlaybackControllerPanelTest {
         assertEquals(null, selectedProgramme.get())
     }
 
-    private fun showChangingProgrammes(): Pair<List<EpgProgramme>, MutableList<Long>> {
+    private fun showChangingProgrammes(startLive: Boolean = false): Pair<List<EpgProgramme>, MutableList<Long>> {
         val midnight = SimpleDateFormat("yyyyMMddHHmmss", Locale.ROOT).parse("20261111000000")!!.time
         val guide = (0..3).map { index ->
             EpgProgramme(midnight + (index - 3) * 3_600_000L, midnight + (index - 2) * 3_600_000L, "同名节目")
         }
+        val liveProgramme = guide.last()
+        val livePosition = liveProgramme.startAt + 1_000
+        val schedule = if (startLive) guide + EpgProgramme(
+            liveProgramme.endAt, liveProgramme.endAt + 3_600_000L, "未播出节目",
+        ) else guide
         val current = mutableStateOf(guide.last())
+        val isReplay = mutableStateOf(!startLive)
         val position = mutableLongStateOf(current.value.startAt + 1_000)
         val targets = mutableListOf<Long>()
         compose.setContent {
             MyTvTheme {
                 VideoPlayerControllerScreen(
                     channelProvider = { Channel(name = "跨日频道") },
-                    currentPlaybackEpgProgrammeProvider = { current.value },
+                    currentPlaybackEpgProgrammeProvider = { current.value.takeIf { isReplay.value } },
                     recentEpgProgrammeProvider = { EpgProgrammeRecent(current.value) },
-                    previousProgrammeProvider = { PlaybackProgrammeNavigation.adjacent(guide, current.value, -1) },
-                    nextProgrammeProvider = { PlaybackProgrammeNavigation.adjacent(guide, current.value, 1) },
-                    canStartProgramme = { true },
+                    previousProgrammeProvider = { PlaybackProgrammeNavigation.adjacent(schedule, current.value, -1) },
+                    nextProgrammeProvider = { PlaybackProgrammeNavigation.adjacent(schedule, current.value, 1) },
+                    canStartProgramme = { it.startAt < livePosition },
                     onProgrammePlayback = {
                         targets += it.startAt
                         current.value = it
+                        isReplay.value = true
                         position.longValue = it.startAt + 1_000
                     },
                     videoPlayerCurrentPositionProvider = { position.longValue },
                     videoPlayerDurationProvider = { current.value.startAt to current.value.endAt },
                     videoPlayerPositionIsAbsoluteProvider = { true },
                     onVideoPlayerSeekTo = { seek.set(it); position.longValue = it },
+                    onVideoPlayerPause = { pause.incrementAndGet() },
+                    isVideoPlayerPlayingProvider = { true },
                     showChannelLogo = false,
                 )
             }
@@ -355,6 +364,23 @@ class PlaybackControllerPanelTest {
             compose.runOnIdle { assertEquals(guide[2 - index].startAt, targets.last()) }
             button.assertIsFocused()
         }
+    }
+
+    @Test fun remoteFocusReturnsToPauseWhenNextProgrammeBecomesUnavailable() {
+        val (guide, targets) = showChangingProgrammes(startLive = true)
+        val nextButton = compose.onNodeWithContentDescription("下一节目")
+        nextButton.assertIsNotEnabled()
+        compose.onNodeWithContentDescription("上一节目")
+            .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            .performKeyInput { pressKey(Key.DirectionCenter) }
+        nextButton.assertIsEnabled()
+            .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            .performKeyInput { pressKey(Key.DirectionCenter) }
+        compose.runOnIdle { assertEquals(guide.takeLast(2).map { it.startAt }, targets) }
+        nextButton.assertIsNotEnabled()
+        compose.onNodeWithContentDescription("暂停播放").assertIsFocused()
+            .performKeyInput { pressKey(Key.DirectionCenter) }
+        assertEquals(1, pause.get())
     }
 
     @Test fun tenSecondButtonsSeekWithinTheNewProgrammeAfterTappingPrevious() {
