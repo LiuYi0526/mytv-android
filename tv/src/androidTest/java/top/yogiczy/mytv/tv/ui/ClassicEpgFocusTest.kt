@@ -248,6 +248,47 @@ class ClassicEpgFocusTest {
         awaitFocused(label(replay))
     }
 
+    @Test fun returningFromDatesFocusesTheLiveProgrammeInsteadOfThePreviouslyFocusedRow() {
+        showScreen(listOf(replay, live, next))
+        press(Key.DirectionRight)
+        awaitFocused(label(live))
+        press(Key.DirectionDown)
+        awaitFocused(label(next))
+        press(Key.DirectionRight)
+        focusDate(dayLabel(live.startAt))
+
+        press(Key.DirectionLeft)
+        awaitFocused(label(live))
+        assertEquals(0, playbackCount)
+        assertEquals(0, reserveCount)
+    }
+
+    @Test fun returningFromDatesDuringReplayUsesThatProgrammeOrTheFirstProgrammeOfAnotherDay() {
+        val todayStart = Calendar.getInstance().apply {
+            timeInMillis = live.startAt
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val firstToday = EpgProgramme(todayStart, minOf(todayStart + 1_800_000, live.startAt), "First programme today")
+        showScreen(listOf(replay, firstToday, live, next), playback = replay)
+        press(Key.DirectionRight)
+        awaitFocused(label(replay))
+
+        press(Key.DirectionRight)
+        focusDate(dayLabel(live.startAt))
+        press(Key.DirectionLeft)
+        awaitFocused(label(firstToday))
+
+        press(Key.DirectionRight)
+        focusDate(dayLabel(replay.startAt))
+        press(Key.DirectionLeft)
+        awaitFocused(label(replay))
+        assertEquals(0, playbackCount)
+        assertEquals(0, reserveCount)
+    }
+
     @Test fun confirmingLiveProgrammeDuringReplaySelectsTheChannelLive() {
         val earlier = live.copy(startAt = now - 1_860_000, endAt = live.startAt, title = "Earlier replay")
         showScreen(listOf(earlier, live.copy(description = "Live synopsis"), next), playback = earlier,

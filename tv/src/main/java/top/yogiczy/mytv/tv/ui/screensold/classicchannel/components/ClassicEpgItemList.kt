@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,6 +44,7 @@ fun ClassicEpgItemList(
     epgProgrammeReserveListProvider: () -> EpgProgrammeReserveList = { EpgProgrammeReserveList() },
     supportPlaybackProvider: () -> Boolean = { false },
     currentPlaybackEpgProgrammeProvider: () -> EpgProgramme? = { null },
+    isPlayingChannelProvider: () -> Boolean = { true },
     onEpgProgrammePlayback: (EpgProgramme) -> Unit = {},
     onLive: () -> Unit = {},
     onEpgProgrammeReserve: (EpgProgramme) -> Unit = {},
@@ -68,6 +70,7 @@ fun ClassicEpgItemList(
     // Only initial entry/guide loading may focus a programme automatically.
     // Browsing dates must keep focus in the date rail across list replacement.
     var focusOnInitialProgramme by remember { mutableStateOf(true) }
+    var programmeFocusRequest by remember { mutableIntStateOf(0) }
 
     Column(
         modifier = modifier
@@ -93,6 +96,8 @@ fun ClassicEpgItemList(
                 epgProgrammeReserveListProvider = epgProgrammeReserveListProvider,
                 supportPlaybackProvider = supportPlaybackProvider,
                 currentPlaybackProvider = currentPlaybackEpgProgrammeProvider,
+                focusRequestKey = programmeFocusRequest,
+                isPlayingChannelProvider = isPlayingChannelProvider,
                 focusOnInitialProgramme = focusOnEntry && focusOnInitialProgramme,
                 awaitDirection = awaitDirection,
                 onPlayback = onEpgProgrammePlayback,
@@ -103,7 +108,10 @@ fun ClassicEpgItemList(
 
             if (programDayGroup.size > 1) {
                 EpgDayItemList(
-                    modifier = Modifier.width(80.dp),
+                    modifier = Modifier.width(80.dp).classicPanelDirections(onLeft = {
+                        onUserAction()
+                        programmeFocusRequest++
+                    }),
                     dayListProvider = { programDayGroup.keys.toPersistentList() },
                     currentDayProvider = { displayedDay },
                     onDaySelected = {

@@ -298,7 +298,10 @@ fun ClassicChannelScreen(
                             )
                         },
                         supportPlaybackProvider = { supportPlaybackProvider(focusedChannel) },
-                        currentPlaybackEpgProgrammeProvider = currentPlaybackEpgProgrammeProvider,
+                        currentPlaybackEpgProgrammeProvider = {
+                            if (focusedChannel == currentChannelProvider()) currentPlaybackEpgProgrammeProvider() else null
+                        },
+                        isPlayingChannelProvider = { focusedChannel == currentChannelProvider() },
                         onEpgProgrammePlayback = { onEpgProgrammePlayback(focusedChannel, it) },
                         onLive = { onChannelSelected(focusedChannel) },
                         onEpgProgrammeReserve = { onEpgProgrammeReserve(focusedChannel, it) },

@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -64,9 +65,14 @@ fun EpgProgrammeItemList(
     focusOnInitialProgramme: Boolean = true,
     awaitDirection: Boolean = false,
     onUserAction: () -> Unit = {},
+    focusRequestKey: Int = 0,
+    isPlayingChannelProvider: () -> Boolean = { true },
 ) {
     val epgProgrammeList = epgProgrammeListProvider()
+    var handledFocusRequest by remember { mutableIntStateOf(0) }
     if (epgProgrammeList.isEmpty()) {
+        // Consume the request on an empty date so it cannot steal focus after a refresh.
+        LaunchedEffect(focusRequestKey) { handledFocusRequest = focusRequestKey }
         // YYKM uses an empty-state view, never a fake programme with replay/reserve actions.
         val emptyFocusRequester = remember { FocusRequester() }
         Box(
@@ -117,6 +123,27 @@ fun EpgProgrammeItemList(
         withFrameNanos { }
         initiallyPositioned = true
         if (shouldFocusInitial) itemFocusRequesterList[initialIndex].saveRequestFocus()
+    }
+    LaunchedEffect(focusRequestKey, listState) {
+        if (focusRequestKey == handledFocusRequest) return@LaunchedEffect
+        handledFocusRequest = focusRequestKey
+
+        val targetIndex = if (isPlayingChannelProvider()) {
+            val playback = currentPlaybackProvider()
+            if (playback == null) {
+                epgProgrammeList.indexOfFirst { it.isLive() }
+            } else {
+                epgProgrammeList.indexOfFirst { it.startAt == playback.startAt && it.endAt == playback.endAt }
+            }
+        } else {
+            -1
+        }.coerceAtLeast(0)
+
+        if (listState.layoutInfo.visibleItemsInfo.none { it.index == targetIndex }) {
+            listState.scrollToItem(targetIndex)
+            withFrameNanos { }
+        }
+        itemFocusRequesterList[targetIndex].saveRequestFocus()
     }
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
