@@ -1,11 +1,11 @@
 package top.yogiczy.mytv.tv.ui.screen.settings.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
@@ -28,6 +28,7 @@ import top.yogiczy.mytv.core.util.utils.humanizeMs
 import top.yogiczy.mytv.tv.ui.material.Drawer
 import top.yogiczy.mytv.tv.ui.material.DrawerPosition
 import top.yogiczy.mytv.tv.ui.material.LocalPopupManager
+import top.yogiczy.mytv.tv.ui.material.PaddedLazyVerticalGrid
 import top.yogiczy.mytv.tv.ui.material.SimplePopup
 import top.yogiczy.mytv.tv.ui.utils.focusOnLaunchedSaveable
 import top.yogiczy.mytv.tv.ui.utils.handleKeyEvents
@@ -58,10 +59,11 @@ internal fun SettingsSeekStepItem(title: String, seconds: Int, onChange: (Int) -
             onDismissRequest = { picking = false },
         ) {
             val options = PlaybackSeekSteps.optionsSeconds
-            LazyVerticalGrid(
+            PaddedLazyVerticalGrid(
                 columns = GridCells.Adaptive(108.dp),
                 modifier = Modifier.heightIn(max = 212.dp),
                 state = rememberLazyGridState(initialFirstVisibleItemIndex = options.indexOf(seconds).coerceAtLeast(0)),
+                contentPadding = PaddingValues(vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {

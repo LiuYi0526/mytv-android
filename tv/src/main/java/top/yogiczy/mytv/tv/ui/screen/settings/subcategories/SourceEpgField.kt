@@ -58,7 +58,11 @@ internal fun SourceEpgField(
         Drawer(modifier = Modifier.width(660.dp), position = DrawerPosition.Center,
             header = { Text("选择节目单") }, onDismissRequest = { visible = false }) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                PaddedLazyColumn(Modifier.heightIn(max = 270.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                PaddedLazyColumn(
+                    modifier = Modifier.heightIn(max = 270.dp),
+                    contentPadding = PaddingValues(vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     item {
                         SettingsListItem(modifier = Modifier.focusOnLaunched(), headlineContent = "使用默认节目单",
                             supportingContent = defaultSource.name.ifBlank { "尚未设置默认节目单" },
