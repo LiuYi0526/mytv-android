@@ -49,6 +49,7 @@ suspend fun <T> String.request(
 
 suspend fun <T> String.request(
     builder: (Request.Builder) -> Request.Builder = { it -> it },
+    acceptNotModified: Boolean = false,
     action: suspend CoroutineScope.(Response, Request) -> T,
 ): T {
     val url = this
@@ -69,7 +70,10 @@ suspend fun <T> String.request(
 
         val response = client.newCall(request).await()
 
-        if (!response.isSuccessful) throw Exception("${response.code}: ${response.message}")
+        if (!response.isSuccessful && !(acceptNotModified && response.code == 304)) {
+            response.close()
+            throw Exception("${response.code}: ${response.message}")
+        }
 
         action(response, response.request)
     }

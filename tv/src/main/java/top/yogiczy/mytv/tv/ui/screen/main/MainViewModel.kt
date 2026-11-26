@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -51,6 +53,8 @@ class MainViewModel : ViewModel() {
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     private var _lastJob: Job? = null
+    private var startupEpgSources: Set<EpgSource>? = null
+    private val startupEpgJobs = mutableMapOf<EpgSource, Job>()
 
     var needRefresh: () -> Unit = {}
 
@@ -234,9 +238,11 @@ class MainViewModel : ViewModel() {
         val channelGroupList = state.channelGroupList
         if (channelGroupList.isEmpty()) return
         val channels = channelGroupList.channelList + Configs.iptvChannelFavoriteList.map { it.channel }
-        val repositories = EpgSourceCatalog.resolve(
+        val sources = EpgSourceCatalog.resolve(
             Configs.iptvSourceCurrent, Configs.epgSourceList, Configs.epgSourceCurrent,
-        ).map(::EpgRepository)
+        )
+        val initialSources = startupEpgSources ?: sources.toSet().also { startupEpgSources = it }
+        val repositories = sources.map(::EpgRepository)
         val refreshHour = Configs.epgRefreshTimeThreshold
 
         fun select(guide: EpgList): EpgList {
@@ -257,10 +263,18 @@ class MainViewModel : ViewModel() {
         }
 
         // Load local guides before waiting on any source's network refresh.
+        val cachedGuides = repositories.mapIndexed { index, repository ->
+            startupEpgJobs[sources[index]]?.join()
+            repository.getCachedGuide(refreshHour, ::select).also { guides[index] = it?.guide }
+        }.toMutableList()
         val pending = repositories.indices.filter { index ->
-            val cached = repositories[index].getCachedGuide(refreshHour, ::select)
-            guides[index] = cached?.guide
-            cached == null || cached.expired
+            val source = sources[index]
+            val cached = cachedGuides[index]
+            when {
+                cached == null -> true
+                cached.hasHttpValidator && source in initialSources -> source !in checkedStartupEpgSources
+                else -> cached.expired
+            }
         }
         if (repositories.isEmpty() || guides.any { it != null }) publish()
         if (pending.isEmpty()) return
@@ -268,9 +282,30 @@ class MainViewModel : ViewModel() {
         flow<Unit> {
             var failure: Exception? = null
             for (index in pending) {
+                val source = sources[index]
+                val repository = repositories[index]
+                val displayed = cachedGuides[index]
+                cachedGuides[index] = null
                 try {
-                    guides[index] = withContext(Dispatchers.Default) {
-                        select(repositories[index].getEpgList(refreshHour))
+                    guides[index] = if (source in initialSources && checkedStartupEpgSources.add(source)) {
+                        // A playlist reload may replace the channel projection during this check.
+                        // Let the request finish so the next projection can read the updated cache.
+                        val job = viewModelScope.async(start = CoroutineStart.LAZY) {
+                            try {
+                                repository.getEpgList(
+                                    refreshHour,
+                                    displayed = displayed,
+                                    checkHttpOnStartup = displayed?.hasHttpValidator == true,
+                                    select = ::select,
+                                )
+                            } finally {
+                                startupEpgJobs.remove(source)
+                            }
+                        }
+                        startupEpgJobs[source] = job
+                        job.await()
+                    } else {
+                        repository.getEpgList(refreshHour, displayed = displayed, select = ::select)
                     }
                 } catch (ex: CancellationException) {
                     throw ex
@@ -349,6 +384,11 @@ class MainViewModel : ViewModel() {
             })
         }
         needRefresh()
+    }
+
+    private companion object {
+        // Activity recreation keeps the same process and does not start a new check.
+        val checkedStartupEpgSources = mutableSetOf<EpgSource>()
     }
 }
 
