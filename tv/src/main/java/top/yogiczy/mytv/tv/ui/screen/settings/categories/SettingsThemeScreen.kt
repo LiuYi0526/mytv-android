@@ -1,8 +1,6 @@
 package top.yogiczy.mytv.tv.ui.screen.settings.categories
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,11 +11,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.Icons
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
@@ -38,7 +34,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import top.yogiczy.mytv.core.data.utils.Globals
 import top.yogiczy.mytv.tv.R
-import top.yogiczy.mytv.tv.ui.material.LocalUnpaddedScrollSpec
+import top.yogiczy.mytv.tv.ui.material.LazyRow
 import top.yogiczy.mytv.tv.ui.material.PaddedLazyColumn
 import top.yogiczy.mytv.tv.ui.screen.components.AppScaffoldHeaderBtn
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
@@ -130,7 +126,6 @@ private fun AppThemeDefItem(
 }
 
 @Composable
-@OptIn(ExperimentalFoundationApi::class)
 private fun AppThemeDefList(
     modifier: Modifier = Modifier,
     title: String,
@@ -159,19 +154,17 @@ private fun AppThemeDefList(
                 )
             }
 
-            CompositionLocalProvider(
-                LocalBringIntoViewSpec provides (LocalUnpaddedScrollSpec.current ?: LocalBringIntoViewSpec.current),
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                contentPadding = PaddingValues(20.dp),
+                preservePaddingOnFocus = true,
+                restoreFocus = false,
             ) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    contentPadding = PaddingValues(20.dp),
-                ) {
-                    items(appThemeDefList) { def ->
-                        AppThemeDefItem(
-                            appThemeDef = def,
-                            onSelected = { onSelected(def) },
-                        )
-                    }
+                items(appThemeDefList) { def ->
+                    AppThemeDefItem(
+                        appThemeDef = def,
+                        onSelected = { onSelected(def) },
+                    )
                 }
             }
         }
