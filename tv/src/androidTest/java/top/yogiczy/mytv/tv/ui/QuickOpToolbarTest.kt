@@ -120,6 +120,33 @@ class QuickOpToolbarTest {
         compose.runOnIdle { assertEquals(listOf("controller", "epg"), actions) }
     }
 
+    @Test fun remoteWrapsFocusAndScrollsBetweenBothEnds() {
+        show(VideoPlayer.Metadata(), ready = false)
+        val first = compose.onNodeWithContentDescription("节目单").assertIsFocused()
+        val last = compose.onNodeWithContentDescription("设置").assertIsNotDisplayed()
+
+        press(Key.DirectionLeft)
+
+        last.assertIsDisplayed().assertIsFocused()
+        val row = compose.onNodeWithTag("toolbar").fetchSemanticsNode().boundsInRoot
+        assertTrue("Last item lost its safe inset", last.fetchSemanticsNode().boundsInRoot.right < row.right)
+        press(Key.DirectionCenter)
+        compose.runOnIdle { assertEquals(listOf("settings"), actions) }
+
+        press(Key.DirectionLeft)
+        compose.onNodeWithContentDescription("主界面").assertIsFocused()
+        press(Key.DirectionRight)
+        last.assertIsFocused()
+        first.assertIsNotDisplayed()
+
+        press(Key.DirectionRight)
+
+        first.assertIsDisplayed().assertIsFocused()
+        assertTrue("First item lost its safe inset", first.fetchSemanticsNode().boundsInRoot.left > row.left)
+        press(Key.DirectionCenter)
+        compose.runOnIdle { assertEquals(listOf("settings", "epg"), actions) }
+    }
+
     @Test fun lateTracksKeepTheFocusedActionAndVideoParametersFitTwoLines() {
         show(VideoPlayer.Metadata(), ready = false)
         press(Key.DirectionRight, 7)

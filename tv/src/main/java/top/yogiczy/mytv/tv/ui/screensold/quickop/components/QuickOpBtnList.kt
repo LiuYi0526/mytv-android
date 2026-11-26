@@ -1,5 +1,6 @@
 package top.yogiczy.mytv.tv.ui.screensold.quickop.components
 
+import android.view.KeyEvent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -24,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -31,11 +33,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.channel.Channel
 import top.yogiczy.mytv.core.util.utils.humanizeAudioChannels
 import top.yogiczy.mytv.core.util.utils.humanizeBitrate
@@ -86,6 +90,8 @@ fun QuickOpBtnList(
     val knowsAudio = hasAudio || playerMetadata.audio?.let { (it.channels ?: 0) > 0 || !it.mimeType.isNullOrBlank() } == true
     var focusedAction by remember { mutableStateOf("") }
     val firstFocus = remember { FocusRequester() }
+    val lastFocus = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
     val keys = remember { listOf("epg", "line", "controller", "engine", "decode", "video", "audio", "subtitle", "display", "timing", "dashboard", "settings") }
     val initialFocusKey = remember {
         initialFocusKeyProvider().takeIf { it in keys && when (it) {
@@ -101,6 +107,21 @@ fun QuickOpBtnList(
     fun focusKey(key: String) = Modifier.onFocusChanged { if (it.hasFocus) focusedAction = key }
         .then(if (key == initialFocusKey) Modifier.focusRequester(initialFocus)
             .onGloballyPositioned { initialFocusPlaced = true } else Modifier)
+
+    fun Modifier.wrapFocus(keyCode: Int, targetIndex: Int, target: FocusRequester) =
+        onPreviewKeyEvent { event ->
+            val key = event.nativeKeyEvent
+            if (key.keyCode != keyCode) return@onPreviewKeyEvent false
+            if (key.action == KeyEvent.ACTION_DOWN && key.repeatCount == 0) {
+                onUserAction()
+                scope.launch {
+                    listState.scrollToItem(targetIndex)
+                    target.saveRequestFocus()
+                }
+            }
+            true
+        }
+
     val timingCloseViewModel = LocalTimingCloseViewModel.current
     val timingCloseStatus by timingCloseViewModel.status.collectAsState()
 
@@ -144,7 +165,9 @@ fun QuickOpBtnList(
     ) {
         item(key = "epg") {
             QuickOpBtn(
-                modifier = focusKey("epg").focusRequester(firstFocus),
+                modifier = focusKey("epg")
+                    .focusRequester(firstFocus)
+                    .wrapFocus(KeyEvent.KEYCODE_DPAD_LEFT, keys.lastIndex, lastFocus),
                 title = "节目单",
                 imageVector = Icons.Outlined.Book,
                 onSelect = onShowEpg,
@@ -279,7 +302,9 @@ fun QuickOpBtnList(
         item(key = "settings") {
             QuickOpBtn(
                 title = "设置",
-                modifier = focusKey("settings"),
+                modifier = focusKey("settings")
+                    .focusRequester(lastFocus)
+                    .wrapFocus(KeyEvent.KEYCODE_DPAD_RIGHT, 0, firstFocus),
                 imageVector = Icons.Outlined.Settings,
                 onSelect = onShowMoreSettings,
             )
