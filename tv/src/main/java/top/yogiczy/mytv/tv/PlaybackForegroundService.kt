@@ -10,7 +10,7 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.ServiceCompat
 
-/** Keeps the process running while the channel player's window is covered by the lock screen. */
+/** Keeps channel playback running while the app is listening in the background or locked. */
 internal class PlaybackForegroundService : Service() {
     inner class LocalBinder : Binder() {
         val service get() = this@PlaybackForegroundService
@@ -24,7 +24,7 @@ internal class PlaybackForegroundService : Service() {
 
     override fun onBind(intent: Intent) = LocalBinder()
 
-    @SuppressLint("WakelockTimeout") // Released when playback pauses, leaves the lock screen or stops.
+    @SuppressLint("WakelockTimeout") // Released when background playback pauses, returns to the app or stops.
     fun show(notificationId: Int, notification: Notification, keepCpuAwake: Boolean) {
         if (!foreground) {
             try {

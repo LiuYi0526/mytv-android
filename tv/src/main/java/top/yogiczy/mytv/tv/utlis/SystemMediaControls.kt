@@ -51,6 +51,7 @@ internal enum class MediaPlaybackAction(
     ADD_FAVORITE("收藏频道", R.drawable.ic_media_favorite_outline, isFrameworkIcon = false),
     REMOVE_FAVORITE("取消收藏", R.drawable.ic_media_favorite, isFrameworkIcon = false),
     OPEN_PLAYER("打开播放页", R.drawable.ic_media_open_player, isFrameworkIcon = false),
+    BACKGROUND_AUDIO("后台听音", R.drawable.ic_media_background_audio, isFrameworkIcon = false),
     STOP("终止播放", Media3UiResources.drawable.exo_icon_stop, isFrameworkIcon = false);
 
     val broadcastAction = "top.yogiczy.mytv.tv.media.$name"
@@ -84,7 +85,7 @@ internal class SystemMediaControls(
         val playbackState: Int,
         val progress: PlaybackControllerTimeline.Progress?,
         val isFavorite: Boolean?,
-        val onLockScreen: Boolean,
+        val inBackground: Boolean,
     ) {
         val leadingAction: MediaPlaybackAction
             get() = when (isFavorite) {
@@ -135,7 +136,7 @@ internal class SystemMediaControls(
         updatePlaybackState(session, state)
         if (!session.isActive) session.isActive = true
         if (metadataChanged || previous?.playbackState != state.playbackState ||
-            previous?.isFavorite != state.isFavorite || previous?.onLockScreen != state.onLockScreen
+            previous?.isFavorite != state.isFavorite || previous?.inBackground != state.inBackground
         ) {
             publishNotification(session, state)
         }
@@ -253,7 +254,7 @@ internal class SystemMediaControls(
                 }
             }
             .build()
-        if (supportsLockScreenPlayback && (playRequested || state.onLockScreen)) {
+        if ((supportsLockScreenPlayback && playRequested) || state.inBackground) {
             if (!serviceBound) {
                 serviceBound = context.bindService(
                     Intent(context, PlaybackForegroundService::class.java),
@@ -261,7 +262,7 @@ internal class SystemMediaControls(
                     Context.BIND_AUTO_CREATE,
                 )
             }
-            playbackService?.show(NOTIFICATION_ID, notification, state.onLockScreen && playRequested)
+            playbackService?.show(NOTIFICATION_ID, notification, state.inBackground && playRequested)
         } else {
             disconnectPlaybackService()
         }

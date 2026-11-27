@@ -78,6 +78,8 @@ class MainActivity : ComponentActivity() {
         private set
     private var playbackActivityStarted by mutableStateOf(false)
     private var lockScreenPlayback by mutableStateOf<ChannelPlaybackControls?>(null)
+    private var backgroundAudioPlayback by mutableStateOf<ChannelPlaybackControls?>(null)
+    private val backgroundPlayback get() = backgroundAudioPlayback ?: lockScreenPlayback
     private var pausedInBackground: VideoPlayerState? = null
 
     private val mediaActionReceiver = object : BroadcastReceiver() {
@@ -105,12 +107,16 @@ class MainActivity : ComponentActivity() {
     private fun handleMediaAction(action: MediaPlaybackAction) {
         val playback = channelPlaybackControls ?: return
         val player = playback.player
-        val onLockScreen = lockScreenPlayback === playback
-        if (!playbackActivityStarted && !onLockScreen) return
+        val inBackground = backgroundPlayback === playback
+        if (!playbackActivityStarted && !inBackground) return
         if (!playback.isCurrentDestination() ||
-            (!player.hasControllableMedia && !playbackInPictureInPicture && !onLockScreen)
+            (!player.hasControllableMedia && !playbackInPictureInPicture && !inBackground)
         ) return
         when (action) {
+            MediaPlaybackAction.BACKGROUND_AUDIO -> if (playbackInPictureInPicture) {
+                backgroundAudioPlayback = playback
+                if (!moveTaskToBack(true)) backgroundAudioPlayback = null
+            }
             MediaPlaybackAction.PLAY -> if (!player.playRequested) player.play()
             MediaPlaybackAction.PAUSE -> if (player.playRequested) player.pause()
             MediaPlaybackAction.PREVIOUS_CHANNEL -> playback.previousChannel()
@@ -119,6 +125,7 @@ class MainActivity : ComponentActivity() {
             MediaPlaybackAction.REMOVE_FAVORITE -> if (playback.isFavorite() == true) playback.toggleFavorite()
             MediaPlaybackAction.OPEN_PLAYER -> systemMediaControls.openPlayer()
             MediaPlaybackAction.STOP -> {
+                backgroundAudioPlayback = null
                 lockScreenPlayback = null
                 playback.stopPlayback()
                 systemMediaControls.clear()
@@ -199,7 +206,7 @@ class MainActivity : ComponentActivity() {
 
     private fun observeSystemMediaControls() {
         lifecycleScope.launch {
-            snapshotFlow { playbackActivityStarted || lockScreenPlayback != null }.collectLatest { enabled ->
+            snapshotFlow { playbackActivityStarted || backgroundPlayback != null }.collectLatest { enabled ->
                 if (!enabled) {
                     systemMediaControls.clear()
                     return@collectLatest
@@ -216,10 +223,10 @@ class MainActivity : ComponentActivity() {
                     snapshotFlow {
                         val playback = channelPlaybackControls ?: return@snapshotFlow null
                         val player = playback.player
-                        val onLockScreen = lockScreenPlayback === playback
-                        if (!playbackActivityStarted && !onLockScreen) return@snapshotFlow null
+                        val inBackground = backgroundPlayback === playback
+                        if (!playbackActivityStarted && !inBackground) return@snapshotFlow null
                         if (!playback.isCurrentDestination() ||
-                            (!player.hasControllableMedia && (!onLockScreen || player.error != null))
+                            (!player.hasControllableMedia && (!inBackground || player.error != null))
                         ) {
                             return@snapshotFlow null
                         }
@@ -237,7 +244,7 @@ class MainActivity : ComponentActivity() {
                             playbackState = state,
                             progress = progress?.copy(elapsedMs = progress.elapsedMs / 1_000 * 1_000),
                             isFavorite = playback.isFavorite(),
-                            onLockScreen = onLockScreen,
+                            inBackground = inBackground,
                         )
                     }.collect { state ->
                         if (state == null) systemMediaControls.clear() else systemMediaControls.publish(state)
@@ -254,6 +261,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        backgroundAudioPlayback = null
         lockScreenPlayback = null
         val paused = pausedInBackground
         pausedInBackground = null
@@ -262,13 +270,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         val playback = channelPlaybackControls
-        if (!isFinishing && supportsLockScreenPlayback && playback != null && playback.isCurrentDestination() &&
+        val keepBackgroundAudio = !isFinishing && playback != null &&
+            backgroundAudioPlayback === playback && playback.isCurrentDestination()
+        if (!keepBackgroundAudio) backgroundAudioPlayback = null
+        if (!keepBackgroundAudio && !isFinishing && supportsLockScreenPlayback &&
+            playback != null && playback.isCurrentDestination() &&
             (playback.player.playRequested || lockScreenPlayback === playback) && isDeviceLocked()
         ) {
             lockScreenPlayback = playback
         } else {
             lockScreenPlayback = null
-            if (!isFinishing && playback != null) pauseForBackground(playback.player)
+            if (!isFinishing && playback != null && !keepBackgroundAudio) pauseForBackground(playback.player)
         }
         playbackActivityStarted = false
         super.onStop()
@@ -305,6 +317,7 @@ class MainActivity : ComponentActivity() {
         val playback = channelPlaybackControls ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             Configs.appPipEnable &&
+            backgroundAudioPlayback == null &&
             playback.isCurrentDestination() &&
             playback.player.canEnterPictureInPicture &&
             !isDeviceLocked() &&
@@ -317,10 +330,16 @@ class MainActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun pictureInPictureParams(playRequested: Boolean): PictureInPictureParams {
-        val action = MediaPlaybackAction.forPlayback(playRequested)
+        val actions = listOf(
+            MediaPlaybackAction.BACKGROUND_AUDIO,
+            MediaPlaybackAction.forPlayback(playRequested),
+            MediaPlaybackAction.NEXT_CHANNEL,
+        ).map { action ->
+            RemoteAction(action.icon(this), action.label, action.label, action.pendingIntent(this))
+        }
         return PictureInPictureParams.Builder()
             .setAspectRatio(Rational(16, 9))
-            .setActions(listOf(RemoteAction(action.icon(this), action.label, action.label, action.pendingIntent(this))))
+            .setActions(actions)
             .build()
     }
 
