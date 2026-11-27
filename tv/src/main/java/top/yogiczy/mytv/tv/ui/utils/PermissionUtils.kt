@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -21,9 +22,12 @@ import top.yogiczy.mytv.tv.ui.material.Snackbar
 import top.yogiczy.mytv.tv.ui.material.SnackbarType
 
 @Composable
-fun rememberCanRequestPackageInstallsPermission(): Pair<Boolean, () -> Unit> {
+fun rememberCanRequestPackageInstallsPermission(
+    onResult: (Boolean) -> Unit = {},
+): Pair<Boolean, () -> Unit> {
 
     val context = LocalContext.current
+    val latestOnResult by rememberUpdatedState(onResult)
 
     var hasPermission by remember { mutableStateOf(false) }
 
@@ -35,27 +39,25 @@ fun rememberCanRequestPackageInstallsPermission(): Pair<Boolean, () -> Unit> {
                 if (!hasPermission) {
                     Snackbar.show("未授予 应用内安装其他应用 权限", type = SnackbarType.ERROR)
                 }
+                latestOnResult(hasPermission)
             }
         }
 
     fun requestPermission() {
-        if (hasPermission) return
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            hasPermission = true
+        hasPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            context.packageManager.canRequestPackageInstalls()
+        if (hasPermission) {
+            latestOnResult(true)
         } else {
-            hasPermission = context.packageManager.canRequestPackageInstalls()
-
-            if (!hasPermission) {
-                runCatching {
-                    val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                    launcher.launch(intent)
-                }.onFailure {
-                    Snackbar.show(
-                        "无法找到对应的设置项，请手动授予 应用内安装其他应用 权限。",
-                        type = SnackbarType.ERROR,
-                    )
-                }
+            runCatching {
+                val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+                launcher.launch(intent)
+            }.onFailure {
+                Snackbar.show(
+                    "无法找到对应的设置项，请手动授予 应用内安装其他应用 权限。",
+                    type = SnackbarType.ERROR,
+                )
+                latestOnResult(false)
             }
         }
     }

@@ -1,11 +1,15 @@
 package top.yogiczy.mytv.tv.ui.screen.update
 
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import top.yogiczy.mytv.core.data.entities.git.GitRelease
 import top.yogiczy.mytv.core.data.repositories.git.GitRepository
 import top.yogiczy.mytv.core.data.utils.Constants
@@ -28,9 +32,6 @@ class UpdateViewModel(
 
     private var _isUpdateAvailable by mutableStateOf(false)
     val isUpdateAvailable get() = _isUpdateAvailable
-
-    private var _updateDownloaded by mutableStateOf(false)
-    val updateDownloaded get() = _updateDownloaded
 
     private var _latestRelease by mutableStateOf(debugLatestRelease ?: GitRelease())
     val latestRelease get() = _latestRelease
@@ -57,11 +58,12 @@ class UpdateViewModel(
         }
     }
 
-    suspend fun downloadAndUpdate(latestFile: File) {
-        if (!_isUpdateAvailable) return
-        if (_isUpdating) return
+    suspend fun downloadVerifiedUpdate(context: Context): File? {
+        if (!_isUpdateAvailable || _isUpdating) return null
+        val release = _latestRelease
+        _isUpdating = true
 
-        try {
+        return try {
             log.i("开始下载更新...")
             Snackbar.show(
                 "开始下载更新",
@@ -70,24 +72,35 @@ class UpdateViewModel(
                 id = "downloadProcess",
             )
 
-            _isUpdating = true
-            _updateDownloaded = false
-
-            Downloader.downloadTo(_latestRelease.downloadUrl, latestFile.path) {
-                Snackbar.show(
-                    "正在下载更新: $it%",
-                    leadingLoading = true,
-                    duration = 10_000,
-                    id = "downloadProcess"
-                )
+            val verifiedFile = withContext(Dispatchers.IO) {
+                val download = File.createTempFile("update-", ".apk", context.cacheDir)
+                try {
+                    Downloader.downloadTo(release.downloadUrl, download.path) {
+                        Snackbar.show(
+                            "正在下载更新: $it%",
+                            leadingLoading = true,
+                            duration = 10_000,
+                            id = "downloadProcess",
+                        )
+                    }
+                    verifyUpdateApk(context, download, release.version)
+                    val verified = File(context.cacheDir, "verified-update.apk")
+                    check(download.renameTo(verified)) { "无法保存已校验的更新包" }
+                    verified
+                } finally {
+                    download.delete()
+                }
             }
 
-            _updateDownloaded = true
-            Snackbar.show("下载更新成功")
-            log.i("下载更新成功")
+            Snackbar.show("更新包下载并校验成功", id = "downloadProcess")
+            log.i("更新包下载并校验成功: ${release.version}")
+            verifiedFile
+        } catch (ex: CancellationException) {
+            throw ex
         } catch (ex: Exception) {
-            Snackbar.show("下载更新失败", type = SnackbarType.ERROR)
-            log.e("下载更新失败", ex)
+            Snackbar.show(ex.message ?: "准备更新失败", type = SnackbarType.ERROR, id = "downloadProcess")
+            log.e("准备更新失败", ex)
+            null
         } finally {
             _isUpdating = false
         }

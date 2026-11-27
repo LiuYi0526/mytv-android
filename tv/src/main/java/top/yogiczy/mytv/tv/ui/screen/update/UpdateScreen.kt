@@ -9,8 +9,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -20,11 +23,11 @@ import androidx.tv.material3.ListItem
 import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import top.yogiczy.mytv.core.data.entities.git.GitRelease
-import top.yogiczy.mytv.core.data.utils.Globals
 import top.yogiczy.mytv.core.util.utils.ApkInstaller
+import top.yogiczy.mytv.tv.ui.material.Snackbar
+import top.yogiczy.mytv.tv.ui.material.SnackbarType
 import top.yogiczy.mytv.tv.ui.screen.components.AppScreen
 import top.yogiczy.mytv.tv.ui.theme.MyTvTheme
 import top.yogiczy.mytv.tv.ui.theme.SAFE_AREA_HORIZONTAL_PADDING
@@ -41,22 +44,22 @@ fun UpdateScreen(
     updateViewModel: UpdateViewModel = updateVM,
     onBackPressed: () -> Unit = {},
 ) {
-    val latestFile by lazy { File(Globals.cacheDir, "latest.apk") }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val latestRelease = updateViewModel.latestRelease
+    var pendingInstall by remember { mutableStateOf<File?>(null) }
 
-    val (hasPermission, requestPermission) = rememberCanRequestPackageInstallsPermission()
-
-    LaunchedEffect(hasPermission) {
-        if (hasPermission) ApkInstaller.installApk(context, latestFile.path)
-    }
-
-    LaunchedEffect(updateViewModel.updateDownloaded) {
-        if (!updateViewModel.updateDownloaded) return@LaunchedEffect
-
-        if (hasPermission) ApkInstaller.installApk(context, latestFile.path)
-        else requestPermission()
+    val (_, requestPermission) = rememberCanRequestPackageInstallsPermission { granted ->
+        val file = pendingInstall ?: return@rememberCanRequestPackageInstallsPermission
+        pendingInstall = null
+        if (granted) {
+            runCatching {
+                check(file.isFile)
+                ApkInstaller.installApk(context, file.path)
+            }.onFailure {
+                Snackbar.show("无法打开更新安装界面", type = SnackbarType.ERROR)
+            }
+        }
     }
 
     AppScreen(
@@ -94,7 +97,7 @@ fun UpdateScreen(
 
                 if (updateViewModel.isUpdateAvailable) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (updateViewModel.isUpdating) {
+                        if (updateViewModel.isUpdating || pendingInstall != null) {
                             UpdateActionBtn(
                                 modifier = Modifier.focusOnLaunched(),
                                 title = "更新中，请勿关闭页面",
@@ -104,8 +107,10 @@ fun UpdateScreen(
                                 modifier = Modifier.focusOnLaunched(),
                                 title = "立即更新",
                                 onSelected = {
-                                    coroutineScope.launch(Dispatchers.IO) {
-                                        updateViewModel.downloadAndUpdate(latestFile)
+                                    coroutineScope.launch {
+                                        if (pendingInstall != null) return@launch
+                                        pendingInstall = updateViewModel.downloadVerifiedUpdate(context) ?: return@launch
+                                        requestPermission()
                                     }
                                 },
                             )

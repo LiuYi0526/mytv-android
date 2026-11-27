@@ -15,7 +15,7 @@ object ApkInstaller {
         if (file.exists()) {
             val cacheDir = context.cacheDir
             val cachedApkFile = File(cacheDir, file.name).apply {
-                writeBytes(file.readBytes())
+                if (canonicalFile != file.canonicalFile) file.copyTo(this, overwrite = true)
                 // 解决Android6 无法解析安装包
                 setReadable(true, false)
             }
